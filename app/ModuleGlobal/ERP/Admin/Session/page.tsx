@@ -74,28 +74,29 @@ const ListofUser: React.FC = () => {
         }
     };
 
-    // Filter users by search term (firstname, lastname)
-    // Sort posts by timestamp in descending order (latest first)
-const sortedPosts = [...posts].sort((a, b) => 
-    new Date(b.timestamp) - new Date(a.timestamp)
-);
+    const sortedPosts = [...posts].sort((a, b) => {
+        const dateA = new Date(a.timestamp || 0).getTime();
+        const dateB = new Date(b.timestamp || 0).getTime();
+        return dateB - dateA;
+    });
 
-const filteredAccounts = sortedPosts.filter((post) => {
-    // Check if the user's name matches the search term
-    const matchesSearchTerm = [post?.email]
-        .some((field) => field?.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return matchesSearchTerm;
-});
+    const filteredAccounts = sortedPosts.filter((post) => {
+        // Check if the user's name matches the search term
+        const matchesSearchTerm = [post?.email]
+            .some((field) => field?.toLowerCase().includes(searchTerm.toLowerCase()));
 
-const indexOfLastPost = currentPage * postsPerPage;
-const indexOfFirstPost = indexOfLastPost - postsPerPage;
-const currentPosts = filteredAccounts.slice(indexOfFirstPost, indexOfLastPost);
-const totalPages = Math.ceil(filteredAccounts.length / postsPerPage);
+        return matchesSearchTerm;
+    });
 
-useEffect(() => {
-    fetchData();
-}, []);
+    const indexOfLastPost = currentPage * postsPerPage;
+    const indexOfFirstPost = indexOfLastPost - postsPerPage;
+    const currentPosts = filteredAccounts.slice(indexOfFirstPost, indexOfLastPost);
+    const totalPages = Math.ceil(filteredAccounts.length / postsPerPage);
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     // Handle editing a post
     const handleEdit = (post: any) => {
