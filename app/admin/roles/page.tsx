@@ -80,67 +80,104 @@ export default function AccountPage() {
     const [isDownloading, setIsDownloading] = useState(false)
 
     const handleDownload = async () => {
-        if (filtered.length === 0) return
-        setIsDownloading(true)
+        if (filtered.length === 0) return;
+        setIsDownloading(true);
 
-        let currentBytes = 0
+        let currentBytes = 0;
         const totalBytes = filtered.reduce((acc, u) => {
             return (
                 acc +
-                [u.Firstname, u.Lastname, u.Email, u.Department, u.Company, u.Position]
+                [
+                    u.ReferenceID,
+                    u.Firstname,
+                    u.Lastname,
+                    u.Email,
+                    u.Department,
+                    u.Company,
+                    u.Position,
+                    u.TSM,
+                    u.Manager,
+                ]
                     .map(v => (v?.length || 0) + 3)
                     .reduce((a, b) => a + b, 0)
-            )
-        }, 0)
+            );
+        }, 0);
 
-        // ✅ Use a wrapper component with no arguments
-        const toastId = toast(() => (
-            <SpinnerItem
-                currentBytes={currentBytes}
-                totalBytes={totalBytes}
-                fileCount={filtered.length}
-                onCancel={() => {
-                    toast.dismiss(toastId)
-                    setIsDownloading(false)
-                }}
-            />
-        ), { duration: Infinity })
+        // ✅ Toast spinner setup
+        const toastId = toast(
+            () => (
+                <SpinnerItem
+                    currentBytes={currentBytes}
+                    totalBytes={totalBytes}
+                    fileCount={filtered.length}
+                    onCancel={() => {
+                        toast.dismiss(toastId);
+                        setIsDownloading(false);
+                    }}
+                />
+            ),
+            { duration: Infinity }
+        );
 
         try {
-            const csvHeader = ["Firstname", "Lastname", "Email", "Department", "Company", "Position"].join(",")
+            // ✅ Add new headers here
+            const csvHeader = [
+                "ReferenceID",
+                "Firstname",
+                "Lastname",
+                "Email",
+                "Department",
+                "Company",
+                "Position",
+                "TSM",
+                "Manager",
+            ].join(",");
+
+            // ✅ Map user data to match new header order
             const csvRows = filtered.map(u =>
-                [u.Firstname, u.Lastname, u.Email, u.Department, u.Company, u.Position]
+                [
+                    u.ReferenceID,
+                    u.Firstname,
+                    u.Lastname,
+                    u.Email,
+                    u.Department,
+                    u.Company,
+                    u.Position,
+                    u.TSM,
+                    u.Manager,
+                ]
                     .map(v => `"${v || ""}"`)
                     .join(",")
-            )
-            const csvContent = [csvHeader, ...csvRows].join("\n")
+            );
+
+            const csvContent = [csvHeader, ...csvRows].join("\n");
 
             // simulate download progress
-            const blob = new Blob([csvContent], { type: "text/csv" })
-            const reader = new FileReader()
+            const blob = new Blob([csvContent], { type: "text/csv" });
+            const reader = new FileReader();
             reader.onload = () => {
-                currentBytes = (reader.result as string).length
-            }
-            reader.readAsText(blob)
+                currentBytes = (reader.result as string).length;
+            };
+            reader.readAsText(blob);
 
-            await new Promise(resolve => setTimeout(resolve, 500)) // show spinner
+            await new Promise(resolve => setTimeout(resolve, 500)); // spinner delay
 
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement("a")
-            link.href = url
-            link.download = `user_accounts_page_${page}.csv`
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(url)
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `user_accounts_page_${page}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
 
-            toast.success("CSV download started!", { id: toastId })
+            toast.success("CSV download started!", { id: toastId });
         } catch (err) {
-            toast.error("Failed to download CSV", { id: toastId })
+            toast.error("Failed to download CSV", { id: toastId });
         } finally {
-            setIsDownloading(false)
+            setIsDownloading(false);
         }
-    }
+    };
 
     useEffect(() => {
         if (!showTransferDialog) return
