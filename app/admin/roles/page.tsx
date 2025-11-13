@@ -80,104 +80,104 @@ export default function AccountPage() {
     const [isDownloading, setIsDownloading] = useState(false)
 
     const handleDownload = async () => {
-        if (filtered.length === 0) return;
-        setIsDownloading(true);
+    if (filtered.length === 0) return;
+    setIsDownloading(true);
 
-        let currentBytes = 0;
-        const totalBytes = filtered.reduce((acc, u) => {
-            return (
-                acc +
-                [
-                    u.ReferenceID,
-                    u.Firstname,
-                    u.Lastname,
-                    u.Email,
-                    u.Department,
-                    u.Company,
-                    u.Position,
-                    u.TSM,
-                    u.Manager,
-                ]
-                    .map(v => (v?.length || 0) + 3)
-                    .reduce((a, b) => a + b, 0)
-            );
-        }, 0);
+    let currentBytes = 0;
+    const totalBytes = filtered.reduce((acc, u) => {
+        return (
+            acc +
+            [
+                u.ReferenceID,
+                u.Firstname,
+                u.Lastname,
+                u.Email,
+                u.Department,
+                u.Company,
+                u.Position,
+                u.TSM,
+                u.Manager,
+            ]
+                .map(v => (v?.length || 0) + 3)
+                .reduce((a, b) => a + b, 0)
+        );
+    }, 0);
 
-        // ✅ Toast spinner setup
-        const toastId = toast(
-            () => (
-                <SpinnerItem
-                    currentBytes={currentBytes}
-                    totalBytes={totalBytes}
-                    fileCount={filtered.length}
-                    onCancel={() => {
-                        toast.dismiss(toastId);
-                        setIsDownloading(false);
-                    }}
-                />
-            ),
-            { duration: Infinity }
+    // ✅ Toast spinner setup
+    const toastId = toast(
+        () => (
+            <SpinnerItem
+                currentBytes={currentBytes}
+                totalBytes={totalBytes}
+                fileCount={filtered.length}
+                onCancel={() => {
+                    toast.dismiss(toastId);
+                    setIsDownloading(false);
+                }}
+            />
+        ),
+        { duration: Infinity }
+    );
+
+    try {
+        // ✅ Add new headers here
+        const csvHeader = [
+            "ReferenceID",
+            "Firstname",
+            "Lastname",
+            "Email",
+            "Department",
+            "Company",
+            "Position",
+            "TSM",
+            "Manager",
+        ].join(",");
+
+        // ✅ Map user data to match new header order
+        const csvRows = filtered.map(u =>
+            [
+                u.ReferenceID,
+                u.Firstname,
+                u.Lastname,
+                u.Email,
+                u.Department,
+                u.Company,
+                u.Position,
+                u.TSM,
+                u.Manager,
+            ]
+                .map(v => `"${v || ""}"`)
+                .join(",")
         );
 
-        try {
-            // ✅ Add new headers here
-            const csvHeader = [
-                "ReferenceID",
-                "Firstname",
-                "Lastname",
-                "Email",
-                "Department",
-                "Company",
-                "Position",
-                "TSM",
-                "Manager",
-            ].join(",");
+        const csvContent = [csvHeader, ...csvRows].join("\n");
 
-            // ✅ Map user data to match new header order
-            const csvRows = filtered.map(u =>
-                [
-                    u.ReferenceID,
-                    u.Firstname,
-                    u.Lastname,
-                    u.Email,
-                    u.Department,
-                    u.Company,
-                    u.Position,
-                    u.TSM,
-                    u.Manager,
-                ]
-                    .map(v => `"${v || ""}"`)
-                    .join(",")
-            );
+        // simulate download progress
+        const blob = new Blob([csvContent], { type: "text/csv" });
+        const reader = new FileReader();
+        reader.onload = () => {
+            currentBytes = (reader.result as string).length;
+        };
+        reader.readAsText(blob);
 
-            const csvContent = [csvHeader, ...csvRows].join("\n");
+        await new Promise(resolve => setTimeout(resolve, 500)); // spinner delay
 
-            // simulate download progress
-            const blob = new Blob([csvContent], { type: "text/csv" });
-            const reader = new FileReader();
-            reader.onload = () => {
-                currentBytes = (reader.result as string).length;
-            };
-            reader.readAsText(blob);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `user_accounts_page_${page}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
-            await new Promise(resolve => setTimeout(resolve, 500)); // spinner delay
-
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `user_accounts_page_${page}.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            toast.success("CSV download started!", { id: toastId });
-        } catch (err) {
-            toast.error("Failed to download CSV", { id: toastId });
-        } finally {
-            setIsDownloading(false);
-        }
-    };
+        toast.success("CSV download started!", { id: toastId });
+    } catch (err) {
+        toast.error("Failed to download CSV", { id: toastId });
+    } finally {
+        setIsDownloading(false);
+    }
+};
 
     useEffect(() => {
         if (!showTransferDialog) return
