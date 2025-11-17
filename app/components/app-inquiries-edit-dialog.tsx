@@ -40,13 +40,11 @@ interface EditActivityModalProps {
 }
 
 const editableFields: { key: keyof Inquiries; label: string }[] = [
-  { key: "activitynumber", label: "Activity Number" },
   { key: "companyname", label: "Company Name" },
   { key: "contactperson", label: "Contact Person" },
   { key: "contactnumber", label: "Contact Number" },
   { key: "emailaddress", label: "Email Address" },
   { key: "address", label: "Address" },
-  { key: "area", label: "Area" },
   { key: "typeclient", label: "Type Client" },
   { key: "ticketreferencenumber", label: "Ticket Reference Number" },
   { key: "wrapup", label: "Wrap Up" },

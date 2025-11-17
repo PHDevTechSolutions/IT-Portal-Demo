@@ -167,13 +167,11 @@ export default function ActivityLogsPage() {
 
             const {
                 id,
-                activitynumber,
                 companyname,
                 contactperson,
                 contactnumber,
                 emailaddress,
                 address,
-                area,
                 typeclient,
                 ticketreferencenumber,
                 wrapup,
@@ -185,13 +183,11 @@ export default function ActivityLogsPage() {
 
             const payload = {
                 id,
-                activitynumber,
                 companyname,
                 contactperson,
                 contactnumber,
                 emailaddress,
                 address,
-                area,
                 typeclient,
                 ticketreferencenumber,
                 wrapup,
@@ -201,7 +197,7 @@ export default function ActivityLogsPage() {
                 salesagentname,
             };
 
-            const response = await fetch("/api/activity/update", {
+            const response = await fetch("/api/inquiries/update", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -316,14 +312,6 @@ export default function ActivityLogsPage() {
                         {/* Delete Selected Button on the right side */}
                         {selectedIds.size > 0 && (
                             <>
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => setShowBulkUpdateDialog(true)}
-                                    className="whitespace-nowrap"
-                                >
-                                    Update Target Quota ({selectedIds.size})
-                                </Button>
                                 <Button
                                     size="sm"
                                     variant="destructive"
