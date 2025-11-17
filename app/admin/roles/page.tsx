@@ -591,7 +591,7 @@ export default function AccountPage() {
                             </TableBody>
                         </Table>
                     ) : (
-                        <div className="py-10 text-center text-xs text-muted-foreground">No users found.</div>
+                        <div className="py-10 text-center text-xs text-muted-foreground">No user found.</div>
                     )}
                 </div>
 
