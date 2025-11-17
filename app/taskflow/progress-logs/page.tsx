@@ -17,28 +17,28 @@ import type { DateRange } from "react-day-picker";
 import { Calendar23 } from "../../components/app-activity-daterange";
 import { Badge } from "@/components/ui/badge";
 
-import EditActivityModal, { Activity } from "../../components/app-activity-edit-dialog";
-import { DeleteDialog } from "../../components/app-activity-delete-dialog";
-import BulkUpdateTargetQuotaModal from "../../components/app-activity-bulk-target-quota";
-import { ActivityFilterDialog } from "../../components/app-activity-filter-dialog";
+import EditProgressModal, { Progress } from "../../components/app-progress-edit-dialog";
+import { DeleteDialog } from "../../components/app-progress-delete-dialog";
+import BulkUpdateTargetQuotaModal from "../../components/app-progress-bulk-target-quota";
+import { ProgressFilterDialog } from "../../components/app-progress-filter-dialog";
 
 interface UserAccount {
     referenceid: string;
     targetquota: string;
 }
 
-export default function ActivityLogsPage() {
+export default function ProgressLogsPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
-    const [activities, setActivities] = useState<Activity[]>([]);
+    const [progress, setProgress] = useState<Progress[]>([]);
     const [accounts, setAccounts] = useState<UserAccount[]>([]);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isFetching, setIsFetching] = useState(false);
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [rowsPerPage] = useState(20);
-    const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+    const [editingActivity, setEditingActivity] = useState<Progress | null>(null);
     const [showEditDialog, setShowEditDialog] = useState(false);
     const [range, setRange] = React.useState<DateRange | undefined>();
     const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date } | undefined>(undefined);
@@ -46,11 +46,13 @@ export default function ActivityLogsPage() {
     const [showBulkUpdateDialog, setShowBulkUpdateDialog] = useState(false);
 
     const [showFilterDialog, setShowFilterDialog] = useState(false);
+    const [filterTypeActivity, setFilterTypeActivity] = useState<string | undefined>(undefined);
     const [filterActivityStatus, setFilterActivityStatus] = useState<string | undefined>(undefined);
     const [filterTypeClient, setFilterTypeClient] = useState<string | undefined>(undefined);
     const [filterSource, setFilterSource] = useState<string | undefined>(undefined);
 
     const resetFilters = () => {
+        setFilterTypeActivity("");
         setFilterActivityStatus("");
         setFilterTypeClient("");
         setFilterSource("");
@@ -64,11 +66,11 @@ export default function ActivityLogsPage() {
     const fetchActivities = async () => {
         try {
             setIsFetching(true);
-            const response = await fetch("/api/Data/Applications/Taskflow/Activity/Fetch");
+            const response = await fetch("/api/Data/Applications/Taskflow/Progress/Fetch");
             const json = await response.json();
             if (!response.ok || json.success === false)
                 throw new Error(json.error || "Failed to fetch activities");
-            setActivities(json.data || []);
+            setProgress(json.data || []);
         } catch (err: any) {
             toast.error(`Error fetching activity logs: ${err.message}`);
         } finally {
@@ -98,7 +100,7 @@ export default function ActivityLogsPage() {
 
     // Filter and paginate with search and dateRange
     const filtered = useMemo(() => {
-        return activities
+        return progress
             .filter((a) => {
                 // Search
                 if (
@@ -114,7 +116,9 @@ export default function ActivityLogsPage() {
                     if (dateRange.from && created < dateRange.from) return false;
                     if (dateRange.to && created > dateRange.to) return false;
                 }
-
+                
+                if (filterTypeActivity && a.typeactivity !== filterTypeActivity)
+                    return false;
                 if (filterActivityStatus && a.activitystatus !== filterActivityStatus)
                     return false;
                 if (filterTypeClient && a.typeclient !== filterTypeClient)
@@ -129,9 +133,7 @@ export default function ActivityLogsPage() {
                 const dateB = new Date(b.date_created ?? 0).getTime();
                 return dateB - dateA;
             });
-    }, [activities, search, dateRange, filterActivityStatus, filterTypeClient, filterSource]);
-
-
+    }, [progress, search, dateRange, filterTypeActivity, filterActivityStatus, filterTypeClient, filterSource]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
     const current = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
@@ -155,8 +157,8 @@ export default function ActivityLogsPage() {
     };
 
     // Edit dialog handlers
-    const openEditDialog = (activity: Activity) => {
-        setEditingActivity(activity);
+    const openEditDialog = (progress: Progress) => {
+        setEditingActivity(progress);
         setShowEditDialog(true);
     };
 
@@ -166,59 +168,16 @@ export default function ActivityLogsPage() {
     };
 
     // Save updated activity: call API and update state
-    const handleSaveEdit = async (updatedActivity: Activity) => {
+    const handleSaveEdit = async (updatedActivity: Progress) => {
         try {
             if (!updatedActivity.id) {
                 throw new Error("Missing activity id");
             }
 
-            const {
-                id,
-                activitynumber,
-                companyname,
-                contactperson,
-                contactnumber,
-                emailaddress,
-                address,
-                area,
-                typeclient,
-                projectname,
-                projectcategory,
-                projecttype,
-                source,
-                targetquota,
-                activityremarks,
-                ticketreferencenumber,
-                wrapup,
-                inquiries,
-                csragent,
-                activitystatus,
-            } = updatedActivity;
+            // Payload will be the entire updatedActivity object (you can adjust this if you want to whitelist keys)
+            const payload = { ...updatedActivity };
 
-            const payload = {
-                id,
-                activitynumber,
-                companyname,
-                contactperson,
-                contactnumber,
-                emailaddress,
-                address,
-                area,
-                typeclient,
-                projectname,
-                projectcategory,
-                projecttype,
-                source,
-                targetquota,
-                activityremarks,
-                ticketreferencenumber,
-                wrapup,
-                inquiries,
-                csragent,
-                activitystatus,
-            };
-
-            const response = await fetch("/api/activity/update", {
+            const response = await fetch("/api/progress/update", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -230,9 +189,11 @@ export default function ActivityLogsPage() {
                 throw new Error(result.error || "Failed to update activity");
             }
 
-            setActivities((prev) =>
+            // Update local state with the updated activity returned from the API
+            setProgress((prev) =>
                 prev.map((a) => (a.id === updatedActivity.id ? result.updatedActivity : a))
             );
+
             closeEditDialog();
             toast.success("Activity updated.");
         } catch (error: any) {
@@ -243,7 +204,7 @@ export default function ActivityLogsPage() {
     const handleBulkUpdate = async (newQuota: string) => {
         const toastId = toast.loading("Updating target quotas...");
         try {
-            const res = await fetch("/api/activity/bulk-update-target-quota", {
+            const res = await fetch("/api/progress/bulk-update-target-quota", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -255,7 +216,7 @@ export default function ActivityLogsPage() {
             if (!res.ok || !result.success) throw new Error(result.error || "Update failed");
 
             // Update activities state with new targetquota for selected ids
-            setActivities((prev) =>
+            setProgress((prev) =>
                 prev.map((a) =>
                     selectedIds.has(a.id) ? { ...a, targetquota: newQuota } : a
                 )
@@ -271,7 +232,7 @@ export default function ActivityLogsPage() {
     const confirmDelete = async () => {
         const toastId = toast.loading("Deleting activities...");
         try {
-            const res = await fetch("/api/activity/delete", {
+            const res = await fetch("/api/progress/delete", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ ids: Array.from(selectedIds) }),
@@ -279,7 +240,7 @@ export default function ActivityLogsPage() {
             const result = await res.json();
             if (!res.ok || !result.success) throw new Error("Delete failed");
 
-            setActivities((prev) => prev.filter((a) => !selectedIds.has(a.id)));
+            setProgress((prev) => prev.filter((a) => !selectedIds.has(a.id)));
             setSelectedIds(new Set());
             toast.success("Selected activities deleted successfully.", { id: toastId });
         } catch (err) {
@@ -307,7 +268,7 @@ export default function ActivityLogsPage() {
                             </BreadcrumbItem>
                             <BreadcrumbSeparator />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Activity Logs</BreadcrumbPage>
+                                <BreadcrumbPage>Progress Logs</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -388,7 +349,7 @@ export default function ActivityLogsPage() {
                     {isFetching ? (
                         <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
                             <Loader2 className="size-6 animate-spin" />
-                            <span>Loading activities...</span>
+                            <span>Loading progress...</span>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -404,7 +365,7 @@ export default function ActivityLogsPage() {
                                         <TableHead>Activity #</TableHead>
                                         <TableHead>Company Info</TableHead>
                                         <TableHead>Project Details</TableHead>
-                                        <TableHead>CSR Agent</TableHead>
+                                        <TableHead>Sales Details</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Date</TableHead>
                                         <TableHead className="w-16 text-center">Actions</TableHead>
@@ -413,7 +374,7 @@ export default function ActivityLogsPage() {
 
                                 <TableBody>
                                     {current.map((act, index) => (
-                                        <TableRow key={act.id || `activity-${index}`} className="even:bg-muted/40 text-[11px]">
+                                        <TableRow key={act.id || `progress-${index}`} className="even:bg-muted/40 text-[11px]">
                                             <TableCell className="text-center">
                                                 <Checkbox
                                                     checked={selectedIds.has(act.id)}
@@ -429,8 +390,6 @@ export default function ActivityLogsPage() {
                                                 {act.contactperson} / {act.contactnumber}
                                                 <br />
                                                 {act.emailaddress}
-                                                <br />
-                                                <span className="text-muted-foreground break-words whitespace-normal">{act.address}</span>
                                             </TableCell>
 
                                             <TableCell className="text-[11px] leading-tight">
@@ -450,10 +409,33 @@ export default function ActivityLogsPage() {
                                                     )}
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="text-[11px] leading-tight">
+                                                <div>
+                                                    <strong>Q-Num:</strong> {act.quotationnumber || "N/A"}
+                                                </div>
+                                                <div>
+                                                    <strong>Q-Amount:</strong> {act.quotationamount || "N/A"}
+                                                </div>
+                                                <div>
+                                                    <strong>SO Number:</strong> {act.sonumber || "N/A"}
+                                                </div>
+                                                <div>
+                                                    <strong>SO Amount:</strong> {act.soamount || "N/A"}
+                                                </div>
+                                                <div>
+                                                    <strong>Actual Sales:</strong> {act.actualsales || "N/A"}
+                                                </div>
+                                                <div>
+                                                    <strong>DR Number:</strong> {act.drnumber || "N/A"}
+                                                </div>
+                                                <div>
+                                                    <strong>Delivery Date:</strong> {act.deliverydate || "N/A"}
+                                                </div>
+                                            </TableCell>
+
                                             <TableCell>
                                                 <Badge className="text-[8px]">{act.activitystatus}</Badge>
                                             </TableCell>
-                                            <TableCell>{act.csragent || "N/A"}</TableCell>
                                             <TableCell>
                                                 Created:{" "}
                                                 {act.date_created ? new Date(act.date_created).toLocaleString() : "N/A"} <br /> Updated:{" "}
@@ -464,7 +446,7 @@ export default function ActivityLogsPage() {
                                                 <Button
                                                     variant="outline"
                                                     onClick={() => openEditDialog(act)}
-                                                    aria-label={`Edit activity ${act.activitynumber || act.id}`}
+                                                    aria-label={`Edit progress ${act.activitynumber || act.id}`}
                                                 >
                                                     <EditIcon className="w-4 h-4" />
                                                 </Button>
@@ -488,8 +470,8 @@ export default function ActivityLogsPage() {
 
                 {/* Edit modal dialog */}
                 {showEditDialog && editingActivity && (
-                    <EditActivityModal
-                        activity={editingActivity}
+                    <EditProgressModal
+                        progress={editingActivity}
                         onCloseAction={closeEditDialog}
                         onSaveAction={handleSaveEdit}
                     />
@@ -509,14 +491,16 @@ export default function ActivityLogsPage() {
                     onConfirmAction={confirmDelete}
                 />
 
-                <ActivityFilterDialog
+                <ProgressFilterDialog
                     open={showFilterDialog}
                     onOpenChangeAction={setShowFilterDialog}
-                    activities={activities}
+                    progress={progress}
+                    filterTypeActivity={filterTypeActivity}
                     filterActivityStatus={filterActivityStatus}
                     filterTypeClient={filterTypeClient}
                     filterSource={filterSource}
                     setFilterActivityStatusAction={setFilterActivityStatus}
+                    setFilterTypeActivityAction={setFilterTypeActivity}
                     setFilterTypeClientAction={setFilterTypeClient}
                     setFilterSourceAction={setFilterSource}
                     resetFiltersAction={resetFilters}
