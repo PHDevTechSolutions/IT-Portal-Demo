@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from '@/lib/Asset/MongoDB';
+import { connectToDatabaseDemo } from '@/lib/Demo';
 
 export default async function fetchAccounts(
   req: NextApiRequest,
@@ -11,9 +11,9 @@ export default async function fetchAccounts(
   }
 
   try {
-    const db = await connectToDatabase();
-    const UserCollection = db.collection("inventory");
-    const data = await UserCollection.find({}).toArray();
+    const db = await connectToDatabaseDemo();
+    const Collection = db.collection("inventory");
+    const data = await Collection.find({}).toArray();
 
     return res.status(200).json({ success: true, data });
   } catch (error) {
