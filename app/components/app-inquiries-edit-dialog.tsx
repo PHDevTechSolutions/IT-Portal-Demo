@@ -24,6 +24,7 @@ export interface Inquiries {
   area?: string;
   typeclient: string;
   ticketreferencenumber?: string;
+  TicketReferenceNumber: string;
   wrapup?: string;
   inquiries?: string;
   csragent?: string;

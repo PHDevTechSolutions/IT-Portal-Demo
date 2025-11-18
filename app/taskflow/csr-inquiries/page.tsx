@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "../../components/app-sidebar";
@@ -10,12 +10,20 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator, } from "@/components/ui/breadcrumb";
-import { Pagination } from "../../components/app-pagination"
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Pagination } from "../../components/app-pagination";
 import { Separator } from "@/components/ui/separator";
 import type { DateRange } from "react-day-picker";
 import { Calendar23 } from "../../components/app-activity-daterange";
 import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
 import EditActivityModal, { Inquiries } from "../../components/app-inquiries-edit-dialog";
 import { DeleteDialog } from "../../components/app-inquiries-delete-dialog";
@@ -27,10 +35,13 @@ interface UserAccount {
 }
 
 export default function ActivityLogsPage() {
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
+
     const [activities, setActivities] = useState<Inquiries[]>([]);
+    const [fetchActivityData, setFetchActivityData] = useState<any[]>([]);
     const [accounts, setAccounts] = useState<UserAccount[]>([]);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isFetching, setIsFetching] = useState(false);
@@ -42,7 +53,6 @@ export default function ActivityLogsPage() {
     const [range, setRange] = React.useState<DateRange | undefined>();
     const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date } | undefined>(undefined);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const [showBulkUpdateDialog, setShowBulkUpdateDialog] = useState(false);
 
     const [showFilterDialog, setShowFilterDialog] = useState(false);
     const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
@@ -57,7 +67,21 @@ export default function ActivityLogsPage() {
         setPage(1);
     };
 
-    // Fetch activities
+    // Row height, dapat consistent sa lahat ng tables (adjust kung iba)
+    const rowHeight = 70; // middle section badge row height, adjust kung needed
+
+    // State para sa selected row index
+    const [selectedRow, setSelectedRow] = useState<number | null>(null);
+
+    // Scroll function para i-sync scrollTop ng 3 divs base sa row index
+    const scrollToRow = (index: number) => {
+        const scrollPos = index * rowHeight;
+        if (leftRef.current) leftRef.current.scrollTop = scrollPos;
+        if (middleRef.current) middleRef.current.scrollTop = scrollPos;
+        if (rightRef.current) rightRef.current.scrollTop = scrollPos;
+    };
+
+    // Fetch CSR Inquiries
     const fetchActivities = async () => {
         try {
             setIsFetching(true);
@@ -73,7 +97,19 @@ export default function ActivityLogsPage() {
         }
     };
 
-    // Fetch accounts
+    // Fetch Ecodesk Ticket Activity
+    const fetchActivity = async () => {
+        try {
+            const response = await fetch("/api/Data/Applications/Ecodesk/Tickets/FetchActivity");
+            const data = await response.json();
+            setFetchActivityData(data || []);
+        } catch (error) {
+            toast.error("Error fetching Ecodesk Activity.");
+            console.error("Error fetching Ecodesk Activity:", error);
+        }
+    };
+
+    // Fetch user accounts
     const fetchAccounts = async () => {
         try {
             const res = await fetch("/api/UserManagement/Fetch");
@@ -90,44 +126,45 @@ export default function ActivityLogsPage() {
 
     useEffect(() => {
         fetchActivities();
+        fetchActivity();
         fetchAccounts();
     }, []);
 
-    // Filter and paginate with search and dateRange
+    // Filtering + Pagination for CSR Inquiries
     const filtered = useMemo(() => {
         return activities
             .filter((a) => {
-                // Search
-                if (
-                    search &&
-                    !Object.values(a).join(" ").toLowerCase().includes(search.toLowerCase())
-                )
+                if (search && !Object.values(a).join(" ").toLowerCase().includes(search.toLowerCase()))
                     return false;
-
-                // Date range
                 if (dateRange?.from || dateRange?.to) {
                     if (!a.date_created) return false;
                     const created = new Date(a.date_created);
                     if (dateRange.from && created < dateRange.from) return false;
                     if (dateRange.to && created > dateRange.to) return false;
                 }
-
-                if (filterStatus && a.status !== filterStatus)
-                    return false;
-                if (filterTypeClient && a.typeclient !== filterTypeClient)
-                    return false;
-
+                if (filterStatus && a.status !== filterStatus) return false;
+                if (filterTypeClient && a.typeclient !== filterTypeClient) return false;
                 return true;
             })
-            .sort((a, b) => {
-                const dateA = new Date(a.date_created ?? 0).getTime();
-                const dateB = new Date(b.date_created ?? 0).getTime();
-                return dateB - dateA;
-            });
+            .sort((a, b) => new Date(b.date_created ?? 0).getTime() - new Date(a.date_created ?? 0).getTime());
     }, [activities, search, dateRange, filterStatus, filterTypeClient]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
     const current = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+    // Build a map for quick lookup of Ecodesk tickets by normalized ticket reference number
+    const ecoMap = useMemo(() => {
+        const map = new Map<string, any>();
+        fetchActivityData.forEach((d) => {
+            const key = (
+                d.TicketReferenceNumber ||
+                d.ticketreferencenumber ||
+                ""
+            ).toString().trim().toLowerCase();
+            if (key) map.set(key, d);
+        });
+        return map;
+    }, [fetchActivityData]);
 
     // Checkbox logic
     const toggleSelectAll = () => {
@@ -147,7 +184,6 @@ export default function ActivityLogsPage() {
         });
     };
 
-    // Edit dialog handlers
     const openEditDialog = (activity: Inquiries) => {
         setEditingActivity(activity);
         setShowEditDialog(true);
@@ -158,7 +194,27 @@ export default function ActivityLogsPage() {
         setShowEditDialog(false);
     };
 
-    // Save updated activity: call API and update state
+    // Scroll syncing refs and handlers
+    const leftRef = useRef<HTMLDivElement>(null);
+    const middleRef = useRef<HTMLDivElement>(null);
+    const rightRef = useRef<HTMLDivElement>(null);
+
+    // Sync vertical scroll between the 3 containers
+    const onScroll = (source: "left" | "middle" | "right") => {
+        return (e: React.UIEvent<HTMLDivElement>) => {
+            const scrollTop = e.currentTarget.scrollTop;
+            if (source !== "left" && leftRef.current && e.currentTarget !== leftRef.current) {
+                leftRef.current.scrollTop = scrollTop;
+            }
+            if (source !== "middle" && middleRef.current && e.currentTarget !== middleRef.current) {
+                middleRef.current.scrollTop = scrollTop;
+            }
+            if (source !== "right" && rightRef.current && e.currentTarget !== rightRef.current) {
+                rightRef.current.scrollTop = scrollTop;
+            }
+        };
+    };
+
     const handleSaveEdit = async (updatedActivity: Inquiries) => {
         try {
             if (!updatedActivity.id) {
@@ -264,7 +320,7 @@ export default function ActivityLogsPage() {
                     </Breadcrumb>
                 </header>
 
-                {/* Search, Date Range, Actions */}
+                {/* Search + Filter */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
                     <div className="relative w-full sm:max-w-xs">
                         <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
@@ -280,12 +336,7 @@ export default function ActivityLogsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={() => setShowFilterDialog(true)}
-                            className="h-9 w-9"
-                        >
+                        <Button size="icon" variant="outline" onClick={() => setShowFilterDialog(true)}>
                             <Filter className="size-4" />
                         </Button>
 
@@ -296,20 +347,10 @@ export default function ActivityLogsPage() {
                                 setDateRange(newRange);
                             }}
                         />
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                                setSearch("");
-                                setRange(undefined);
-                                setDateRange(undefined);
-                                setPage(1);
-                            }}
-                        >
+                        <Button size="sm" variant="outline" onClick={resetFilters}>
                             Clear
                         </Button>
 
-                        {/* Delete Selected Button on the right side */}
                         {selectedIds.size > 0 && (
                             <>
                                 <Button
@@ -322,95 +363,207 @@ export default function ActivityLogsPage() {
                                 </Button>
                             </>
                         )}
-
                     </div>
                 </div>
 
-                {/* Table */}
-                <div className="mx-4 border border-border shadow-sm rounded-lg overflow-hidden">
-                    {isFetching ? (
-                        <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
-                            <Loader2 className="size-6 animate-spin" />
-                            <span>Loading activities...</span>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <Table className="min-w-[1150px] w-full text-sm">
-                                <TableHeader className="bg-muted sticky top-0 z-10">
-                                    <TableRow>
-                                        <TableHead className="w-10 text-center">
-                                            <Checkbox
-                                                checked={selectedIds.size === current.length && current.length > 0}
-                                                onCheckedChange={toggleSelectAll}
-                                            />
-                                        </TableHead>
-                                        <TableHead>Ticket Ref #</TableHead>
-                                        <TableHead>Agent</TableHead>
-                                        <TableHead>Company Info</TableHead>
-                                        <TableHead>CSR Agent</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead className="w-16 text-center">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
+                {/* === THREE TABLES SIDE BY SIDE WITH SCROLL SYNC === */}
+                <div
+                    className="grid gap-4 px-4 pb-4"
+                    style={{
+                        minHeight: 600,
+                        gridTemplateColumns: "45% 10% 45%", // Left 45%, Middle 10%, Right 45%
+                    }}
+                >
+                    {/* Left Table - Ecodesk Activity */}
+                    <div
+                        className="border border-border shadow-sm rounded-lg overflow-hidden"
+                        ref={leftRef}
+                        onScroll={onScroll("left")}
+                        style={{ maxHeight: 600, overflowY: "auto" }}
+                    >
+                        <div className="bg-muted px-3 py-2 text-xs font-semibold">Ecodesk Ticket Activity</div>
+                        <Table className="w-full text-xs">
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Ticket Reference #</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {current.map((act, idx) => {
+                                    // Normalize key for lookup
+                                    const key = (act.ticketreferencenumber || act.TicketReferenceNumber || "")
+                                        .toString()
+                                        .trim()
+                                        .toLowerCase();
 
-                                <TableBody>
-                                    {current.map((act, index) => (
-                                        <TableRow key={act.id || `activity-${index}`} className="even:bg-muted/40 text-[11px]">
-                                            <TableCell className="text-center">
-                                                <Checkbox
-                                                    checked={selectedIds.has(act.id)}
-                                                    onCheckedChange={() => toggleSelect(act.id)}
-                                                />
-                                            </TableCell>
+                                    // Get the corresponding Ecodesk data from the map
+                                    const eco = ecoMap.get(key);
 
-                                            <TableCell>{act.ticketreferencenumber || "N/A"}</TableCell>
-                                            <TableCell>{act.salesagentname || "N/A"}</TableCell>
+                                    if (!eco) {
+                                        return (
+                                            <TableRow key={`eco-empty-${act.id}`}>
+                                                <TableCell colSpan={9} className="text-left text-red-600">
+                                                    No Ecodesk data
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    }
 
-                                            <TableCell className="text-[11px] leading-tight">
-                                                <strong>{act.companyname || "N/A"}</strong>
-                                                <br />
-                                                {act.contactperson} / {act.contactnumber}
-                                                <br />
-                                                {act.emailaddress}
-                                                <br />
-                                                <span className="text-muted-foreground break-words whitespace-normal">{act.address}</span>
-                                            </TableCell>
-                                            <TableCell>{act.csragent || "N/A"}{act.wrapup || "N/A"}{act.inquiries || "N/A"}</TableCell>
-                                            <TableCell><Badge>{act.status || "N/A"}</Badge></TableCell>
-                                            <TableCell>
-                                                Created:{" "}
-                                                {act.date_created ? new Date(act.date_created).toLocaleString() : "N/A"} <br /> Updated:{" "}
-                                                {act.date_updated ? new Date(act.date_updated).toLocaleString() : "N/A"}
-                                            </TableCell>
+                                    // Use composite key to ensure uniqueness (TicketReferenceNumber + ReferenceID + index)
+                                    return (
+                                        <TableRow key={`eco-${eco.TicketReferenceNumber}-${eco.ReferenceID}-${idx}`}>
+                                            <Accordion type="single" collapsible>
+                                                <AccordionItem value="item-1">
+                                                    <AccordionTrigger>
+                                                        <TableCell>{eco.TicketReferenceNumber || eco.ticketreferencenumber || "N/A"}</TableCell>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent>
+                                                        <div className="px-2 py-1 space-y-1 text-xs">
+                                                            <p><strong>Reference ID:</strong> {eco.ReferenceID}</p>
+                                                            <p><strong>Company:</strong> {eco.CompanyName}</p>
+                                                            <p><strong>Customer:</strong> {eco.CustomerName}</p>
+                                                            <p><strong>Contact:</strong> {eco.ContactNumber}</p>
+                                                            <p><strong>Email:</strong> {eco.Email}</p>
+                                                            <p><strong>City:</strong> {eco.CityAddress}</p>
+                                                            <p><strong>WrapUp:</strong> {eco.WrapUp}</p>
+                                                            <p className="max-w-[240px] whitespace-normal break-words">
+                                                                <strong>Inquiries:</strong> {eco.Inquiries}
+                                                            </p>
+                                                            <p><strong>Ticket Endorsed:</strong>{eco.TicketEndorsed ? new Date(eco.TicketEndorsed).toLocaleString() : "N/A"}</p>
+                                                        </div>
+                                                    </AccordionContent>
+                                                </AccordionItem>
+                                            </Accordion>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
 
-                                            <TableCell className="text-center">
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={() => openEditDialog(act)}
-                                                    aria-label={`Edit activity ${act.activitynumber || act.id}`}
-                                                >
-                                                    <EditIcon className="w-4 h-4" />
-                                                </Button>
+                    <div
+                        className="shadow-sm rounded-lg overflow-hidden flex flex-col"
+                        ref={middleRef}
+                        onScroll={onScroll("middle")}
+                        style={{ maxHeight: 600, overflowY: "auto" }} // no border here
+                    >
+                        <div className="bg-muted px-3 py-2 text-xs font-semibold text-center">Status</div>
+                        <Table className="w-full text-xs">
+                            <TableHead></TableHead>
+                            <TableBody>
+                                {current.map((act) => {
+                                    const key = (act.ticketreferencenumber || act.TicketReferenceNumber || "")
+                                        .toString()
+                                        .trim()
+                                        .toLowerCase();
+                                    const matched = ecoMap.has(key);
+                                    return (
+                                        <TableRow key={`status-${act.id}`} className="text-center" style={{ height: 70 }}>
+                                            {/* Removed invalid nested TableRow */}
+                                            <TableCell className="relative flex items-center justify-center px-0">
+                                                
+                                                {/* Badge */}
+                                                {matched ? (
+                                                    <Badge className="z-10 bg-green-600 px-4">Transferred</Badge>
+                                                ) : (
+                                                    <Badge variant="destructive" className="z-10 px-4">
+                                                        Invalid Transfer
+                                                    </Badge>
+                                                )}
+
                                             </TableCell>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+
+                    {/* Right Table - CSR Inquiries */}
+                    <div
+                        className="border border-border shadow-sm rounded-lg overflow-hidden"
+                        ref={rightRef}
+                        onScroll={onScroll("right")}
+                        style={{ maxHeight: 600, overflowY: "auto" }}
+                    >
+                        <div className="bg-muted px-3 py-2 text-xs font-semibold">CSR Inquiries</div>
+                        <Table className="w-full text-xs">
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-10 text-center">
+                                        <Checkbox
+                                            checked={selectedIds.size === current.length && current.length > 0}
+                                            onCheckedChange={toggleSelectAll}
+                                        />
+                                    </TableHead>
+                                    <TableHead>Ticket Reference #</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {current.map((act) => {
+                                    const key = (act.ticketreferencenumber || act.TicketReferenceNumber || "").toString().trim().toLowerCase();
+                                    const matched = ecoMap.has(key);
+                                    return (
+                                        <TableRow
+                                            key={`csr-${act.id}`}
+                                            className={
+                                                !matched
+                                                    ? "bg-red-500 text-white hover:bg-white hover:text-black"
+                                                    : "hover:bg-white hover:text-black"
+                                            }
+                                            style={{ height: 48 }}
+                                        >
+
+                                            <TableCell className="text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Checkbox
+                                                        checked={selectedIds.has(act.id)}
+                                                        onCheckedChange={() => toggleSelect(act.id)}
+                                                    />
+                                                    <Button variant="outline" size="icon" onClick={() => openEditDialog(act)}>
+                                                        <EditIcon className="size-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                            <Accordion type="single" collapsible>
+                                                <AccordionItem value="item-1">
+                                                    <AccordionTrigger>
+                                                        <TableCell>{act.ticketreferencenumber || act.TicketReferenceNumber || "N/A"}</TableCell>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent>
+                                                        <div className="px-2 py-1 space-y-1 text-xs">
+                                                            <strong>{act.companyname || "N/A"}</strong>
+                                                            <br />
+                                                            Contact: {act.contactperson} / {act.contactnumber}
+                                                            <br />
+                                                            Email: {act.emailaddress}
+                                                            <br />
+                                                            WrapUp: {act.wrapup}
+                                                            <br />
+                                                            <span className="text-muted-foreground">Inquiries: {act.inquiries}</span>
+                                                            <br />
+                                                            <Badge className="text-[8px] capitalize">{act.status || "N/A"}</Badge>
+                                                            <br />
+                                                            Created: {act.date_created ? new Date(act.date_created).toLocaleString() : "N/A"}
+                                                        </div>
+                                                    </AccordionContent>
+                                                </AccordionItem>
+                                            </Accordion>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </div>
 
+                {/* Pagination */}
                 <div className="flex justify-center items-center gap-4 my-4">
-                    {/* Pagination */}
-                    <Pagination
-                        page={page}
-                        totalPages={totalPages}
-                        onPageChangeAction={setPage}
-                    />
+                    <Pagination page={page} totalPages={totalPages} onPageChangeAction={setPage} />
                 </div>
 
-                {/* Edit modal dialog */}
+                {/* Dialogs */}
                 {showEditDialog && editingActivity && (
                     <EditActivityModal
                         activity={editingActivity}
@@ -436,7 +589,6 @@ export default function ActivityLogsPage() {
                     setFilterTypeClientAction={setFilterTypeClient}
                     resetFiltersAction={resetFilters}
                 />
-
             </SidebarInset>
         </SidebarProvider>
     );
