@@ -12,27 +12,56 @@ export default async function DeleteBulkOrders(
   }
 
   const { ids } = req.body as { ids?: string[] };
+
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ success: false, error: "Missing or invalid ids array" });
+    return res.status(400).json({
+      success: false,
+      error: "Missing or invalid ids array",
+      received: req.body
+    });
   }
 
   try {
     const db = await connectToDatabase();
 
-    // Convert string ids to ObjectId array
-    const objectIds = ids.map((id) => new ObjectId(id));
+    let objectIds: ObjectId[] = [];
+    try {
+      objectIds = ids.map((id) => new ObjectId(id));
+    } catch (err: any) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid ObjectId format",
+        details: err.message,
+        ids
+      });
+    }
 
     const result = await db
       .collection("TaskLog")
       .deleteMany({ _id: { $in: objectIds } });
 
     if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, error: "No orders found to delete" });
+      return res.status(404).json({
+        success: false,
+        error: "No documents found for deletion",
+        attemptedIds: ids
+      });
     }
 
-    res.status(200).json({ success: true, deletedCount: result.deletedCount });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: "Bulk delete failed" });
+    return res.status(200).json({
+      success: true,
+      deletedCount: result.deletedCount,
+      deletedIds: ids
+    });
+
+  } catch (err: any) {
+    console.error("Bulk delete failed:", err);
+
+    return res.status(500).json({
+      success: false,
+      error: "Bulk delete failed",
+      message: err.message,
+      stack: err.stack
+    });
   }
 }

@@ -61,9 +61,14 @@ export default function TaskflowLinks() {
   const queryUserId = searchParams?.get("userId");
   const [userId] = useState<string | null>(queryUserId ?? null);
 
+  const appendUserId = (url: string) => {
+    if (!userId) return url;
+    return url.includes("?") ? `${url}&userId=${userId}` : `${url}?userId=${userId}`;
+  };
+
   const handleApplicationsClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    const url = `/application/modules${userId ? `?userId=${userId}` : ""}`;
+    const url = appendUserId("/application/modules");
     router.push(url);
   };
 
@@ -72,7 +77,7 @@ export default function TaskflowLinks() {
       <AppSidebar userId={userId} />
       <SidebarInset>
         {/* Header with SidebarTrigger, Back Button and Breadcrumbs */}
-        <header className="flex h-16 items-center gap-2 px-4 border-b border-gray-200">
+        <header className="flex h-16 items-center gap-2 px-6 border-b border-gray-200">
           <SidebarTrigger className="-ml-1" />
           <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
             Back
@@ -81,7 +86,7 @@ export default function TaskflowLinks() {
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink
-                  href={`/application/modules${userId ? `?userId=${userId}` : ""}`}
+                  href={appendUserId("/application/modules")}
                   onClick={handleApplicationsClick}
                 >
                   Applications
@@ -96,7 +101,7 @@ export default function TaskflowLinks() {
         </header>
 
         {/* Main content */}
-        <main className="flex w-full max-w-3xl flex-col gap-6 p-6 mx-auto">
+        <main className="flex flex-col gap-6 p-6 w-full max-w-full">
           {links.map(({ name, path, icon: Icon }) => (
             <Item
               key={path}
@@ -110,7 +115,7 @@ export default function TaskflowLinks() {
                 className="flex items-center justify-between w-full"
                 onClick={(e) => {
                   e.preventDefault();
-                  router.push(path);
+                  router.push(appendUserId(path));
                 }}
               >
                 <ItemMedia>

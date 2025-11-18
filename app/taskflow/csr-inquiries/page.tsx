@@ -67,10 +67,8 @@ export default function ActivityLogsPage() {
         setPage(1);
     };
 
-    // Row height, dapat consistent sa lahat ng tables (adjust kung iba)
-    const rowHeight = 70; // middle section badge row height, adjust kung needed
+    const rowHeight = 70; 
 
-    // State para sa selected row index
     const [selectedRow, setSelectedRow] = useState<number | null>(null);
 
     // Scroll function para i-sync scrollTop ng 3 divs base sa row index
