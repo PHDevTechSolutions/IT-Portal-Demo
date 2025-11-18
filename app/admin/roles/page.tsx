@@ -410,7 +410,6 @@ export default function AccountPage() {
                                 setAccountsAction={setAccounts}
                             />
 
-
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -420,7 +419,6 @@ export default function AccountPage() {
                             >
                                 <Download className="w-4 h-4" /> Download
                             </Button>
-
 
                             <Select value={filterDepartment} onValueChange={setFilterDepartment}>
                                 <SelectTrigger className="w-[200px] h-10 text-sm">

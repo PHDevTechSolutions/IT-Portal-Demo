@@ -9,9 +9,12 @@ import { Download } from "../../components/app-customer-database-download"
 import { Audit } from "../../components/app-customer-database-audit"
 import { Calendar } from "../../components/app-customer-database-calendar";
 import { ImportDialog } from "../../components/app-customer-database-import"
+import { AuditDialog } from "../../components/app-customer-database-audit-dialog"
+import { DeleteDialog } from "../../components/app-customer-database-delete-dialog"
+import { TransferDialog } from "../../components/app-customer-database-transfer"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
-import { BadgeCheck, AlertTriangle, Clock, XCircle, PauseCircle, UserX, UserCheck } from "lucide-react"
+import { BadgeCheck, AlertTriangle, Clock, XCircle, PauseCircle, UserX, UserCheck, ArrowRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
@@ -24,7 +27,7 @@ import { DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor, us
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { ButtonGroup } from "@/components/ui/button-group"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+type AuditKey = "duplicates" | "missingType" | "missingStatus";
 
 interface Customer {
     id: number
@@ -90,11 +93,21 @@ export default function AccountPage() {
     const [selectAll, setSelectAll] = useState(false)
 
     const [showAuditDialog, setShowAuditDialog] = useState(false);
-    const [auditSelection, setAuditSelection] = useState({
+    const [auditSelection, setAuditSelection] = useState<Record<AuditKey, boolean>>({
         duplicates: false,
         missingType: false,
         missingStatus: false,
     });
+
+    // 🔹 Manager & TSM lists
+    const [tsas, setTsas] = useState<{ label: string; value: string }[]>([])
+    const [tsms, setTsms] = useState<{ label: string; value: string }[]>([])
+    const [managers, setManagers] = useState<{ label: string; value: string }[]>([])
+
+    const [showTransferDialog, setShowTransferDialog] = useState(false)
+    const [transferType, setTransferType] = useState<"TSM" | "Manager" | null>(null)
+    const [transferSelection, setTransferSelection] = useState<string>("")
+
     const toggleAuditSelection = (key: "duplicates" | "missingType" | "missingStatus") => {
         setAuditSelection(prev => ({ ...prev, [key]: !prev[key] }));
     };
@@ -143,6 +156,45 @@ export default function AccountPage() {
         fetchData()
     }, [])
 
+    useEffect(() => {
+        if (!showTransferDialog) return;
+
+        const fetchDropdowns = async () => {
+            try {
+                const [tsaRes, tsmRes, managerRes] = await Promise.all([
+                    fetch("/api/UserManagement/FetchTSA?Role=Territory Sales Associate"),
+                    fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager"),
+                    fetch("/api/UserManagement/FetchManager?Role=Manager"),
+                ]);
+                const tsaData = await tsaRes.json();
+                const tsmData = await tsmRes.json();
+                const managerData = await managerRes.json();
+                setTsas(
+                    tsaData.map((m: any) => ({
+                        label: `${m.Firstname} ${m.Lastname}`,
+                        value: m.ReferenceID,
+                    }))
+                );
+                setTsms(
+                    tsmData.map((t: any) => ({
+                        label: `${t.Firstname} ${t.Lastname}`,
+                        value: t.ReferenceID,
+                    }))
+                );
+                setManagers(
+                    managerData.map((m: any) => ({
+                        label: `${m.Firstname} ${m.Lastname}`,
+                        value: m.ReferenceID,
+                    }))
+                );
+            } catch (err) {
+                toast.error("Failed to fetch manager/TSM lists.");
+            }
+        };
+
+        fetchDropdowns();
+    }, [showTransferDialog]);
+
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event
         if (active.id !== over?.id) {
@@ -172,10 +224,8 @@ export default function AccountPage() {
         return () => clearTimeout(timer)
     }, [search, filterType, filterStatus])
 
-
     // 🔍 Filtered + Search
     useEffect(() => setPage(1), [search, filterType, filterStatus])
-
     const filtered = useMemo(() =>
         customers
             .filter((c) =>
@@ -189,18 +239,22 @@ export default function AccountPage() {
                     ? true
                     : c.referenceid?.trim().toLowerCase() === filterTSA.trim().toLowerCase()
             )
-
             .filter((c) => {
-                if (!startDate && !endDate) return true
-                const created = new Date(c.date_created)
-                const start = startDate ? new Date(startDate) : null
-                const end = endDate ? new Date(endDate) : null
-                if (start && created < start) return false
-                if (end && created > end) return false
-                return true
+                if (!startDate && !endDate) return true;
+                const created = new Date(c.date_created);
+                const start = startDate ? new Date(startDate) : null;
+                const end = endDate ? new Date(endDate) : null;
+                if (start && created < start) return false;
+                if (end && created > end) return false;
+                return true;
+            })
+            .sort((a, b) => {
+                const dateA = new Date(a.date_created).getTime();
+                const dateB = new Date(b.date_created).getTime();
+                return dateB - dateA; // descending order: latest first
             }),
         [customers, search, filterType, filterStatus, filterTSA, startDate, endDate]
-    )
+    );
 
     // 🧭 Pagination + display switch
     const displayData = useMemo(() => {
@@ -237,8 +291,11 @@ export default function AccountPage() {
         setShowDeleteDialog(true);
     };
 
-    const executeBulkDelete = async () => {
-        if (selectedIds.size === 0) return toast.error("No customers selected.");
+    const executeBulkDelete = async (): Promise<void> => {
+        if (selectedIds.size === 0) {
+            toast.error("No customers selected.");
+            return; // Early return with void
+        }
 
         const idsArray = Array.from(selectedIds);
         let deletedCount = 0;
@@ -266,8 +323,10 @@ export default function AccountPage() {
                 setCustomers((prev) => prev.filter((c) => !selectedIds.has(c.id)));
                 setSelectedIdsAction(new Set());
 
+                // No return value here!
             } else {
                 toast.error(result.error || "Bulk delete failed.");
+                // No return value here either
             }
         } catch (err) {
             console.error(err);
@@ -348,24 +407,28 @@ export default function AccountPage() {
 
                                 <ImportDialog />
 
-                                {/* Download */}
-                                <Download
-                                    data={filtered}
-                                    filename="CustomerDatabase"
+                                <Download data={filtered} filename="CustomerDatabase" />
+                                {selectedIds.size > 0 && (
+                                    <>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowTransferDialog(true)}
+                                        >
+                                            <ArrowRight className="w-4 h-4" /> Transfer
+                                        </Button>
 
-                                />
+                                        <Button
+                                            onClick={handleBulkDelete}
+                                            variant="destructive"
+                                            size="sm"
+                                            className="rounded-none sm:rounded-r-md border-l sm:border-l-0"
+                                        >
+                                            Delete Selected ({selectedIds.size})
+                                        </Button>
+                                    </>
+                                )}
 
-                                <Button
-                                    onClick={handleBulkDelete}
-                                    variant="destructive"
-                                    size="sm"
-                                    className="rounded-none sm:rounded-r-md border-l sm:border-l-0"
-                                    disabled={selectedIds.size === 0}
-                                >
-                                    Delete Selected ({selectedIds.size})
-                                </Button>
-
-                                {/* Audit / Return */}
                                 {!isAuditView ? (
                                     <Audit
                                         customers={customers}
@@ -384,6 +447,26 @@ export default function AccountPage() {
                                     </Button>
                                 )}
                             </ButtonGroup>
+
+                            <TransferDialog
+                                open={showTransferDialog}
+                                onOpenChangeAction={(open) => {
+                                    setShowTransferDialog(open);
+                                    if (!open) {
+                                        setTransferSelection("");
+                                        setTransferType(null);
+                                    }
+                                }}
+                                selectedIds={new Set(Array.from(selectedIds).map(String))}
+                                setSelectedIdsAction={(ids: Set<string>) => {
+                                    const newIds = new Set(Array.from(ids).map((id) => Number(id)));
+                                    setSelectedIdsAction(newIds);
+                                }}
+                                setAccountsAction={(updateFn) => setCustomers((prev) => updateFn(prev))}
+                                tsas={tsas}
+                                tsms={tsms}
+                                managers={managers}
+                            />
                         </div>
                     </div>
 
@@ -476,8 +559,6 @@ export default function AccountPage() {
                                 🧾 Audit Summary: <span className="font-semibold text-red-600">{audited.length}</span> total issues found
                             </div>
 
-
-
                             {/* 🧩 Button Group Filters (right side) */}
                             <div className="flex flex-wrap gap-2 justify-end ml-auto">
                                 <ButtonGroup aria-label="Audit Filter Buttons" className="flex">
@@ -525,142 +606,23 @@ export default function AccountPage() {
                     </div>
                 )}
 
-                <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Delete Selected Customers?</DialogTitle>
-                            <DialogDescription>
-                                You are about to delete {selectedIds.size} customers. This action cannot be undone.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                variant="destructive"
-                                onClick={async () => {
-                                    setShowDeleteDialog(false);
-                                    await executeBulkDelete();
-                                }}
-                            >
-                                Delete
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                <DeleteDialog
+                    open={showDeleteDialog}
+                    onOpenChange={setShowDeleteDialog}
+                    selectedCount={selectedIds.size}
+                    onConfirm={executeBulkDelete}
+                />
 
-                {(audited.length > 0 || duplicateIds.size > 0) && (
-                    <Dialog open={showAuditDialog} onOpenChange={setShowAuditDialog}>
-                        <DialogContent className="max-w-md">
-                            <DialogHeader>
-                                <DialogTitle>Audit Summary Details</DialogTitle>
-                                <DialogDescription>
-                                    Here’s the breakdown of the audited data. You can select which issues to highlight:
-                                </DialogDescription>
-                            </DialogHeader>
-
-                            <div className="flex flex-col gap-2 mt-2 text-sm">
-                                {duplicateIds.size > 0 && (
-                                    <label className="flex justify-between items-center gap-2">
-                                        <span>Duplicates:</span>
-                                        <div className="flex items-center gap-1">
-                                            <span className="font-semibold text-red-600">{duplicateIds.size}</span>
-                                            <input
-                                                type="checkbox"
-                                                checked={auditSelection.duplicates}
-                                                onChange={() => toggleAuditSelection("duplicates")}
-                                            />
-                                        </div>
-                                    </label>
-                                )}
-                                {audited.some(c => !c.typeclient?.trim() && c.status?.trim()) && (
-                                    <label className="flex justify-between items-center gap-2">
-                                        <span>Missing Type:</span>
-                                        <div className="flex items-center gap-1">
-                                            <span className="font-semibold text-yellow-600">
-                                                {audited.filter(c => !c.typeclient?.trim() && c.status?.trim()).length}
-                                            </span>
-                                            <input
-                                                type="checkbox"
-                                                checked={auditSelection.missingType}
-                                                onChange={() => toggleAuditSelection("missingType")}
-                                            />
-                                        </div>
-                                    </label>
-                                )}
-                                {audited.some(c => !c.status?.trim() && c.typeclient?.trim()) && (
-                                    <label className="flex justify-between items-center gap-2">
-                                        <span>Missing Status:</span>
-                                        <div className="flex items-center gap-1">
-                                            <span className="font-semibold text-yellow-600">
-                                                {audited.filter(c => !c.status?.trim() && c.typeclient?.trim()).length}
-                                            </span>
-                                            <input
-                                                type="checkbox"
-                                                checked={auditSelection.missingStatus}
-                                                onChange={() => toggleAuditSelection("missingStatus")}
-                                            />
-                                        </div>
-                                    </label>
-                                )}
-                            </div>
-
-                            <DialogFooter className="flex justify-end gap-2 mt-4">
-                                <Button variant="outline" onClick={() => setShowAuditDialog(false)}>Close</Button>
-                                <Button
-                                    onClick={async () => {
-                                        setShowAuditDialog(false);
-
-                                        // Determine which audit types are selected
-                                        if (auditSelection.duplicates) setAuditFilter("duplicates");
-                                        else if (auditSelection.missingType) setAuditFilter("missingType");
-                                        else if (auditSelection.missingStatus) setAuditFilter("missingStatus");
-                                        else setAuditFilter("all");
-
-                                        // 🔹 Bulk update status if "Missing Status" is checked
-                                        if (auditSelection.missingStatus) {
-                                            const missingStatusIds = audited
-                                                .filter(c => !c.status?.trim() && c.typeclient?.trim())
-                                                .map(c => c.id);
-
-                                            if (missingStatusIds.length > 0) {
-                                                try {
-                                                    const res = await fetch(
-                                                        "/api/Data/Applications/Taskflow/CustomerDatabase/BulkEditStatus",
-                                                        {
-                                                            method: "PUT",
-                                                            headers: { "Content-Type": "application/json" },
-                                                            body: JSON.stringify({ userIds: missingStatusIds, status: "Active" }),
-                                                        }
-                                                    );
-                                                    const json = await res.json();
-
-                                                    if (json.success) {
-                                                        toast.success(`Updated status for ${missingStatusIds.length} customers.`);
-                                                        setCustomers(prev =>
-                                                            prev.map(c =>
-                                                                missingStatusIds.includes(c.id) ? { ...c, status: "Active" } : c
-                                                            )
-                                                        );
-                                                    } else {
-                                                        toast.error(json.error || "Failed to update statuses.");
-                                                    }
-                                                } catch (err) {
-                                                    console.error(err);
-                                                    toast.error("Failed to update statuses.");
-                                                }
-                                            }
-                                        }
-                                    }}
-                                >
-                                    Take Action
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                )}
-
+                <AuditDialog
+                    showAuditDialog={showAuditDialog}
+                    setShowAuditDialogAction={setShowAuditDialog}
+                    audited={audited}
+                    duplicateIds={duplicateIds}
+                    auditSelection={auditSelection}
+                    toggleAuditSelectionAction={toggleAuditSelection}
+                    setAuditFilterAction={setAuditFilter}
+                    setCustomersAction={setCustomers}
+                />
 
                 {/* Table */}
                 <div className="mx-4 border border-border shadow-sm rounded-lg">

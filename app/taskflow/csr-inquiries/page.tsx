@@ -278,7 +278,7 @@ export default function ActivityLogsPage() {
     const confirmDelete = async () => {
         const toastId = toast.loading("Deleting activities...");
         try {
-            const res = await fetch("/api/activity/delete", {
+            const res = await fetch("/api/inquiries/delete", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ ids: Array.from(selectedIds) }),
