@@ -302,7 +302,6 @@ export default function ActivityLogsPage() {
                                                 checked={selectedIds.size === current.length && current.length > 0}
                                                 onCheckedChange={toggleSelectAll}
                                             />
-
                                         </TableHead>
                                         <TableHead>ReferenceID</TableHead>
                                         <TableHead>Email</TableHead>
@@ -328,7 +327,6 @@ export default function ActivityLogsPage() {
                                                     checked={selectedIds.has(act._id)}
                                                     onCheckedChange={() => toggleSelect(act._id)}
                                                 />
-
                                             </TableCell>
 
                                             <TableCell>{act.ReferenceID || "N/A"}</TableCell>

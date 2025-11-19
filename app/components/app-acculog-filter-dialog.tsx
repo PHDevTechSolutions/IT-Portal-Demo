@@ -43,7 +43,7 @@ export function ActivityFilterDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChangeAction}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md rounded-lg">
                 <DialogHeader>
                     <DialogTitle>Advance Filters</DialogTitle>
                     <DialogDescription>
@@ -79,7 +79,7 @@ export function ActivityFilterDialog({
                     </div>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="gap-2">
                     <Button variant="outline" onClick={resetFiltersAction}>
                         Reset Filters
                     </Button>
