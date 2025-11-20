@@ -18,13 +18,12 @@ import { NavUser } from "../components/nav-user"
 import {
   BookOpen,
   Bot,
-  Command,
-  Frame,
-  LifeBuoy,
-  PieChart,
-  Send,
-  Settings2,
   SquareTerminal,
+  Settings2,
+  LifeBuoy,
+  Send,
+  Frame,
+  PieChart,
 } from "lucide-react"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -34,6 +33,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({ userId, ...props }: AppSidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
+
   const [userDetails, setUserDetails] = React.useState({
     UserId: "",
     Firstname: "",
@@ -41,43 +41,34 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
     Email: "",
     profilePicture: "",
     ReferenceID: "",
+    Position: "",
   })
 
-  // Fetch user details
   React.useEffect(() => {
     if (!userId) return
-    const fetchUserDetails = async () => {
-      try {
-        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`)
-        if (!res.ok) throw new Error("Failed to fetch user details")
-        const data = await res.json()
-        setUserDetails({
-          UserId: data._id || userId,
-          Firstname: data.Firstname || "Leroux",
-          Lastname: data.Lastname || "Xchire",
-          Email: data.Email || "example@email.com",
-          profilePicture: data.profilePicture || "/avatars/default.jpg",
-          ReferenceID: data.ReferenceID || "N/A",
-        })
-      } catch (err) {
-        console.error(err)
-      }
+    const fetchData = async () => {
+      const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`)
+      const data = await res.json()
+      setUserDetails({
+        UserId: data._id || userId,
+        Firstname: data.Firstname || "",
+        Lastname: data.Lastname || "",
+        Email: data.Email || "",
+        profilePicture: data.profilePicture || "/avatars/default.jpg",
+        ReferenceID: data.ReferenceID || "",
+        Position: data.Position || "",
+      })
     }
-    fetchUserDetails()
+    fetchData()
   }, [userId])
 
-  // Original static sidebar data
-  const appendUserId = (url: string) => {
-    if (!userId) return url
-    return url.includes("?") ? `${url}&userId=${userId}` : `${url}?userId=${userId}`
-  }
+  const appendUserId = (url: string) =>
+    userId ? (url.includes("?") ? `${url}&userId=${userId}` : `${url}?userId=${userId}`) : url
 
-  const data = {
-    user: {
-      name: `${userDetails.Firstname} ${userDetails.Lastname}`,
-      email: userDetails.Email,
-      avatar: userDetails.profilePicture,
-    },
+  // -------------------------------
+  // FULL SIDEBAR DATA (BASE)
+  // -------------------------------
+  const fullSidebar = {
     navMain: [
       {
         title: "Applications",
@@ -91,9 +82,7 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
         url: "#",
         icon: Bot,
         isActive: pathname?.startsWith("/cloudflare"),
-        items: [
-          { title: "DNS", url: appendUserId("/cloudflare/dns") },
-        ],
+        items: [{ title: "DNS", url: appendUserId("/cloudflare/dns") }],
       },
       {
         title: "User Accounts",
@@ -114,8 +103,8 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
       },
     ],
     navSecondary: [
-      { title: "Support", url: appendUserId("/support"), icon: LifeBuoy, isActive: pathname?.startsWith("/support") },
-      { title: "Feedback", url: appendUserId("/feedback"), icon: Send, isActive: pathname?.startsWith("/feedback") },
+      { title: "Support", url: appendUserId("/support"), icon: LifeBuoy },
+      { title: "Feedback", url: appendUserId("/feedback"), icon: Send },
     ],
     projects: [
       { name: "Taskflow Sales Management System", url: appendUserId("/taskflow"), icon: Frame },
@@ -128,9 +117,71 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
     ],
   }
 
+  // -------------------------------------
+  // ROLE-BASED FILTERING STARTS HERE
+  // -------------------------------------
+  const position = userDetails.Position?.trim()
+
+  const fullAccess = [
+    "IT Manager",
+    "IT Senior Supervisor",
+    "Senior Fullstack Developer",
+  ]
+
+  let filtered = { ...fullSidebar }
+
+  if (!fullAccess.includes(position)) {
+    // ASSET SUPERVISOR — Only Taskflow SMS + Settings
+    if (position === "Asset Supervisor") {
+      filtered = {
+        navMain: [
+          fullSidebar.navMain[3], // Settings only
+        ],
+        navSecondary: [],
+        projects: [
+          fullSidebar.projects.find((p) => p.name === "Taskflow Sales Management System")!,
+          fullSidebar.projects.find((p) => p.name === "IT Asset Management System")!,
+        ].filter(Boolean),
+      }
+    }
+
+
+    // IT ASSOCIATE
+    else if (position === "IT Associate") {
+      filtered = {
+        navMain: [
+          fullSidebar.navMain[0], // Applications
+          {
+            ...fullSidebar.navMain[2], // User Accounts
+            items: [fullSidebar.navMain[2].items[0]], // Roles only
+          },
+          fullSidebar.navMain[3], // ALWAYS include Settings
+        ],
+        navSecondary: [],
+        projects: [
+          fullSidebar.projects.find((p) => p.name === "Taskflow Sales Management System")!,
+          fullSidebar.projects.find((p) => p.name === "Acculog HR Attendance System")!,
+        ],
+      }
+    }
+
+    // IT - OJT — ONLY Taskflow + Settings
+    else if (position === "IT - OJT") {
+      filtered = {
+        navMain: [
+          fullSidebar.navMain[3], // Settings
+        ],
+        navSecondary: [],
+        projects: [
+          fullSidebar.projects.find((p) => p.name === "Taskflow Sales Management System")!,
+        ],
+      }
+    }
+  }
+
   const goToPage = (url: string) => {
     if (!userId) return
-    router.push(`${url}?userId=${userId}`)
+    router.push(appendUserId(url))
   }
 
   return (
@@ -140,10 +191,10 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a onClick={() => goToPage("/dashboard")}>
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <img src="/xchire-logo.png" alt="Xchire Logo" className="w-4 h-4 object-contain" />
+                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex size-8 items-center justify-center rounded-lg">
+                  <img src="/xchire-logo.png" className="w-4 h-4" />
                 </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+                <div className="grid flex-1 text-left text-sm">
                   <span className="truncate font-medium">IT Portal</span>
                   <span className="truncate text-xs">Enterprise</span>
                 </div>
@@ -155,19 +206,21 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
 
       <SidebarContent>
         <NavMain
-          items={data.navMain.map((item) => ({
+          items={filtered.navMain.map((item) => ({
             ...item,
-            onClick: () => goToPage(item.items?.[0]?.url || item.url), // click sa parent => first child o url
+            onClick: () => goToPage(item.items?.[0]?.url || item.url),
           }))}
         />
+
         <NavProjects
-          projects={data.projects.map((p) => ({
+          projects={filtered.projects.map((p) => ({
             ...p,
             onClick: () => goToPage(p.url),
           }))}
         />
+
         <NavSecondary
-          items={data.navSecondary.map((item) => ({
+          items={filtered.navSecondary.map((item) => ({
             ...item,
             onClick: () => goToPage(item.url),
           }))}
@@ -178,7 +231,7 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
       <SidebarFooter>
         <NavUser
           user={{
-            id: userDetails.UserId || undefined,
+            id: userDetails.UserId,
             name: `${userDetails.Firstname} ${userDetails.Lastname}`,
             email: userDetails.Email,
             avatar: userDetails.profilePicture,

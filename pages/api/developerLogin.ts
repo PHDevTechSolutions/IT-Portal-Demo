@@ -24,6 +24,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ message: "Invalid credentials." });
   }
 
+  // 🔐 IT Department filter
+  if (user.Department !== "IT") {
+    return res.status(403).json({
+      message: "Access denied. Only IT Department accounts are allowed.",
+    });
+  }
+
   // Validate user credentials
   const result = await validateUser({ Email, Password });
 

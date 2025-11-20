@@ -4,10 +4,7 @@ import React, { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronRightIcon,
-  DatabaseIcon,
-  ActivityIcon,
-  BarChart2Icon,
-  MessageCircleIcon,
+  FileTextIcon 
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -34,24 +31,9 @@ import {
 
 const links = [
   {
-    name: "Customer Database",
-    path: "/taskflow/customer-database",
-    icon: DatabaseIcon,
-  },
-  {
     name: "Activity Logs",
-    path: "/taskflow/activity-logs",
-    icon: ActivityIcon,
-  },
-  {
-    name: "Progress Logs",
-    path: "/taskflow/progress-logs",
-    icon: BarChart2Icon,
-  },
-  {
-    name: "CSR Inquiries",
-    path: "/taskflow/csr-inquiries",
-    icon: MessageCircleIcon,
+    path: "/acculog/activity-logs",
+    icon: FileTextIcon,
   },
 ];
 
