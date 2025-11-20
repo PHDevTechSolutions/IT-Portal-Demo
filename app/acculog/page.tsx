@@ -76,7 +76,7 @@ export default function TaskflowLinks() {
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbPage>Modules</BreadcrumbPage>
+                <BreadcrumbPage>Acculog</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
