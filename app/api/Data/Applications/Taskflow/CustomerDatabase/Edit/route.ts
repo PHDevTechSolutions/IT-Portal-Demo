@@ -13,19 +13,19 @@ async function update(
     referenceid: string, 
     manager: string, 
     tsm: string, 
-    companyname: string,
-    contactperson: string,
-    contactnumber: string,
-    emailaddress: string,
-    typeclient: string,
-    companygroup: string,
+    company_name: string,
+    contact_person: string,
+    contact_number: string,
+    email_address: string,
+    type_client: string,
+    company_group: string,
     address: string,
-    deliveryaddress: string,
-    area: string,
+    delivery_address: string,
+    region: string,
     status: string
 ) {
     try {
-        if (!id || !companyname) {
+        if (!id || !company_name) {
             throw new Error("ID and company name are required.");
         }
 
@@ -35,15 +35,15 @@ async function update(
                 referenceid = ${referenceid},
                 manager = ${manager},
                 tsm = ${tsm},
-                companyname = ${companyname},
-                contactperson = ${contactperson},
-                contactnumber = ${contactnumber},
-                emailaddress = ${emailaddress},
-                typeclient = ${typeclient},
-                companygroup = ${companygroup},
+                company_name = ${company_name},
+                contact_person = ${contact_person},
+                contact_number = ${contact_number},
+                email_address = ${email_address},
+                type_client = ${type_client},
+                company_group = ${company_group},
                 address = ${address},
-                deliveryaddress = ${deliveryaddress},
-                area = ${area},
+                delivery_address = ${delivery_address},
+                region = ${region},
                 status = ${status}
             WHERE id = ${id} 
             RETURNING *;
@@ -64,21 +64,21 @@ export async function PUT(req: Request) {
             referenceid, 
             manager, 
             tsm, 
-            companyname, 
-            contactperson, 
-            contactnumber, 
-            emailaddress, 
-            typeclient, 
-            companygroup,
+            company_name, 
+            contact_person, 
+            contact_number, 
+            email_address, 
+            type_client, 
+            company_group,
             address, 
-            deliveryaddress,
-            area, 
+            delivery_address,
+            region, 
             status 
         } = Xchire_body;
 
         const Xchire_result = await update(
-            id, referenceid, manager, tsm, companyname, contactperson, 
-            contactnumber, emailaddress, typeclient, companygroup, address, deliveryaddress, area, status
+            id, referenceid, manager, tsm, company_name, contact_person, 
+            contact_number, email_address, type_client, company_group, address, delivery_address, region, status
         );
 
         return NextResponse.json(Xchire_result);

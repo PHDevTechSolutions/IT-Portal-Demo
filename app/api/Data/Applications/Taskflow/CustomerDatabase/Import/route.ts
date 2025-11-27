@@ -15,23 +15,23 @@ async function create(
     referenceid: string,
     manager: string,
     tsm: string,
-    companyname: string,
-    contactperson: string,
-    contactnumber: string,
-    emailaddress: string,
-    typeclient: string,
+    company_name: string,
+    contact_person: string,
+    contact_number: string,
+    email_address: string,
+    type_client: string,
     address: string,
-    deliveryaddress: string,
-    area: string,
+    delivery_address: string,
+    region: string,
     status: string,
     industry?: string,
 ) {
     try {
         const Xchire_insert = await Xchire_sql`
-            INSERT INTO accounts (referenceid, manager, tsm, companyname, contactperson, contactnumber, emailaddress, 
-            typeclient, address, deliveryaddress, area, status, industry, date_created) 
-            VALUES (${referenceid}, ${manager}, ${tsm}, ${companyname}, ${contactperson}, ${contactnumber}, ${emailaddress}, 
-            ${typeclient}, ${address}, ${deliveryaddress}, ${area}, ${status}, ${industry}, NOW()) 
+            INSERT INTO accounts (referenceid, manager, tsm, company_name, contact_person, contact_number, email_address, 
+            type_client, address, delivery_address, region, status, industry, date_created) 
+            VALUES (${referenceid}, ${manager}, ${tsm}, ${company_name}, ${contact_person}, ${contact_number}, ${email_address}, 
+            ${type_client}, ${address}, ${delivery_address}, ${region}, ${status}, ${industry}, NOW()) 
             RETURNING *;
         `;
 
@@ -63,14 +63,14 @@ export async function POST(req: Request) {
                 account.referenceid,
                 account.manager,  // Assuming manager is optional
                 account.tsm,
-                account.companyname,
-                account.contactperson,
-                account.contactnumber,
-                account.emailaddress,
-                account.typeclient,
+                account.company_name,
+                account.contact_person,
+                account.contact_number,
+                account.email_address,
+                account.type_client,
                 account.address,
-                account.deliveryaddress,
-                account.area,
+                account.delivery_address,
+                account.region,
                 account.status,
                 account.industry // Assuming industry is optional
             );

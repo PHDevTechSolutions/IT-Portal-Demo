@@ -17,13 +17,13 @@ type AuditFilter = "" | "all" | AuditKey;
 
 interface Customer {
   id: number;
-  companyname: string;
-  contactperson: string;
-  contactnumber: string;
-  emailaddress: string;
+  company_name: string;
+  contact_person: string;
+  contact_number: string;
+  email_address: string;
   address: string;
-  area: string;
-  typeclient: string;
+  region: string;
+  type_client: string;
   referenceid: string;
   tsm: string;
   manager: string;
@@ -80,12 +80,12 @@ export const AuditDialog: React.FC<AuditDialogProps> = ({
                 </div>
               </label>
             )}
-            {audited.some((c) => !c.typeclient?.trim() && c.status?.trim()) && (
+            {audited.some((c) => !c.type_client?.trim() && c.status?.trim()) && (
               <label className="flex justify-between items-center gap-2">
                 <span>Missing Type:</span>
                 <div className="flex items-center gap-1">
                   <span className="font-semibold text-yellow-600">
-                    {audited.filter((c) => !c.typeclient?.trim() && c.status?.trim()).length}
+                    {audited.filter((c) => !c.type_client?.trim() && c.status?.trim()).length}
                   </span>
                   <input
                     type="checkbox"
@@ -95,12 +95,12 @@ export const AuditDialog: React.FC<AuditDialogProps> = ({
                 </div>
               </label>
             )}
-            {audited.some((c) => !c.status?.trim() && c.typeclient?.trim()) && (
+            {audited.some((c) => !c.status?.trim() && c.type_client?.trim()) && (
               <label className="flex justify-between items-center gap-2">
                 <span>Missing Status:</span>
                 <div className="flex items-center gap-1">
                   <span className="font-semibold text-yellow-600">
-                    {audited.filter((c) => !c.status?.trim() && c.typeclient?.trim()).length}
+                    {audited.filter((c) => !c.status?.trim() && c.type_client?.trim()).length}
                   </span>
                   <input
                     type="checkbox"
@@ -129,7 +129,7 @@ export const AuditDialog: React.FC<AuditDialogProps> = ({
                 // Bulk update status if "Missing Status" is checked
                 if (auditSelection.missingStatus) {
                   const missingStatusIds = audited
-                    .filter((c) => !c.status?.trim() && c.typeclient?.trim())
+                    .filter((c) => !c.status?.trim() && c.type_client?.trim())
                     .map((c) => c.id);
 
                   if (missingStatusIds.length > 0) {

@@ -15,7 +15,7 @@ interface AuditProps<T> {
 /**
  * 🔍 Audit component (reusable + no duplicate interface)
  */
-export function Audit<T extends { id: number; companyname?: string; contactnumber?: string; contactperson?: string; typeclient?: string; status?: string }>({
+export function Audit<T extends { id: number; company_name?: string; contact_number?: string; contact_person?: string; type_client?: string; status?: string }>({
   customers,
   setAuditedAction,
   setDuplicateIdsAction,
@@ -26,7 +26,7 @@ export function Audit<T extends { id: number; companyname?: string; contactnumbe
     const duplicates = new Set<number>()
 
     customers.forEach((c) => {
-      const key = `${c.companyname?.trim().toLowerCase()}|${c.contactnumber?.trim()}|${c.contactperson
+      const key = `${c.company_name?.trim().toLowerCase()}|${c.contact_number?.trim()}|${c.contact_person
         ?.trim()
         .toLowerCase()}`
       if (seen.has(key)) {
@@ -38,7 +38,7 @@ export function Audit<T extends { id: number; companyname?: string; contactnumbe
     })
 
     const issues = customers.filter(
-      (c) => !c.typeclient?.trim() || !c.status?.trim() || duplicates.has(c.id)
+      (c) => !c.type_client?.trim() || !c.status?.trim() || duplicates.has(c.id)
     )
 
     toast.loading("Auditing database...")

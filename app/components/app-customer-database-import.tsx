@@ -84,16 +84,17 @@ export function ImportDialog() {
                             manager: selectedManager?.value || "",
                             tsm: selectedTSM?.value || "",
                             tsa: selectedTSA?.value || "",
-                            companyname: row.getCell(1).value || "",
-                            contactperson: row.getCell(2).value || "",
-                            contactnumber: row.getCell(3).value || "",
-                            emailaddress: row.getCell(4).value || "",
-                            typeclient: row.getCell(5).value || "",
+                            company_name: row.getCell(1).value || "",
+                            contact_person: row.getCell(2).value || "",
+                            contact_number: row.getCell(3).value || "",
+                            email_address: row.getCell(4).value || "",
+                            type_client: row.getCell(5).value || "",
                             address: row.getCell(6).value || "",
-                            deliveryaddress: row.getCell(7).value || "",
-                            area: row.getCell(8).value || "",
-                            industry: row.getCell(9).value || "",
-                            status: row.getCell(10).value || "",
+                            region: row.getCell(7).value || "",
+                            status: row.getCell(8).value || "",
+                            company_group: row.getCell(9).value || "",
+                            delivery_address: row.getCell(10).value || "",
+                            industry: row.getCell(11).value || "",
                         })
                     })
 
@@ -200,24 +201,26 @@ export function ImportDialog() {
                                         <TableHead>Email</TableHead>
                                         <TableHead>Type of Client</TableHead>
                                         <TableHead>Address</TableHead>
-                                        <TableHead>Delivery Address</TableHead>
-                                        <TableHead>Area</TableHead>
-                                        <TableHead>Industry</TableHead>
+                                        <TableHead>Region</TableHead>
                                         <TableHead>Status</TableHead>
+                                        <TableHead>Company Group</TableHead>
+                                        <TableHead>Delivery Address</TableHead>
+                                        <TableHead>Industry</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {previewData.map((row, i) => (
                                         <TableRow key={i}>
-                                            <TableCell className="whitespace-normal break-words max-w-[250px]">{row.companyname}</TableCell>
-                                            <TableCell className="whitespace-normal break-words max-w-[250px]">{row.contactperson}</TableCell>
-                                            <TableCell className="whitespace-normal break-words max-w-[250px]">{row.emailaddress}</TableCell>
-                                            <TableCell className="whitespace-nowrap">{row.typeclient}</TableCell>
+                                            <TableCell className="whitespace-normal break-words max-w-[250px]">{row.company_name}</TableCell>
+                                            <TableCell className="whitespace-normal break-words max-w-[250px]">{row.contact_person}</TableCell>
+                                            <TableCell className="whitespace-normal break-words max-w-[250px]">{row.email_address}</TableCell>
+                                            <TableCell className="whitespace-nowrap">{row.type_client}</TableCell>
                                             <TableCell className="whitespace-normal break-words max-w-[250px]">{row.address}</TableCell>
-                                            <TableCell className="whitespace-nowrap">{row.deliveryaddress}</TableCell>
-                                            <TableCell className="whitespace-nowrap">{row.area}</TableCell>
-                                            <TableCell className="whitespace-nowrap">{row.industry}</TableCell>
+                                            <TableCell className="whitespace-nowrap">{row.region}</TableCell>
                                             <TableCell className="whitespace-nowrap">{row.status}</TableCell>
+                                            <TableCell className="whitespace-nowrap">{row.company_group}</TableCell>
+                                            <TableCell className="whitespace-nowrap">{row.delivery_address}</TableCell>
+                                            <TableCell className="whitespace-nowrap">{row.industry}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

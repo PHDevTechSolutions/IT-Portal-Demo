@@ -17,7 +17,7 @@ async function bulktransfer(userIds: string[], tsaReferenceID: string) {
         const Xchire_update = await Xchire_sql`
             UPDATE accounts
             SET referenceid = ${tsaReferenceID},
-                typeclient = 'Transferred Account'
+                type_client = 'Transferred Account'
             WHERE id = ANY(${userIds})
             RETURNING *;
         `;

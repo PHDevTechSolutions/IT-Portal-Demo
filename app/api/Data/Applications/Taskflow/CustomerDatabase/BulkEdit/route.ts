@@ -8,16 +8,16 @@ if (!Xchire_databaseUrl) {
 
 const Xchire_sql = neon(Xchire_databaseUrl);
 
-async function bulkupdate(userIds: string[], typeclient: string) {
+async function bulkupdate(userIds: string[], type_client: string) {
     try {
-        if (!userIds || userIds.length === 0 || !typeclient) {
+        if (!userIds || userIds.length === 0 || !type_client) {
             throw new Error("User IDs and typeclient are required.");
         }
 
         const Xchire_update = await Xchire_sql`
             UPDATE accounts
             SET 
-                typeclient = ${typeclient},
+                type_client = ${type_client},
                 date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
             WHERE id = ANY(${userIds})
             RETURNING *;

@@ -23,29 +23,31 @@ export const Download: React.FC<DownloadProps> = ({ data, filename = "CustomerDa
     setIsDownloading(true);
 
     const headers = [
-      "companyname",
-      "contactperson",
-      "contactnumber",
-      "emailaddress",
-      "typeclient",
+      "company_name",
+      "contact_person",
+      "contact_number",
+      "email_address",
+      "type_client",
       "address",
-      "area",
+      "region",
       "status",
-      "companygroup",
-      "deliveryaddress",
+      "company_group",
+      "delivery_address",
+      "industry"
     ];
 
     const rows = data.map((c) => [
-      c.companyname,
-      c.contactperson,
-      c.contactnumber,
-      c.emailaddress,
-      c.typeclient,
+      c.company_name,
+      c.contact_person,
+      c.contact_number,
+      c.email_address,
+      c.type_client,
       c.address,
-      c.area,
+      c.region,
       c.status,
-      c.companygroup,
-      c.deliveryaddress,
+      c.company_group,
+      c.delivery_address,
+      c.industry
     ]);
 
     const csvContentArray = [headers, ...rows].map((row) =>

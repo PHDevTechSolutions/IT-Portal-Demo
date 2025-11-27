@@ -31,13 +31,13 @@ type AuditKey = "duplicates" | "missingType" | "missingStatus";
 
 interface Customer {
     id: number
-    companyname: string
-    contactperson: string
-    contactnumber: string
-    emailaddress: string
+    company_name: string
+    contact_person: string
+    contact_number: string
+    email_address: string
     address: string
-    area: string
-    typeclient: string
+    region: string
+    type_client: string
     referenceid: string
     tsm: string
     manager: string
@@ -206,7 +206,7 @@ export default function AccountPage() {
 
     // 🔹 Dynamic filters
     const typeOptions = useMemo(() => {
-        const types = new Set(customers.map((c) => c.typeclient).filter(Boolean))
+        const types = new Set(customers.map((c) => c.type_client).filter(Boolean))
         return ["all", ...Array.from(types)]
     }, [customers])
 
@@ -229,10 +229,10 @@ export default function AccountPage() {
     const filtered = useMemo(() =>
         customers
             .filter((c) =>
-                [c.companyname, c.contactperson, c.emailaddress, c.area, c.manager, c.tsm]
+                [c.company_name, c.contact_person, c.email_address, c.region, c.manager, c.tsm]
                     .some((field) => field?.toLowerCase().includes(search.toLowerCase()))
             )
-            .filter((c) => (filterType === "all" ? true : c.typeclient === filterType))
+            .filter((c) => (filterType === "all" ? true : c.type_client === filterType))
             .filter((c) => (filterStatus === "all" ? true : c.status === filterStatus))
             .filter((c) =>
                 filterTSA === "all"
@@ -261,9 +261,9 @@ export default function AccountPage() {
         if (!isAuditView) return filtered
         if (auditFilter === "" || auditFilter === "all") return audited
         if (auditFilter === "missingType")
-            return audited.filter((c) => !c.typeclient?.trim() && c.status?.trim())
+            return audited.filter((c) => !c.type_client?.trim() && c.status?.trim())
         if (auditFilter === "missingStatus")
-            return audited.filter((c) => !c.status?.trim() && c.typeclient?.trim())
+            return audited.filter((c) => !c.status?.trim() && c.type_client?.trim())
         if (auditFilter === "duplicates")
             return audited.filter((c) => duplicateIds.has(c.id))
         return audited
@@ -572,7 +572,7 @@ export default function AccountPage() {
                                         }
                                     >
                                         ⚠ Missing Type:{" "}
-                                        {audited.filter((c) => !c.typeclient?.trim() && c.status?.trim()).length}
+                                        {audited.filter((c) => !c.type_client?.trim() && c.status?.trim()).length}
                                     </Button>
                                     <Button
                                         size="sm"
@@ -587,7 +587,7 @@ export default function AccountPage() {
                                         }
                                     >
                                         ⚠ Missing Status:{" "}
-                                        {audited.filter((c) => !c.status?.trim() && c.typeclient?.trim()).length}
+                                        {audited.filter((c) => !c.status?.trim() && c.type_client?.trim()).length}
                                     </Button>
                                     <Button
                                         size="sm"
@@ -658,7 +658,7 @@ export default function AccountPage() {
 
                                         <TableBody className="text-[12px]">
                                             {current.map((c) => {
-                                                const isMissingType = !c.typeclient?.trim()
+                                                const isMissingType = !c.type_client?.trim()
                                                 const isMissingStatus = !c.status?.trim()
                                                 const isDuplicate = duplicateIds.has(c.id)
                                                 const isSelected = selectedIds.has(c.id)
@@ -676,16 +676,16 @@ export default function AccountPage() {
                                                             className={`uppercase whitespace-normal break-words max-w-[250px] ${isDuplicate ? "bg-red-100" : isMissingType || isMissingStatus ? "bg-yellow-100" : ""
                                                                 }`}
                                                         >
-                                                            {c.companyname}
+                                                            {c.company_name}
                                                         </TableCell>
                                                         <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
-                                                            {c.contactperson}
+                                                            {c.contact_person}
                                                         </TableCell>
                                                         <TableCell className="whitespace-normal break-words max-w-[250px]">
-                                                            {c.emailaddress}
+                                                            {c.email_address}
                                                         </TableCell>
                                                         <TableCell className={isMissingType ? "bg-yellow-100" : ""}>
-                                                            {c.typeclient || "—"}
+                                                            {c.type_client || "—"}
                                                         </TableCell>
                                                         <TableCell className="text-center">
                                                             {c.status ? (
@@ -783,7 +783,7 @@ export default function AccountPage() {
                                                                 </Badge>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell>{c.area}</TableCell>
+                                                        <TableCell>{c.region}</TableCell>
                                                         <TableCell className="capitalize">
                                                             {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-"}
                                                         </TableCell>

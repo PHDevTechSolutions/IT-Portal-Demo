@@ -14,25 +14,25 @@ async function create(
     referenceid: string,
     manager: string,
     tsm: string,
-    companyname: string, 
-    contactperson: string,
-    contactnumber: string,
-    emailaddress: string,
-    typeclient: string,
-    companygroup: string,
+    company_name: string, 
+    contact_person: string,
+    contact_number: string,
+    email_address: string,
+    type_client: string,
+    company_group: string,
     address: string,
-    deliveryaddress: string,
-    area: string,
+    delivery_address: string,
+    region: string,
     status: string,
 ) {
     try {
-        if (!companyname || !typeclient) {
+        if (!company_name || !type_client) {
             throw new Error("Company Name and Type of Client are required.");
         }
 
         const Xchire_insert = await Xchire_sql`
-            INSERT INTO accounts (referenceid, manager, tsm, companyname, contactperson, contactnumber, emailaddress, typeclient, companygroup, address, deliveryaddress, area, status, date_created) 
-            VALUES (${referenceid}, ${manager}, ${tsm}, ${companyname}, ${contactperson}, ${contactnumber}, ${emailaddress}, ${typeclient}, ${companygroup}, ${address}, ${deliveryaddress}, ${area}, ${status}, NOW()) 
+            INSERT INTO accounts (referenceid, manager, tsm, company_name, contact_person, contact_number, email_address, type_client, company_group, address, delivery_address, region, status, date_created) 
+            VALUES (${referenceid}, ${manager}, ${tsm}, ${company_name}, ${contact_person}, ${contact_number}, ${email_address}, ${type_client}, ${company_group}, ${address}, ${delivery_address}, ${region}, ${status}, NOW()) 
             RETURNING *;
         `;
 
@@ -47,10 +47,10 @@ export async function POST(req: Request) {
     try {
         // Ensure request body is valid JSON
         const Xchire_body = await req.json();
-        const { referenceid, manager, tsm, companyname, contactperson, contactnumber, emailaddress, typeclient, companygroup, address, deliveryaddress, area, status } = Xchire_body;
+        const { referenceid, manager, tsm, company_name, contact_person, contact_number, email_address, type_client, company_group, address, delivery_address, region, status } = Xchire_body;
 
         // Call the addUser function
-        const Xchire_result = await create(referenceid, manager, tsm, companyname, contactperson, contactnumber, emailaddress, typeclient, companygroup, address, deliveryaddress, area, status);
+        const Xchire_result = await create(referenceid, manager, tsm, company_name, contact_person, contact_number, email_address, type_client, company_group, address, delivery_address, region, status);
 
         // Return response
         return NextResponse.json(Xchire_result);
