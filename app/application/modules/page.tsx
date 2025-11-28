@@ -1,11 +1,9 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "../../components/app-sidebar"
-import { AppCard } from "../../components/app-card"
-import { AppTable } from "../../components/app-table"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -16,36 +14,28 @@ import {
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Pagination,
   PaginationContent,
   PaginationItem,
   PaginationLink,
 } from "@/components/ui/pagination"
-
-// 🧩 drag imports
+import { Input } from "@/components/ui/input"
 import {
-  DndContext,
-  closestCenter,
-  MouseSensor,
-  TouchSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core"
-import {
-  SortableContext,
-  rectSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable"
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 
 interface Item {
   id: number
   title: string
   description: string
-  image?: string
+  url: string
 }
 
 export default function AccountPage() {
@@ -54,97 +44,176 @@ export default function AccountPage() {
   const [userId] = useState<string | null>(queryUserId ?? null)
   const router = useRouter()
 
-  // 🔹 Data setup
-  const titles = [
-    "Taskflow - Activity Time and Motion Management System",
-    "Ecodesk - Customer Ticketing System",
-    "Acculog - Attendance Tracking System",
-    "Shifts - Room Reservation System",
-    "Linker X - Store and Shared Links Platform",
-    "Stash - IT Asset Management System",
-    "IT Ticketing Management System",
-    "Know My Employee",
-    "WooCommerce",
-    "Shopify",
-    "Cloudinary",
+  // All items combined
+  const items: Item[] = [
+    {
+      id: 1,
+      title: "Taskflow ( Current Live )",
+      description: "Manage and track activity time and motion efficiently.",
+      url: "https://ecoshift-erp-system.vercel.app/",
+    },
+    {
+      id: 2,
+      title: "Taskflow ( Demo Server )",
+      description: "Manage and track activity time and motion efficiently.",
+      url: "https://taskflow-tau-seven.vercel.app/",
+    },
+    {
+      id: 3,
+      title: "Ecodesk ( Current Live )",
+      description: "Customer support ticketing system for seamless issue tracking.",
+      url: "https://ecoshift-erp-system.vercel.app/",
+    },
+    {
+      id: 4,
+      title: "Acculog ( Current Live )",
+      description: "Attendance tracking system to monitor employee hours.",
+      url: "https://acculog.vercel.app/",
+    },
+    {
+      id: 5,
+      title: "Acculog ( Demo Server )",
+      description: "Attendance tracking system to monitor employee hours.",
+      url: "https://acculog-demo-navy.vercel.app/",
+    },
+    {
+      id: 6,
+      title: "Room Reservation ( Demo Server )",
+      description: "Reserve rooms and manage shift schedules easily.",
+      url: "https://shift-reservation.vercel.app/Book",
+    },
+    {
+      id: 7,
+      title: "Stash IT Asset ( Old Version )",
+      description: "IT asset management system to track company equipment.",
+      url: "https://stash-rouge-pi.vercel.app/",
+    },
+    {
+      id: 8,
+      title: "Stash IT Asset ( New Version )",
+      description: "IT asset management system to track company equipment.",
+      url: "https://stash-it-asset-management-system.vercel.app/",
+    },
+    {
+      id: 9,
+      title: "Know My Employee",
+      description: "Employee analytics and HR insights platform.",
+      url: "https://kme-orcin.vercel.app/Home",
+    },
+    {
+      id: 10,
+      title: "Linker X",
+      description: "Platform to store and share links securely.",
+      url: "https://linker-x-delta.vercel.app/",
+    },
+    {
+      id: 11,
+      title: "Ecoshift Corporation",
+      description: "Official website of Ecoshift Corporation.",
+      url: "https://www.ecoshiftcorp.com/",
+    },
+    {
+      id: 12,
+      title: "Disruptive Solutions Inc",
+      description: "Disruptive Solutions Inc official site.",
+      url: "https://disruptivesolutionsinc.com/",
+    },
+    {
+      id: 13,
+      title: "Ecoshift Shopify Admin",
+      description: "Shopify admin login for Ecoshift.",
+      url: "https://admin.shopify.com/login?ui_locales=en-PH&errorHint=no_cookie_session",
+    },
+    {
+      id: 14,
+      title: "Ecoshift Shopify Website",
+      description: "Ecoshift Shopify customer-facing website.",
+      url: "https://eshome.ph/",
+    },
+    {
+      id: 15,
+      title: "Elementor Pro",
+      description: "Elementor Pro website login and management.",
+      url: "https://my.elementor.com/login/?redirect_to=%2Fwebsites%2F",
+    },
+    {
+      id: 16,
+      title: "Nitropack",
+      description: "Nitropack dashboard for website speed optimization.",
+      url: "https://app.nitropack.io/dashboard",
+    },
+    {
+      id: 17,
+      title: "Vercel",
+      description: "Vercel platform login for deployments.",
+      url: "https://vercel.com/login",
+    },
+    {
+      id: 18,
+      title: "VAH",
+      description: "VAH official site.",
+      url: "https://buildchem-nu.vercel.app/",
+    },
+    {
+      id: 19,
+      title: "Neon PostgreSQL",
+      description: "Neon cloud Postgres database console and management.",
+      url: "https://console.neon.tech/realms/prod-realm/protocol/openid-connect/auth?client_id=neon-console&redirect_uri=https%3A%2F%2Fconsole.neon.tech%2Fauth%2Fkeycloak%2Fcallback&response_type=code&scope=openid+profile+email&state=AbXDgr_yQo6C3WZ9xHF_mA%3D%3D%2C%2C%2C",
+    },
+    {
+      id: 20,
+      title: "MongoDB",
+      description: "MongoDB cloud account and database management.",
+      url: "https://account.mongodb.com/account/login?n=https%3A%2F%2Fcloud.mongodb.com%2Fv2%2F6891bf020016b943a3459440&nextHash=%23metrics%2FreplicaSet%2F6891bf5e52da71245672c0d1%2Fexplorer%2FLinkerX%2Fnotes%2Ffind&signedOut=true",
+    },
+    {
+      id: 21,
+      title: "Supabase",
+      description: "Supabase dashboard for backend database and authentication.",
+      url: "https://supabase.com/dashboard/sign-in",
+    },
+    {
+      id: 22,
+      title: "Redis",
+      description: "Redis Cloud subscription and metrics dashboard.",
+      url: "https://cloud.redis.io/#/subscriptions/subscription/2915038/bdb-view/13569236/metric",
+    },
+    {
+      id: 23,
+      title: "Firebase",
+      description: "Firebase console for Firestore and project management.",
+      url: "https://console.firebase.google.com/u/0/project/taskflow-4605f/firestore/databases/-default-/indexes",
+    },
   ]
 
-  const generateDescription = (title: string) => {
-    if (title.includes("Taskflow")) return "Manage and track activity time and motion efficiently."
-    if (title.includes("Ecodesk")) return "Customer support ticketing system for seamless issue tracking."
-    if (title.includes("Acculog")) return "Attendance tracking system to monitor employee hours."
-    if (title.includes("Shifts")) return "Reserve rooms and manage shift schedules easily."
-    if (title.includes("Linker X")) return "Platform to store and share links securely."
-    if (title.includes("Stash")) return "IT asset management system to track company equipment."
-    if (title.includes("IT Ticketing")) return "IT support ticketing and workflow management."
-    if (title.includes("Know My Employee")) return "Employee analytics and HR insights platform."
-    if (title.includes("Cloudinary")) return "Media management and image hosting solution."
-    if (title.includes("WooCommerce")) return "E-commerce platform for WordPress stores."
-    if (title.includes("Shopify")) return "Complete e-commerce solution for online stores."
-    return "Description for " + title
-  }
+  const [search, setSearch] = useState("")
 
-  const getImageForTitle = (title: string) => {
-    if (title.includes("Taskflow")) return "/images/logo/1.jpg"
-    if (title.includes("Ecodesk")) return "/images/logo/2.jpg"
-    if (title.includes("Acculog")) return "/images/logo/3.jpg"
-    if (title.includes("WooCommerce")) return "/images/logo/4.jpg"
-    if (title.includes("Shopify")) return "/images/logo/5.jpg"
-    if (title.includes("Cloudinary")) return "/images/logo/6.jpg"
-    if (title.includes("Shifts")) return "/images/logo/9.png"
-    if (title.includes("Linker X")) return "/images/logo/10.png"
-    if (title.includes("Stash")) return "/images/logo/11.png"
-    if (title.includes("Know My Employee")) return "/ecoshift.png"
-    if (title.includes("IT Ticketing")) return "/ecoshift.png"
-    return "/logo/default.jpg"
-  }
+  const filteredItems = useMemo(() => {
+    if (!search.trim()) return items
+    return items.filter(
+      (item) =>
+        item.title.toLowerCase().includes(search.toLowerCase()) ||
+        item.description.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [search, items])
 
-  const items: Item[] = titles.map((title, i) => ({
-    id: i + 1,
-    title,
-    description: generateDescription(title),
-    image: getImageForTitle(title),
-  }))
+  const itemsPerPage = 10
+  const [page, setPage] = useState(1)
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage)
 
-  // 🧭 Pagination setup
-  const cardsPerPage = 9
-  const tablePerPage = 10
+  const paginatedItems = filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
-  const [cardPage, setCardPage] = useState(1)
-  const [tablePage, setTablePage] = useState(1)
-  const [tabValue, setTabValue] = useState<"cards" | "table">("cards")
-
-  const totalCardPages = Math.ceil(items.length / cardsPerPage)
-  const totalTablePages = Math.ceil(items.length / tablePerPage)
-
-  const paginatedCards = items.slice((cardPage - 1) * cardsPerPage, cardPage * cardsPerPage)
-  const paginatedTable = items.slice((tablePage - 1) * tablePerPage, tablePage * tablePerPage)
+  React.useEffect(() => {
+    setPage(1)
+  }, [search])
 
   const generatePages = (total: number) => Array.from({ length: total }, (_, i) => i + 1)
-
-  // 🪄 DRAG logic for cards
-  const [cardData, setCardData] = useState(paginatedCards)
-
-  const sensors = useSensors(
-    useSensor(MouseSensor),
-    useSensor(TouchSensor),
-    useSensor(KeyboardSensor)
-  )
-
-  const handleCardDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (over && active.id !== over.id) {
-      const oldIndex = cardData.findIndex((c) => c.id === active.id)
-      const newIndex = cardData.findIndex((c) => c.id === over.id)
-      setCardData(arrayMove(cardData, oldIndex, newIndex))
-    }
-  }
 
   return (
     <SidebarProvider>
       <AppSidebar userId={userId} />
       <SidebarInset>
-        {/* 🔹 Header */}
+        {/* Header */}
         <header className="flex h-16 shrink-0 items-center gap-2 px-4">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
@@ -164,106 +233,84 @@ export default function AccountPage() {
               </BreadcrumbList>
             </Breadcrumb>
           </div>
-
-          <div className="ml-auto">
-            <Tabs value={tabValue} onValueChange={(v) => setTabValue(v as "cards" | "table")}>
-              <TabsList className="space-x-2">
-                <TabsTrigger value="cards">Cards</TabsTrigger>
-                <TabsTrigger value="table">Table</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
         </header>
 
-        {/* 🔹 Main content */}
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <Tabs value={tabValue} onValueChange={(v) => setTabValue(v as "cards" | "table")} className="w-full">
-            
-            {/* 🟩 CARDS TAB */}
-            <TabsContent value="cards">
-              <DndContext
-                collisionDetection={closestCenter}
-                onDragEnd={handleCardDragEnd}
-                sensors={sensors}
-              >
-                <SortableContext items={cardData.map((c) => c.id)} strategy={rectSortingStrategy}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {cardData.map((item) => (
-                      <AppCard
-                        key={item.id}
-                        id={item.id}
-                        title={item.title}
-                        description={item.description}
-                        image={item.image}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
+        {/* Main content */}
+        <div className="flex flex-col gap-4 p-4 pt-0">
+          <Input
+            type="search"
+            placeholder="Search by title or description..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-md"
+          />
 
-              {/* Pagination */}
-              <Pagination className="mt-4 justify-center">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationLink
-                      onClick={() => cardPage > 1 && setCardPage(cardPage - 1)}
-                      className={cardPage === 1 ? "pointer-events-none opacity-50" : ""}
-                    >
-                      Prev
-                    </PaginationLink>
-                  </PaginationItem>
-                  {generatePages(totalCardPages).map((page) => (
-                    <PaginationItem key={page}>
-                      <PaginationLink onClick={() => setCardPage(page)} isActive={page === cardPage}>
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationLink
-                      onClick={() => cardPage < totalCardPages && setCardPage(cardPage + 1)}
-                      className={cardPage === totalCardPages ? "pointer-events-none opacity-50" : ""}
-                    >
-                      Next
-                    </PaginationLink>
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </TabsContent>
+          <Table>
+            <TableCaption>
+              List of applications and sites (filtered: {filteredItems.length} result
+              {filteredItems.length !== items.length ? `s` : ""})
+            </TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Link</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedItems.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground">
+                    No results found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedItems.map((item) => (
+                  <TableRow key={item.id} className="hover:bg-muted/50">
+                    <TableCell className="font-medium">{item.title}</TableCell>
+                    <TableCell>{item.description}</TableCell>
+                    <TableCell>
+                      <Button variant="link" size="sm" asChild>
+                        <a href={item.url} target="_blank" rel="noopener noreferrer">
+                          Open Link
+                        </a>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
 
-            {/* 🟦 TABLE TAB */}
-            <TabsContent value="table">
-              <AppTable items={paginatedTable} />
-              <Pagination className="mt-4 justify-center">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationLink
-                      onClick={() => tablePage > 1 && setTablePage(tablePage - 1)}
-                      className={tablePage === 1 ? "pointer-events-none opacity-50" : ""}
-                    >
-                      Prev
+          {totalPages > 1 && (
+            <Pagination className="mt-4 justify-center">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationLink
+                    onClick={() => page > 1 && setPage(page - 1)}
+                    className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                  >
+                    Prev
+                  </PaginationLink>
+                </PaginationItem>
+                {generatePages(totalPages).map((p) => (
+                  <PaginationItem key={p}>
+                    <PaginationLink onClick={() => setPage(p)} isActive={p === page}>
+                      {p}
                     </PaginationLink>
                   </PaginationItem>
-                  {generatePages(totalTablePages).map((page) => (
-                    <PaginationItem key={page}>
-                      <PaginationLink onClick={() => setTablePage(page)} isActive={page === tablePage}>
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationLink
-                      onClick={() => tablePage < totalTablePages && setTablePage(tablePage + 1)}
-                      className={tablePage === totalTablePages ? "pointer-events-none opacity-50" : ""}
-                    >
-                      Next
-                    </PaginationLink>
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </TabsContent>
-
-          </Tabs>
+                ))}
+                <PaginationItem>
+                  <PaginationLink
+                    onClick={() => page < totalPages && setPage(page + 1)}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : ""}
+                  >
+                    Next
+                  </PaginationLink>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       </SidebarInset>
     </SidebarProvider>

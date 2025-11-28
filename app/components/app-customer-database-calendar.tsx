@@ -29,7 +29,7 @@ export function Calendar({ startDate, endDate, setStartDateAction, setEndDateAct
             <PopoverTrigger asChild>
                 <Button
                     variant="outline"
-                    className="rounded-none w-56 justify-between font-normal"
+                    className="rounded w-56 justify-between font-normal"
                 >
                     {range?.from && range?.to
                         ? `${range.from.toLocaleDateString()} - ${range.to.toLocaleDateString()}`
@@ -39,6 +39,7 @@ export function Calendar({ startDate, endDate, setStartDateAction, setEndDateAct
             </PopoverTrigger>
             <PopoverContent className="w-auto overflow-hidden p-0" align="start">
                 <UiCalendar
+
                     mode="range"
                     selected={range}
                     captionLayout="dropdown"

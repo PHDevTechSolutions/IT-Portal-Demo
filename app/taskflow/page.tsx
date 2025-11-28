@@ -2,41 +2,25 @@
 
 import React, { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ChevronRightIcon,
-  DatabaseIcon,
-  ActivityIcon,
-  BarChart2Icon,
-  MessageCircleIcon,
-} from "lucide-react";
+import { ChevronRightIcon, DatabaseIcon, ActivityIcon, BarChart2Icon, MessageCircleIcon, CheckCircle2Icon, } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-  ItemMedia,
-} from "@/components/ui/item";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle, ItemMedia, } from "@/components/ui/item";
 
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "../components/app-sidebar";
-
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator, } from "@/components/ui/breadcrumb";
 
 const links = [
   {
     name: "Customer Database",
     path: "/taskflow/customer-database",
     icon: DatabaseIcon,
+  },
+  {
+    name: "Approval of Pending and Transfer Accounts",
+    path: "/taskflow/customer-approval",
+    icon: CheckCircle2Icon,
   },
   {
     name: "Activity Logs",
