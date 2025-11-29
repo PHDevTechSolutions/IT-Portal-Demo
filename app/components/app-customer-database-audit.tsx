@@ -53,8 +53,8 @@ export function Audit<T extends { id: number; company_name?: string; contact_num
   }
 
   return (
-    <Button variant="destructive" size="sm" onClick={handleAudit}>
-      <ShieldAlert className="size-4 mr-1" /> Audit Database
+    <Button variant="destructive" onClick={handleAudit}>
+      <ShieldAlert className="size-4 mr-1" /> Audit
     </Button>
   )
 }

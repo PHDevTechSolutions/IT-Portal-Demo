@@ -12,8 +12,9 @@ import { ImportDialog } from "../../components/app-customer-database-import"
 import { AuditDialog } from "../../components/app-customer-database-audit-dialog"
 import { DeleteDialog } from "../../components/app-customer-database-delete-dialog"
 import { TransferDialog } from "../../components/app-customer-database-transfer"
+import { FilterDialog } from "../../components/app-customer-database-filter-dialog"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, Filter } from "lucide-react"
 import { BadgeCheck, AlertTriangle, Clock, XCircle, PauseCircle, UserX, UserCheck, ArrowRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
@@ -110,6 +111,7 @@ export default function AccountPage() {
     const [transferSelection, setTransferSelection] = useState<string>("")
 
     const [isGenerating, setIsGenerating] = useState(false);
+    const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc");
 
     const toggleAuditSelection = (key: "duplicates" | "missingType" | "missingStatus") => {
         setAuditSelection(prev => ({ ...prev, [key]: !prev[key] }));
@@ -252,11 +254,14 @@ export default function AccountPage() {
                 return true;
             })
             .sort((a, b) => {
-                const dateA = new Date(a.date_created).getTime();
-                const dateB = new Date(b.date_created).getTime();
-                return dateB - dateA; // descending order: latest first
+                const nameA = a.company_name?.toLowerCase() || "";
+                const nameB = b.company_name?.toLowerCase() || "";
+
+                if (nameA < nameB) return sortOrder === "asc" ? -1 : 1;
+                if (nameA > nameB) return sortOrder === "asc" ? 1 : -1;
+                return 0;
             }),
-        [customers, search, filterType, filterStatus, filterTSA, startDate, endDate]
+        [customers, search, filterType, filterStatus, filterTSA, startDate, endDate, sortOrder]
     );
 
     // 🧭 Pagination + display switch
@@ -461,158 +466,115 @@ export default function AccountPage() {
                     </div>
 
                     {/* 🧩 Right-Side Button Group */}
-                    <div className="flex justify-end w-full sm:w-auto">
-                        <div className="inline-flex flex-wrap gap-2 sm:gap-0 sm:flex-nowrap border border-border rounded-md overflow-hidden">
-                            <ButtonGroup aria-label="Audit Filter Buttons" className="flex">
+                    <div className="flex flex-wrap items-center justify-end w-full gap-2 sm:w-auto">
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowFilters((prev) => !prev)}
+                        >
+                            <Filter />
+                        </Button>
+
+                        <Calendar
+                            startDate={startDate}
+                            endDate={endDate}
+                            setStartDateAction={setStartDate}
+                            setEndDateAction={setEndDate}
+                        />
+
+                        <ImportDialog />
+
+                        <Download data={filtered} filename="CustomerDatabase" />
+
+                        {selectedIds.size > 0 && (
+                            <>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setShowFilters((prev) => !prev)}
-                                    className="rounded-none sm:rounded-l-md w-full sm:w-auto"
+                                    onClick={() => setShowTransferDialog(true)}
+                                    className="min-w-[100px]"
                                 >
-                                    {showFilters ? "Hide Filters" : "Show Filters"}
+                                    <ArrowRight className="w-4 h-4" /> Transfer
                                 </Button>
 
-                                <ImportDialog />
+                                <Button
+                                    onClick={handleAutoGenerate}
+                                    size="sm"
+                                    disabled={isGenerating}
+                                    className="min-w-[140px]"
+                                >
+                                    {isGenerating ? "Generating..." : "Auto-Generate ID"} ({selectedIds.size})
+                                </Button>
 
-                                <Download data={filtered} filename="CustomerDatabase" />
-                                {selectedIds.size > 0 && (
-                                    <>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setShowTransferDialog(true)}
-                                        >
-                                            <ArrowRight className="w-4 h-4" /> Transfer
-                                        </Button>
+                                <Button
+                                    onClick={handleBulkDelete}
+                                    variant="destructive"
+                                    size="sm"
+                                    className="rounded-none sm:rounded-r-md border-l sm:border-l-0 min-w-[140px]"
+                                >
+                                    Delete Selected ({selectedIds.size})
+                                </Button>
+                            </>
+                        )}
 
-                                        <Button
-                                            onClick={handleAutoGenerate}
-                                            size="sm"
-                                            disabled={isGenerating}
-                                            className="ml-2"
-                                        >
-                                            {isGenerating ? "Generating..." : "Auto-Generate ID"} ({selectedIds.size})
-                                        </Button>
-
-                                        <Button
-                                            onClick={handleBulkDelete}
-                                            variant="destructive"
-                                            size="sm"
-                                            className="rounded-none sm:rounded-r-md border-l sm:border-l-0"
-                                        >
-                                            Delete Selected ({selectedIds.size})
-                                        </Button>
-                                    </>
-                                )}
-
-                                {!isAuditView ? (
-                                    <Audit
-                                        customers={customers}
-                                        setAuditedAction={setAudited}
-                                        setDuplicateIdsAction={setDuplicateIds}
-                                        setIsAuditViewAction={setIsAuditView}
-                                    />
-                                ) : (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleReturn}
-                                        className="rounded-none sm:rounded-r-md border-l sm:border-l-0"
-                                    >
-                                        Return to List
-                                    </Button>
-                                )}
-                            </ButtonGroup>
-
-                            <TransferDialog
-                                open={showTransferDialog}
-                                onOpenChangeAction={(open) => {
-                                    setShowTransferDialog(open);
-                                    if (!open) {
-                                        setTransferSelection("");
-                                        setTransferType(null);
-                                    }
-                                }}
-                                selectedIds={new Set(Array.from(selectedIds).map(String))}
-                                setSelectedIdsAction={(ids: Set<string>) => {
-                                    const newIds = new Set(Array.from(ids).map((id) => Number(id)));
-                                    setSelectedIdsAction(newIds);
-                                }}
-                                setAccountsAction={(updateFn) => setCustomers((prev) => updateFn(prev))}
-                                tsas={tsas}
-                                tsms={tsms}
-                                managers={managers}
+                        {!isAuditView ? (
+                            <Audit
+                                customers={customers}
+                                setAuditedAction={setAudited}
+                                setDuplicateIdsAction={setDuplicateIds}
+                                setIsAuditViewAction={setIsAuditView}
                             />
-                        </div>
+                        ) : (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleReturn}
+                                className="rounded-none sm:rounded-r-md border-l sm:border-l-0 min-w-[120px]"
+                            >
+                                Return to List
+                            </Button>
+                        )}
+
+                        <TransferDialog
+                            open={showTransferDialog}
+                            onOpenChangeAction={(open) => {
+                                setShowTransferDialog(open);
+                                if (!open) {
+                                    setTransferSelection("");
+                                    setTransferType(null);
+                                }
+                            }}
+                            selectedIds={new Set(Array.from(selectedIds).map(String))}
+                            setSelectedIdsAction={(ids: Set<string>) => {
+                                const newIds = new Set(Array.from(ids).map((id) => Number(id)));
+                                setSelectedIdsAction(newIds);
+                            }}
+                            setAccountsAction={(updateFn) => setCustomers((prev) => updateFn(prev))}
+                            tsas={tsas}
+                            tsms={tsms}
+                            managers={managers}
+                        />
                     </div>
 
                     {/* 🧮 Filters Section (collapsible) */}
                     {showFilters && (
-                        <div className="flex flex-wrap justify-start sm:justify-end gap-2 w-full border-border text-sm">
-                            <ButtonGroup aria-label="Audit Filter Buttons" className="flex">
-                                <Select value={filterTSA} onValueChange={setFilterTSA}>
-                                    <SelectTrigger className="w-full sm:w-[200px]">
-                                        <SelectValue placeholder="Filter by TSA" />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-none sm:rounded-r-md border-l sm:border-l-0 capitalize">
-                                        {tsaList.map((t) => (
-                                            <SelectItem key={t.value} value={t.value}>
-                                                {t.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Calendar
-                                    startDate={startDate}
-                                    endDate={endDate}
-                                    setStartDateAction={setStartDate}
-                                    setEndDateAction={setEndDate}
-                                />
-                                <Select value={filterType} onValueChange={setFilterType}>
-                                    <SelectTrigger className="rounded-none sm:rounded-r-md border-l sm:border-l-0">
-                                        <SelectValue placeholder="Filter by Type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {typeOptions.map((t) => (
-                                            <SelectItem key={t} value={t}>
-                                                {t === "all" ? "All Types" : t}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                                    <SelectTrigger className="rounded-none sm:rounded-r-md border-l sm:border-l-0">
-                                        <SelectValue placeholder="Filter by Status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {statusOptions.map((s) => (
-                                            <SelectItem key={s} value={s}>
-                                                {s === "all" ? "All Status" : s}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={rowsPerPage.toString()}
-                                    onValueChange={(v) => {
-                                        setRowsPerPage(Number(v))
-                                        setPage(1)
-                                    }}
-                                >
-                                    <SelectTrigger className="rounded-none sm:rounded-r-md border-l sm:border-l-0">
-                                        <SelectValue placeholder="Rows/Page" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="20">20</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
-                                        <SelectItem value="100">100</SelectItem>
-                                        <SelectItem value="1000">1000</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </ButtonGroup>
-
-                        </div>
+                        <FilterDialog
+                            open={showFilters}
+                            onOpenChange={setShowFilters}
+                            filterTSA={filterTSA}
+                            setFilterTSA={setFilterTSA}
+                            filterType={filterType}
+                            setFilterType={setFilterType}
+                            filterStatus={filterStatus}
+                            setFilterStatus={setFilterStatus}
+                            rowsPerPage={rowsPerPage}
+                            setRowsPerPage={setRowsPerPage}
+                            tsaList={tsaList}
+                            typeOptions={typeOptions}
+                            statusOptions={statusOptions}
+                            sortOrder={sortOrder}
+                            setSortOrder={setSortOrder}
+                            onClose={() => setShowFilters(false)}
+                        />
                     )}
                 </div>
 

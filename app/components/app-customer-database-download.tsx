@@ -119,7 +119,7 @@ export const Download: React.FC<DownloadProps> = ({ data, filename = "CustomerDa
   };
 
   return (
-    <Button variant="default" size="sm" onClick={handleDownload} disabled={isDownloading}>
+    <Button variant="default" onClick={handleDownload} disabled={isDownloading}>
       <DownloadIcon className="size-4 mr-1" /> Download
     </Button>
   );

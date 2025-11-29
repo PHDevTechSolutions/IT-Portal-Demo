@@ -155,7 +155,7 @@ export function ImportDialog() {
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                <Button variant="outline" className="flex items-center gap-1">
                     <UploadIcon className="w-4 h-4" /> Upload
                 </Button>
             </DialogTrigger>
