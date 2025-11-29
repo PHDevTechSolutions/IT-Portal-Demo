@@ -271,6 +271,8 @@ export default function AccountPage() {
 
     const totalPages = Math.max(1, Math.ceil(displayData.length / rowsPerPage))
     const current = displayData.slice((page - 1) * rowsPerPage, page * rowsPerPage)
+    const totalCount = filtered.length;
+
 
     const handleReturn = () => {
         setIsAuditView(false)
@@ -625,13 +627,17 @@ export default function AccountPage() {
                 />
 
                 {/* Table */}
-                <div className="mx-4 border border-border shadow-sm rounded-lg">
+                <div className="p-4">
+                    <div className="flex justify-start mb-2">
+                        <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
+                    </div>
                     <div className="overflow-auto min-h-[200px] flex items-center justify-center">
                         {isFetching ? (
                             <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
                                 <Loader2 className="size-6 animate-spin" />
                                 <span>Loading customers...</span>
                             </div>
+
                         ) : current.length > 0 ? (
                             <DndContext collisionDetection={closestCenter} sensors={sensors} onDragEnd={handleDragEnd}>
                                 <SortableContext items={current.map((c) => c.id)} strategy={verticalListSortingStrategy}>
