@@ -22,7 +22,6 @@ import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Search } from "lucide-react"
 import { DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable"
@@ -720,20 +719,37 @@ export default function AccountPage() {
                                                             {c.account_reference_number}
                                                         </TableCell>
                                                         <TableCell
-                                                            className={`uppercase whitespace-normal break-words max-w-[250px] ${isDuplicate ? "bg-red-100" : isMissingType || isMissingStatus ? "bg-yellow-100" : ""
-                                                                }`}
+                                                            className="uppercase whitespace-normal break-words max-w-[250px]"
                                                         >
-                                                            {c.company_name}
+                                                            <span
+                                                                className={
+                                                                    isDuplicate || isMissingType || isMissingStatus
+                                                                        ? "line-through underline decoration-red-500 decoration-2"
+                                                                        : ""
+                                                                }
+                                                            >
+                                                                {c.company_name}
+                                                            </span>
                                                         </TableCell>
+
                                                         <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
                                                             {c.contact_person}
                                                         </TableCell>
                                                         <TableCell className="whitespace-normal break-words max-w-[250px]">
                                                             {c.email_address}
                                                         </TableCell>
-                                                        <TableCell className={isMissingType ? "bg-yellow-100" : ""}>
-                                                            {c.type_client || "—"}
+                                                        <TableCell>
+                                                            <span
+                                                                className={
+                                                                    isMissingType
+                                                                        ? "line-through underline decoration-red-500 decoration-2"
+                                                                        : ""
+                                                                }
+                                                            >
+                                                                {c.type_client || "—"}
+                                                            </span>
                                                         </TableCell>
+
                                                         <TableCell className="text-center">
                                                             {c.status ? (
                                                                 (() => {
