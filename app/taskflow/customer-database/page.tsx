@@ -31,6 +31,7 @@ type AuditKey = "duplicates" | "missingType" | "missingStatus";
 
 interface Customer {
     id: number
+    account_reference_number: string;
     company_name: string
     contact_person: string
     contact_number: string
@@ -107,6 +108,8 @@ export default function AccountPage() {
     const [showTransferDialog, setShowTransferDialog] = useState(false)
     const [transferType, setTransferType] = useState<"TSM" | "Manager" | null>(null)
     const [transferSelection, setTransferSelection] = useState<string>("")
+
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const toggleAuditSelection = (key: "duplicates" | "missingType" | "missingStatus") => {
         setAuditSelection(prev => ({ ...prev, [key]: !prev[key] }));
@@ -273,7 +276,6 @@ export default function AccountPage() {
     const current = displayData.slice((page - 1) * rowsPerPage, page * rowsPerPage)
     const totalCount = filtered.length;
 
-
     const handleReturn = () => {
         setIsAuditView(false)
         setAudited([])
@@ -354,6 +356,70 @@ export default function AccountPage() {
         }
     }
 
+    const handleAutoGenerate = async () => {
+        if (selectedIds.size === 0) {
+            toast.error("No customers selected.");
+            return;
+        }
+
+        setIsGenerating(true);
+
+        try {
+            const selectedCustomers = customers.filter(c => selectedIds.has(c.id));
+
+            // Helper to get initials from company_name
+            const getInitials = (name: string) => {
+                const parts = name.trim().split(/\s+/);
+                if (parts.length === 1) return parts[0][0].toUpperCase();
+                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+            };
+
+            // For each customer, build ref based on initials + region (instead of hardcoded "NCR")
+            const updates = selectedCustomers.map((customer, index) => {
+                const initials = getInitials(customer.company_name);
+                // Get region code or fallback to 'NCR'
+                const regionCode = (customer.region || 'NCR').toUpperCase().replace(/\s+/g, '');
+
+                // Sequence number with leading zeros length 10
+                const seqNum = (index + 1).toString().padStart(10, "0");
+
+                // Format: [Initials]-[RegionCode]-[Sequence]
+                const newRef = `${initials}-${regionCode}-${seqNum}`;
+
+                return {
+                    id: customer.id,
+                    account_reference_number: newRef,
+                };
+            });
+
+            const res = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/UpdateReferenceNumber", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ updates }),
+            });
+
+            const result = await res.json();
+
+            if (result.success) {
+                setCustomers((prev) =>
+                    prev.map((c) => {
+                        const update = updates.find((u) => u.id === c.id);
+                        if (update) return { ...c, referenceid: update.account_reference_number };
+                        return c;
+                    })
+                );
+                toast.success("Reference numbers generated and updated successfully.");
+            } else {
+                toast.error(result.error || "Failed to update reference numbers.");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("An error occurred during update.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     return (
         <SidebarProvider>
             <AppSidebar userId={userId} />
@@ -418,6 +484,15 @@ export default function AccountPage() {
                                             onClick={() => setShowTransferDialog(true)}
                                         >
                                             <ArrowRight className="w-4 h-4" /> Transfer
+                                        </Button>
+
+                                        <Button
+                                            onClick={handleAutoGenerate}
+                                            size="sm"
+                                            disabled={isGenerating}
+                                            className="ml-2"
+                                        >
+                                            {isGenerating ? "Generating..." : "Auto-Generate ID"} ({selectedIds.size})
                                         </Button>
 
                                         <Button
@@ -647,6 +722,7 @@ export default function AccountPage() {
                                                 <TableHead className="w-8 text-center">
                                                     <input type="checkbox" checked={selectAll} onChange={handleSelectAll} />
                                                 </TableHead>
+                                                <TableHead>#</TableHead>
                                                 <TableHead>Company</TableHead>
                                                 <TableHead>Contact</TableHead>
                                                 <TableHead>Email</TableHead>
@@ -677,6 +753,9 @@ export default function AccountPage() {
                                                                 checked={isSelected}
                                                                 onChange={() => toggleSelect(c.id)}
                                                             />
+                                                        </TableCell>
+                                                        <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
+                                                            {c.account_reference_number}
                                                         </TableCell>
                                                         <TableCell
                                                             className={`uppercase whitespace-normal break-words max-w-[250px] ${isDuplicate ? "bg-red-100" : isMissingType || isMissingStatus ? "bg-yellow-100" : ""

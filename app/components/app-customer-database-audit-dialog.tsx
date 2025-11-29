@@ -17,6 +17,7 @@ type AuditFilter = "" | "all" | AuditKey;
 
 interface Customer {
   id: number;
+  account_reference_number: string;
   company_name: string;
   contact_person: string;
   contact_number: string;
