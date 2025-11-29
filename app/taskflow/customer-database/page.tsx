@@ -23,9 +23,6 @@ import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
-import { DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
-import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
 import { ButtonGroup } from "@/components/ui/button-group"
 type AuditKey = "duplicates" | "missingType" | "missingStatus";
 
@@ -49,26 +46,10 @@ interface Customer {
     next_available_date?: string
 }
 
-function DraggableRow({ item, children }: { item: Customer; children: React.ReactNode }) {
-    const { setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.8 : 1,
-    }
-    return (
-        <TableRow ref={setNodeRef} style={style} className="data-[dragging=true]:opacity-75 hover:bg-muted/5">
-            {children}
-        </TableRow>
-    )
-}
-
 export default function AccountPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const [userId] = useState<string | null>(searchParams?.get("userId") ?? null)
-    const sensors = useSensors(useSensor(MouseSensor), useSensor(TouchSensor), useSensor(KeyboardSensor))
-
     const [customers, setCustomers] = useState<Customer[]>([])
     const [search, setSearch] = useState("")
     const [filterType, setFilterType] = useState("all")
@@ -94,11 +75,7 @@ export default function AccountPage() {
     const [selectAll, setSelectAll] = useState(false)
 
     const [showAuditDialog, setShowAuditDialog] = useState(false);
-    const [auditSelection, setAuditSelection] = useState<Record<AuditKey, boolean>>({
-        duplicates: false,
-        missingType: false,
-        missingStatus: false,
-    });
+    const [auditSelection, setAuditSelection] = useState<Record<AuditKey, boolean>>({ duplicates: false, missingType: false, missingStatus: false, });
 
     // 🔹 Manager & TSM lists
     const [tsas, setTsas] = useState<{ label: string; value: string }[]>([])
@@ -198,15 +175,6 @@ export default function AccountPage() {
 
         fetchDropdowns();
     }, [showTransferDialog]);
-
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event
-        if (active.id !== over?.id) {
-            const oldIndex = customers.findIndex((c) => c.id === active.id)
-            const newIndex = customers.findIndex((c) => c.id === over?.id)
-            setCustomers(arrayMove(customers, oldIndex, newIndex))
-        }
-    }
 
     // 🔹 Dynamic filters
     const typeOptions = useMemo(() => {
@@ -466,52 +434,20 @@ export default function AccountPage() {
 
                     {/* 🧩 Right-Side Button Group */}
                     <div className="flex flex-wrap items-center justify-end w-full gap-2 sm:w-auto">
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowFilters((prev) => !prev)}
-                        >
-                            <Filter />
-                        </Button>
-
+                        <Button variant="outline" onClick={() => setShowFilters((prev) => !prev)}> <Filter /> </Button>
                         <Calendar
                             startDate={startDate}
                             endDate={endDate}
                             setStartDateAction={setStartDate}
                             setEndDateAction={setEndDate}
                         />
-
                         <ImportDialog />
-
                         <Download data={filtered} filename="CustomerDatabase" />
-
                         {selectedIds.size > 0 && (
                             <>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setShowTransferDialog(true)}
-                                    className="min-w-[100px]"
-                                >
-                                    <ArrowRight className="w-4 h-4" /> Transfer
-                                </Button>
-
-                                <Button
-                                    onClick={handleAutoGenerate}
-                                    size="sm"
-                                    disabled={isGenerating}
-                                    className="min-w-[140px]"
-                                >
-                                    {isGenerating ? "Generating..." : "Auto-Generate ID"} ({selectedIds.size})
-                                </Button>
-
-                                <Button
-                                    onClick={handleBulkDelete}
-                                    variant="destructive"
-                                    size="sm"
-                                    className="rounded-none sm:rounded-r-md border-l sm:border-l-0 min-w-[140px]"
-                                >
-                                    Delete Selected ({selectedIds.size})
-                                </Button>
+                                <Button variant="outline" onClick={() => setShowTransferDialog(true)}> <ArrowRight className="w-4 h-4" /> Transfer </Button>
+                                <Button onClick={handleAutoGenerate} disabled={isGenerating} > {isGenerating ? "Generating..." : "Auto-Generate ID"} ({selectedIds.size}) </Button>
+                                <Button onClick={handleBulkDelete} variant="destructive" > Delete Selected ({selectedIds.size}) </Button>
                             </>
                         )}
 
@@ -523,14 +459,7 @@ export default function AccountPage() {
                                 setIsAuditViewAction={setIsAuditView}
                             />
                         ) : (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleReturn}
-                                className="rounded-none sm:rounded-r-md border-l sm:border-l-0 min-w-[120px]"
-                            >
-                                Return to List
-                            </Button>
+                            <Button variant="outline" onClick={handleReturn}> Return to List </Button>
                         )}
 
                         <TransferDialog
@@ -675,198 +604,192 @@ export default function AccountPage() {
                             </div>
 
                         ) : current.length > 0 ? (
-                            <DndContext collisionDetection={closestCenter} sensors={sensors} onDragEnd={handleDragEnd}>
-                                <SortableContext items={current.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                                    <Table className="whitespace-nowrap text-[13px] min-w-full">
-                                        <TableHeader className="bg-muted sticky top-0 z-10">
-                                            <TableRow>
-                                                <TableHead className="w-8 text-center">
-                                                    <input type="checkbox" checked={selectAll} onChange={handleSelectAll} />
-                                                </TableHead>
-                                                <TableHead>#</TableHead>
-                                                <TableHead>Company</TableHead>
-                                                <TableHead>Contact</TableHead>
-                                                <TableHead>Email</TableHead>
-                                                <TableHead>Type</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead>Area</TableHead>
-                                                <TableHead>TSA</TableHead>
-                                                <TableHead>TSM</TableHead>
-                                                <TableHead>Manager</TableHead>
-                                                <TableHead>Date Created</TableHead>
-                                                <TableHead>Date Updated</TableHead>
-                                                <TableHead>Next Available</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
+                            <Table className="whitespace-nowrap text-[13px] min-w-full">
+                                <TableHeader className="bg-muted sticky top-0 z-10">
+                                    <TableRow>
+                                        <TableHead className="w-8 text-center"><input type="checkbox" checked={selectAll} onChange={handleSelectAll} /></TableHead>
+                                        <TableHead>#</TableHead>
+                                        <TableHead>Company</TableHead>
+                                        <TableHead>Contact</TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Area</TableHead>
+                                        <TableHead>TSA</TableHead>
+                                        <TableHead>TSM</TableHead>
+                                        <TableHead>Manager</TableHead>
+                                        <TableHead>Date Created</TableHead>
+                                        <TableHead>Date Updated</TableHead>
+                                        <TableHead>Next Available</TableHead>
+                                    </TableRow>
+                                </TableHeader>
 
-                                        <TableBody className="text-[12px]">
-                                            {current.map((c) => {
-                                                const isMissingType = !c.type_client?.trim()
-                                                const isMissingStatus = !c.status?.trim()
-                                                const isDuplicate = duplicateIds.has(c.id)
-                                                const isSelected = selectedIds.has(c.id)
+                                <TableBody className="text-[12px]">
+                                    {current.map((c) => {
+                                        const isMissingType = !c.type_client?.trim()
+                                        const isMissingStatus = !c.status?.trim()
+                                        const isDuplicate = duplicateIds.has(c.id)
+                                        const isSelected = selectedIds.has(c.id)
 
-                                                return (
-                                                    <DraggableRow key={c.id} item={c}>
-                                                        <TableCell className="text-center">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isSelected}
-                                                                onChange={() => toggleSelect(c.id)}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
-                                                            {c.account_reference_number}
-                                                        </TableCell>
-                                                        <TableCell
-                                                            className="uppercase whitespace-normal break-words max-w-[250px]"
+                                        return (
+                                            <TableRow key={c.id}>
+                                                <TableCell className="text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() => toggleSelect(c.id)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
+                                                    {c.account_reference_number}
+                                                </TableCell>
+                                                <TableCell
+                                                    className="uppercase whitespace-normal break-words max-w-[250px]"
+                                                >
+                                                    <span
+                                                        className={
+                                                            isDuplicate || isMissingType || isMissingStatus
+                                                                ? "line-through underline decoration-red-500 decoration-2"
+                                                                : ""
+                                                        }
+                                                    >
+                                                        {c.company_name}
+                                                    </span>
+                                                </TableCell>
+
+                                                <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
+                                                    {c.contact_person}
+                                                </TableCell>
+                                                <TableCell className="whitespace-normal break-words max-w-[250px]">
+                                                    {c.email_address}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <span
+                                                        className={
+                                                            isMissingType
+                                                                ? "line-through underline decoration-red-500 decoration-2"
+                                                                : ""
+                                                        }
+                                                    >
+                                                        {c.type_client || "—"}
+                                                    </span>
+                                                </TableCell>
+
+                                                <TableCell className="text-center">
+                                                    {c.status ? (
+                                                        (() => {
+                                                            const status = c.status.trim().toLowerCase()
+                                                            switch (status) {
+                                                                case "active":
+                                                                    return (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="bg-green-500/90 hover:bg-green-600 text-white dark:bg-green-600 dark:hover:bg-green-700 flex items-center gap-1 transition-colors duration-200"
+                                                                        >
+                                                                            <BadgeCheck className="size-3.5" />
+                                                                            Active
+                                                                        </Badge>
+                                                                    )
+                                                                case "new client":
+                                                                    return (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="bg-blue-500/90 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-700 flex items-center gap-1 transition-colors duration-200"
+                                                                        >
+                                                                            <UserCheck className="size-3.5" />
+                                                                            New Client
+                                                                        </Badge>
+                                                                    )
+                                                                case "non-buying":
+                                                                    return (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="bg-yellow-500/90 hover:bg-yellow-600 text-white dark:bg-yellow-600 dark:hover:bg-yellow-700 flex items-center gap-1 transition-colors duration-200"
+                                                                        >
+                                                                            <AlertTriangle className="size-3.5" />
+                                                                            Non-Buying
+                                                                        </Badge>
+                                                                    )
+                                                                case "inactive":
+                                                                    return (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="bg-red-500/90 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 flex items-center gap-1 transition-colors duration-200"
+                                                                        >
+                                                                            <XCircle className="size-3.5" />
+                                                                            Inactive
+                                                                        </Badge>
+                                                                    )
+                                                                case "on hold":
+                                                                    return (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="bg-stone-500/90 hover:bg-stone-600 text-white dark:bg-stone-600 dark:hover:bg-stone-700 flex items-center gap-1 transition-colors duration-200"
+                                                                        >
+                                                                            <PauseCircle className="size-3.5" />
+                                                                            On Hold
+                                                                        </Badge>
+                                                                    )
+                                                                case "used":
+                                                                    return (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1 transition-colors duration-200"
+                                                                        >
+                                                                            <Clock className="size-3.5" />
+                                                                            Used
+                                                                        </Badge>
+                                                                    )
+                                                                case "for deletion":
+                                                                case "remove":
+                                                                    return (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:hover:bg-red-800 flex items-center gap-1 transition-colors duration-200"
+                                                                        >
+                                                                            <UserX className="size-3.5" />
+                                                                            {c.status}
+                                                                        </Badge>
+                                                                    )
+                                                                default:
+                                                                    return (
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="text-muted-foreground hover:bg-muted transition-colors duration-200"
+                                                                        >
+                                                                            {c.status}
+                                                                        </Badge>
+                                                                    )
+                                                            }
+                                                        })()
+                                                    ) : (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-muted-foreground hover:bg-muted transition-colors duration-200"
                                                         >
-                                                            <span
-                                                                className={
-                                                                    isDuplicate || isMissingType || isMissingStatus
-                                                                        ? "line-through underline decoration-red-500 decoration-2"
-                                                                        : ""
-                                                                }
-                                                            >
-                                                                {c.company_name}
-                                                            </span>
-                                                        </TableCell>
+                                                            —
+                                                        </Badge>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>{c.region}</TableCell>
+                                                <TableCell className="capitalize">
+                                                    {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-"}
+                                                </TableCell>
 
-                                                        <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
-                                                            {c.contact_person}
-                                                        </TableCell>
-                                                        <TableCell className="whitespace-normal break-words max-w-[250px]">
-                                                            {c.email_address}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span
-                                                                className={
-                                                                    isMissingType
-                                                                        ? "line-through underline decoration-red-500 decoration-2"
-                                                                        : ""
-                                                                }
-                                                            >
-                                                                {c.type_client || "—"}
-                                                            </span>
-                                                        </TableCell>
-
-                                                        <TableCell className="text-center">
-                                                            {c.status ? (
-                                                                (() => {
-                                                                    const status = c.status.trim().toLowerCase()
-                                                                    switch (status) {
-                                                                        case "active":
-                                                                            return (
-                                                                                <Badge
-                                                                                    variant="secondary"
-                                                                                    className="bg-green-500/90 hover:bg-green-600 text-white dark:bg-green-600 dark:hover:bg-green-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                >
-                                                                                    <BadgeCheck className="size-3.5" />
-                                                                                    Active
-                                                                                </Badge>
-                                                                            )
-                                                                        case "new client":
-                                                                            return (
-                                                                                <Badge
-                                                                                    variant="secondary"
-                                                                                    className="bg-blue-500/90 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                >
-                                                                                    <UserCheck className="size-3.5" />
-                                                                                    New Client
-                                                                                </Badge>
-                                                                            )
-                                                                        case "non-buying":
-                                                                            return (
-                                                                                <Badge
-                                                                                    variant="secondary"
-                                                                                    className="bg-yellow-500/90 hover:bg-yellow-600 text-white dark:bg-yellow-600 dark:hover:bg-yellow-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                >
-                                                                                    <AlertTriangle className="size-3.5" />
-                                                                                    Non-Buying
-                                                                                </Badge>
-                                                                            )
-                                                                        case "inactive":
-                                                                            return (
-                                                                                <Badge
-                                                                                    variant="secondary"
-                                                                                    className="bg-red-500/90 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                >
-                                                                                    <XCircle className="size-3.5" />
-                                                                                    Inactive
-                                                                                </Badge>
-                                                                            )
-                                                                        case "on hold":
-                                                                            return (
-                                                                                <Badge
-                                                                                    variant="secondary"
-                                                                                    className="bg-stone-500/90 hover:bg-stone-600 text-white dark:bg-stone-600 dark:hover:bg-stone-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                >
-                                                                                    <PauseCircle className="size-3.5" />
-                                                                                    On Hold
-                                                                                </Badge>
-                                                                            )
-                                                                        case "used":
-                                                                            return (
-                                                                                <Badge
-                                                                                    variant="secondary"
-                                                                                    className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1 transition-colors duration-200"
-                                                                                >
-                                                                                    <Clock className="size-3.5" />
-                                                                                    Used
-                                                                                </Badge>
-                                                                            )
-                                                                        case "for deletion":
-                                                                        case "remove":
-                                                                            return (
-                                                                                <Badge
-                                                                                    variant="secondary"
-                                                                                    className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:hover:bg-red-800 flex items-center gap-1 transition-colors duration-200"
-                                                                                >
-                                                                                    <UserX className="size-3.5" />
-                                                                                    {c.status}
-                                                                                </Badge>
-                                                                            )
-                                                                        default:
-                                                                            return (
-                                                                                <Badge
-                                                                                    variant="outline"
-                                                                                    className="text-muted-foreground hover:bg-muted transition-colors duration-200"
-                                                                                >
-                                                                                    {c.status}
-                                                                                </Badge>
-                                                                            )
-                                                                    }
-                                                                })()
-                                                            ) : (
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className="text-muted-foreground hover:bg-muted transition-colors duration-200"
-                                                                >
-                                                                    —
-                                                                </Badge>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>{c.region}</TableCell>
-                                                        <TableCell className="capitalize">
-                                                            {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-"}
-                                                        </TableCell>
-
-                                                        <TableCell>{c.tsm}</TableCell>
-                                                        <TableCell>{c.manager}</TableCell>
-                                                        <TableCell>{new Date(c.date_created).toLocaleDateString()}</TableCell>
-                                                        <TableCell>{new Date(c.date_updated).toLocaleDateString()}</TableCell>
-                                                        <TableCell>
-                                                            {c.next_available_date
-                                                                ? new Date(c.next_available_date).toLocaleDateString()
-                                                                : "-"}
-                                                        </TableCell>
-                                                    </DraggableRow>
-                                                )
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </SortableContext>
-                            </DndContext>
+                                                <TableCell>{c.tsm}</TableCell>
+                                                <TableCell>{c.manager}</TableCell>
+                                                <TableCell>{new Date(c.date_created).toLocaleDateString()}</TableCell>
+                                                <TableCell>{new Date(c.date_updated).toLocaleDateString()}</TableCell>
+                                                <TableCell>
+                                                    {c.next_available_date
+                                                        ? new Date(c.next_available_date).toLocaleDateString()
+                                                        : "-"}
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    })}
+                                </TableBody>
+                            </Table>
                         ) : (
                             <div className="py-10 text-center text-xs text-muted-foreground">
                                 No customers found.

@@ -121,13 +121,47 @@ export const AuditDialog: React.FC<AuditDialogProps> = ({
               onClick={async () => {
                 setShowAuditDialogAction(false);
 
-                // Determine which audit types are selected
                 if (auditSelection.duplicates) setAuditFilterAction("duplicates");
                 else if (auditSelection.missingType) setAuditFilterAction("missingType");
                 else if (auditSelection.missingStatus) setAuditFilterAction("missingStatus");
                 else setAuditFilterAction("all");
 
-                // Bulk update status if "Missing Status" is checked
+                // Bulk update type_client if "Missing Type" is checked
+                if (auditSelection.missingType) {
+                  const missingTypeIds = audited
+                    .filter((c) => !c.type_client?.trim() && c.status?.trim())
+                    .map((c) => c.id);
+
+                  if (missingTypeIds.length > 0) {
+                    try {
+                      const res = await fetch(
+                        "/api/Data/Applications/Taskflow/CustomerDatabase/BulkEditTypeClient",
+                        {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ userIds: missingTypeIds, type_client: "TSA Client" }),
+                        }
+                      );
+                      const json = await res.json();
+
+                      if (json.success) {
+                        toast.success(`Updated type_client for ${missingTypeIds.length} customers.`);
+                        setCustomersAction((prev) =>
+                          prev.map((c) =>
+                            missingTypeIds.includes(c.id) ? { ...c, type_client: "TSA Client" } : c
+                          )
+                        );
+                      } else {
+                        toast.error(json.error || "Failed to update type_client.");
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      toast.error("Failed to update type_client.");
+                    }
+                  }
+                }
+
+                // Bulk update status if "Missing Status" is checked (existing logic)
                 if (auditSelection.missingStatus) {
                   const missingStatusIds = audited
                     .filter((c) => !c.status?.trim() && c.type_client?.trim())
@@ -165,6 +199,7 @@ export const AuditDialog: React.FC<AuditDialogProps> = ({
             >
               Take Action
             </Button>
+
           </DialogFooter>
         </DialogContent>
       </Dialog>
