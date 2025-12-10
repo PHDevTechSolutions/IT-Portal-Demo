@@ -118,6 +118,8 @@ export function FilterDialog({
               <SelectItem value="50">50</SelectItem>
               <SelectItem value="100">100</SelectItem>
               <SelectItem value="1000">1000</SelectItem>
+              <SelectItem value="12000">12000</SelectItem>
+              <SelectItem value="30000">30000</SelectItem>
             </SelectContent>
           </Select>
 
