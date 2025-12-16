@@ -22,6 +22,15 @@ import { EditDialog } from "../../components/app-user-accounts-edit-dialog"
 import { TransferDialog } from "../../components/app-user-accounts-transfer-dialog"
 import { ConvertEmailDialog } from "../../components/app-user-accounts-convert-dialog"
 import { SpinnerItem } from "../../components/app-user-accounts-download-spinner"
+
+const statusColors: Record<string, string> = {
+    active: "bg-green-500 text-white",
+    terminated: "bg-red-600 text-white",
+    resigned: "bg-red-600 text-white",
+    "do not disturb": "bg-black text-white",
+    locked: "bg-gray-500 text-white",
+};
+
 interface UserAccount {
     _id: string
     ReferenceID: string
@@ -278,6 +287,7 @@ export default function AccountPage() {
             Finance: "bg-yellow-100 text-yellow-800",
             Marketing: "bg-pink-100 text-pink-800",
             Sales: "bg-purple-100 text-purple-800",
+            "Dev-Team": "bg-black text-yellow-400",
         }
         return colorMap[dept] || "bg-gray-100 text-gray-800"
     }
@@ -530,7 +540,7 @@ export default function AccountPage() {
                                         />
                                     </TableHead>
                                     <TableHead>Profile</TableHead>
-                                    {["Firstname", "Lastname", "Email", "Department", "Company", "Position"].map((key) => (
+                                    {["Fullname", "Email", "Department", "Company", "Position", "Status"].map((key) => (
                                         <TableHead
                                             key={key}
                                             onClick={() => handleSort(key as SortKey)}
@@ -565,22 +575,43 @@ export default function AccountPage() {
                                                 </div>
                                             )}
                                         </TableCell>
-                                        <TableCell className="capitalize">{u.Firstname}</TableCell>
-                                        <TableCell className="capitalize">{u.Lastname}</TableCell>
-                                        <TableCell>{u.Email}</TableCell>
+                                        <TableCell className="capitalize">{u.Firstname}, {u.Lastname}</TableCell>
+                                        <TableCell>{u.Email}<br /><span className="text-[10px] italic">{u.ReferenceID}</span></TableCell>
                                         <TableCell>
-                                            <Badge className={`${getBadgeColor(u.Department)} font-medium`}>
-                                                {u.Department || "—"}
+                                            <Badge className={`${getBadgeColor(
+                                                (u.Position === "Guest" ||
+                                                    u.Position === "Senior Fullstack Developer" ||
+                                                    u.Position === "IT - OJT")
+                                                    ? "Dev-Team"
+                                                    : u.Department
+                                            )} font-medium`}>
+                                                {(u.Position === "Guest" ||
+                                                    u.Position === "Senior Fullstack Developer" ||
+                                                    u.Position === "IT - OJT")
+                                                    ? "Dev Team"
+                                                    : (u.Department || "—")}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell>{u.Company || "—"}</TableCell>
+                                        <TableCell>{u.Company || "—"}<br />{u.Location || "—"}</TableCell>
                                         <TableCell>{u.Position || "—"}<br />{u.Role === "Territory Sales Associate" && (
                                             <div className="text-xs text-gray-500 mt-1">
-                                                TQ: {u.TargetQuota || "—"}
+                                                TQ: {u.TargetQuota || "—"}<br />
+                                                TSM: {u.TSM || "—"}<br />
+                                                Manager: {u.Manager || "—"}
                                             </div>
                                         )}</TableCell>
+                                        <TableCell className="capitalize">
+                                            <Badge className={statusColors[u.Status.toLowerCase()] || "bg-gray-300"}>
+                                                {u.Status}
+                                            </Badge>
+                                        </TableCell>
                                         <TableCell>
-                                            <Button variant="outline" size="sm" onClick={() => handleEdit(u)}>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleEdit(u)}
+                                                disabled={u.Position === "Senior Fullstack Developer" || u.Position === "IT - OJT"}
+                                            >
                                                 <Pencil className="w-4 h-4" />
                                             </Button>
                                         </TableCell>
