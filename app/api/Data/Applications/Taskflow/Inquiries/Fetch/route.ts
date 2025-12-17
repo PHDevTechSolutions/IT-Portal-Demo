@@ -1,27 +1,34 @@
-import { NextResponse } from "next/server";
-import { neon } from "@neondatabase/serverless";
+import type { NextApiRequest, NextApiResponse } from "next";
+import { supabase } from "@/utils/supabase";
 
-// Validate environment variable and initialize database client
-const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
-if (!Xchire_databaseUrl) {
-    throw new Error("TASKFLOW_DB_URL is not set in the environment variables.");
-}
-const Xchire_sql = neon(Xchire_databaseUrl);
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const { referenceid } = req.query;
 
-export async function GET() {
-    try {
-        const Xchire_fetch = await Xchire_sql`SELECT * FROM inquiries;`;
+  if (!referenceid || typeof referenceid !== "string") {
+    return res.status(400).json({ message: "Missing or invalid referenceid" });
+  }
 
-        console.log("Xchire fetched accounts:", Xchire_fetch);
+  try {
+    const { data, error } = await supabase
+      .from("endorsed-ticket")
+      .select("*")
+      .eq("referenceid", referenceid)   // ✅ diretso referenceid
+      .eq("status", "Endorsed");         // ✅ filter kung kailangan
 
-        return NextResponse.json({ success: true, data: Xchire_fetch }, { status: 200 });
-    } catch (Xchire_error: any) {
-        console.error("Xchire error fetching accounts:", Xchire_error);
-        return NextResponse.json(
-            { success: false, error: Xchire_error.message || "Failed to fetch accounts." },
-            { status: 500 }
-        );
+    if (error) {
+      console.error("Supabase fetch error:", error);
+      return res.status(500).json({ message: error.message });
     }
-}
 
-export const dynamic = "force-dynamic"; // Always fetch the latest data
+    return res.status(200).json({
+      activities: data ?? [],
+      cached: false,
+    });
+  } catch (err) {
+    console.error("Server error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}

@@ -41,6 +41,7 @@ interface Customer {
     date_created: string
     date_updated: string
     next_available_date?: string
+    transfer_to: string;
 }
 
 function DraggableRow({ item, children }: { item: Customer; children: React.ReactNode }) {
@@ -174,7 +175,7 @@ export default function AccountPage() {
             )
             .filter((c) => (filterType === "all" ? true : c.type_client === filterType))
             // Filter status to only Transferred or Pending
-            .filter((c) => c.status === "Transferred" || c.status === "Pending")
+            .filter((c) => c.status === "Approval for Transfer")
             .filter((c) =>
                 filterTSA === "all"
                     ? true
@@ -296,23 +297,32 @@ export default function AccountPage() {
         }
         setIsApproving(true);
         try {
-            const res = await fetch(`/api/Data/Applications/Taskflow/CustomerDatabase/BulkEditStatus`, {
+            const res = await fetch(`/api/Data/Applications/Taskflow/CustomerDatabase/BulkApproveTransfer`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     userIds: Array.from(selectedIds),
                     status: "Active",
+                    updateReferenceIdFromTransferTo: true // optional flag to indicate you want to update referenceid
                 }),
             });
 
             const result = await res.json();
 
             if (result.success) {
-                // Update local customers state to reflect new status
+                // Update local customers state to reflect new status and update referenceid using transfer_to
                 setCustomers((prev) =>
-                    prev.map((c) =>
-                        selectedIds.has(c.id) ? { ...c, status: "Active", date_updated: new Date().toISOString() } : c
-                    )
+                    prev.map((c) => {
+                        if (selectedIds.has(c.id)) {
+                            return {
+                                ...c,
+                                status: "Active",
+                                date_updated: new Date().toISOString(),
+                                referenceid: c.transfer_to || c.referenceid, // update referenceid to transfer_to if exists
+                            };
+                        }
+                        return c;
+                    })
                 );
 
                 toast.success(`Approved ${selectedIds.size} customers successfully.`);
@@ -330,6 +340,51 @@ export default function AccountPage() {
         }
     };
 
+    const executeBulkCancelTransfer = async () => {
+        if (selectedIds.size === 0) {
+            toast.error("No customers selected.");
+            return;
+        }
+        setIsApproving(true);
+        try {
+            const res = await fetch(`/api/Data/Applications/Taskflow/CustomerDatabase/BulkCancelTransfer`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userIds: Array.from(selectedIds),
+                    status: "Active", // o ano man ang status para sa cancelled transfer
+                }),
+            });
+
+            const result = await res.json();
+
+            if (result.success) {
+                // Update local customers state to reflect cancel status (status lang, walang referenceid update)
+                setCustomers((prev) =>
+                    prev.map((c) =>
+                        selectedIds.has(c.id)
+                            ? {
+                                ...c,
+                                status: "Active", // or whatever status you want here
+                                date_updated: new Date().toISOString(),
+                            }
+                            : c
+                    )
+                );
+
+                toast.success(`Cancelled transfer for ${selectedIds.size} customers successfully.`);
+                setSelectedIdsAction(new Set());
+                setSelectAll(false);
+            } else {
+                toast.error(result.error || "Cancel transfer failed.");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Cancel transfer failed due to a network error.");
+        } finally {
+            setIsApproving(false);
+        }
+    };
 
     return (
         <SidebarProvider>
@@ -388,6 +443,7 @@ export default function AccountPage() {
                                     onClick={handleBulkDelete}
                                 >
                                     <Trash className="h-5 w-5" />
+                                    Delete
                                 </Button>
 
                                 {/* Approve Button */}
@@ -399,6 +455,16 @@ export default function AccountPage() {
                                     onClick={() => setShowApproveDialog(true)}
                                 >
                                     Approve
+                                </Button>
+
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="p-2 rounded-md"
+                                    aria-label={`Cancel Transfer Selected (${selectedIds.size})`}
+                                    onClick={executeBulkCancelTransfer}
+                                >
+                                    Cancel Transfer
                                 </Button>
                             </>
                         )}
@@ -423,22 +489,6 @@ export default function AccountPage() {
                     </div>
                 </div>
 
-                <ApproveDialog
-                    open={showApproveDialog}
-                    onOpenChange={setShowApproveDialog}
-                    onConfirm={executeBulkApprove}
-                    isLoading={isApproving}
-                    selectedCount={selectedIds.size}
-                />
-
-
-                <DeleteDialog
-                    open={showDeleteDialog}
-                    onOpenChange={setShowDeleteDialog}
-                    selectedCount={selectedIds.size}
-                    onConfirm={executeBulkDelete}
-                />
-
                 {/* Table */}
                 <div className="mx-4 border border-border shadow-sm rounded-lg">
                     <div className="overflow-auto min-h-[200px] flex items-center justify-center">
@@ -462,7 +512,8 @@ export default function AccountPage() {
                                                 <TableHead>Type</TableHead>
                                                 <TableHead>Status</TableHead>
                                                 <TableHead>Area</TableHead>
-                                                <TableHead>TSA</TableHead>
+                                                <TableHead>Transfer From</TableHead>
+                                                <TableHead>Transfer To</TableHead>
                                                 <TableHead>TSM</TableHead>
                                                 <TableHead>Manager</TableHead>
                                                 <TableHead>Date Created</TableHead>
@@ -602,6 +653,9 @@ export default function AccountPage() {
                                                         <TableCell className="capitalize">
                                                             {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-"}
                                                         </TableCell>
+                                                        <TableCell className="capitalize">
+                                                            {tsaMap[c.transfer_to?.trim().toLowerCase()] || c.transfer_to || "-"}
+                                                        </TableCell>
 
                                                         <TableCell>{c.tsm}</TableCell>
                                                         <TableCell>{c.manager}</TableCell>
@@ -626,6 +680,22 @@ export default function AccountPage() {
                         )}
                     </div>
                 </div>
+
+                <ApproveDialog
+                    open={showApproveDialog}
+                    onOpenChange={setShowApproveDialog}
+                    onConfirm={executeBulkApprove}
+                    isLoading={isApproving}
+                    selectedCount={selectedIds.size}
+                />
+
+
+                <DeleteDialog
+                    open={showDeleteDialog}
+                    onOpenChange={setShowDeleteDialog}
+                    selectedCount={selectedIds.size}
+                    onConfirm={executeBulkDelete}
+                />
 
                 {/* Pagination */}
                 <div className="flex justify-center items-center gap-4 my-4">

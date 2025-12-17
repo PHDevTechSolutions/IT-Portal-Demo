@@ -1,27 +1,25 @@
 import { NextResponse } from "next/server";
-import { neon } from "@neondatabase/serverless";
+import { createClient } from "@supabase/supabase-js";
 
-const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
-if (!Xchire_databaseUrl) {
-    throw new Error("TASKFLOW_DB_URL is not set in the environment variables.");
-}
-
-const Xchire_sql = neon(Xchire_databaseUrl);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET() {
-    try {
-        const Xchire_fetch = await Xchire_sql`SELECT * FROM activity;`;
+  try {
+    const { data, error } = await supabase
+      .from("activity") // Adjust table name accordingly
+      .select("id, date_created")
+      .order("date_created", { ascending: true });
 
-        console.log("Fetched accounts:", Xchire_fetch); // Debugging line
-
-        return NextResponse.json({ success: true, data: Xchire_fetch }, { status: 200 });
-    } catch (Xchire_error: any) {
-        console.error("Error fetching accounts:", Xchire_error);
-        return NextResponse.json(
-            { success: false, error: Xchire_error.message || "Failed to fetch accounts." },
-            { status: 500 }
-        );
+    if (error) {
+      console.error("Supabase activity fetch error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
-}
 
-export const dynamic = "force-dynamic"; // Ensure fresh data fetch
+    return NextResponse.json(data);
+  } catch (e: any) {
+    console.error("Unexpected error fetching activity:", e);
+    return NextResponse.json({ error: e.message || "Internal server error" }, { status: 500 });
+  }
+}
