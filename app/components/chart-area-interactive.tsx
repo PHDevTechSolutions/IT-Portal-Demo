@@ -33,13 +33,11 @@ interface ProgressRecord {
   id: string;
   referenceid: string;
   date_created: string; // ISO date string
-  // ramConsumed removed because not used now
 }
 
 interface ActivityRecord {
   id: string;
   date_created: string; // ISO date string
-  // count removed because not used now
 }
 
 const chartConfig = {
@@ -98,28 +96,21 @@ export function ChartAreaInteractive() {
       setError(null);
       try {
         const [progressRes, activityRes] = await Promise.all([
-          fetch("/api/Data/Applications/Taskflow/Progress/Fetch"),
-          fetch("/api/Data/Applications/Taskflow/Activity/Fetch"),
+          fetch("/api/fetch-progress"),
+          fetch("/api/fetch-activity"),
         ]);
         if (!progressRes.ok) throw new Error("Failed to fetch progress data");
         if (!activityRes.ok) throw new Error("Failed to fetch activity data");
 
-        const progressData: ProgressRecord[] = await progressRes.json();
-        const activityData: ActivityRecord[] = await activityRes.json();
+        const progressResJson = await progressRes.json();
+        const activityResJson = await activityRes.json();
 
+        // Correctly read 'activities' property from API response
         setProgressRecords(
-          Array.isArray(progressData)
-            ? progressData
-            : (progressData && Array.isArray((progressData as any).data))
-            ? (progressData as any).data
-            : []
+          Array.isArray(progressResJson.activities) ? progressResJson.activities : []
         );
         setActivityRecords(
-          Array.isArray(activityData)
-            ? activityData
-            : (activityData && typeof activityData === "object" && "data" in activityData && Array.isArray((activityData as any).data))
-            ? (activityData as any).data
-            : []
+          Array.isArray(activityResJson.activities) ? activityResJson.activities : []
         );
       } catch (err: any) {
         setError(err.message || "Error fetching data");
@@ -130,7 +121,7 @@ export function ChartAreaInteractive() {
     fetchData();
   }, []);
 
-  // Count unique IDs per day for progress and activity
+  // Count unique IDs per day
   const progressCountByDate = countDistinctIdsByDate(
     progressRecords,
     (r) => r.date_created,

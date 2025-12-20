@@ -100,19 +100,18 @@ export function SectionCards() {
     }, []);
 
     // Fetch progress records
+    // Fetch progress records
     useEffect(() => {
         async function fetchProgress() {
             setLoadingProgress(true);
             setErrorProgress(null);
             try {
-                const res = await fetch("/api/Data/Applications/Taskflow/Progress/Fetch");
+                const res = await fetch("/api/fetch-progress");
                 if (!res.ok) throw new Error("Failed to fetch progress records");
                 const data = await res.json();
-                setProgressRecords(Array.isArray(data) ? data : data.data ?? []);
+                setProgressRecords(Array.isArray(data.activities) ? data.activities : []);
             } catch (err: any) {
                 setErrorProgress(err.message || "Error fetching progress records");
-                toast.error(`Progress Records Error: ${err.message || err}`);
-                setProgressRecords([]);
             } finally {
                 setLoadingProgress(false);
             }
@@ -126,14 +125,12 @@ export function SectionCards() {
             setLoadingActivity(true);
             setErrorActivity(null);
             try {
-                const res = await fetch("/api/Data/Applications/Taskflow/Activity/Fetch");
+                const res = await fetch("/api/fetch-activity");
                 if (!res.ok) throw new Error("Failed to fetch activity records");
                 const data = await res.json();
-                setActivityRecords(Array.isArray(data) ? data : data.data ?? []);
+                setActivityRecords(Array.isArray(data.activities) ? data.activities : []);
             } catch (err: any) {
                 setErrorActivity(err.message || "Error fetching activity records");
-                toast.error(`Activity Records Error: ${err.message || err}`);
-                setActivityRecords([]);
             } finally {
                 setLoadingActivity(false);
             }
