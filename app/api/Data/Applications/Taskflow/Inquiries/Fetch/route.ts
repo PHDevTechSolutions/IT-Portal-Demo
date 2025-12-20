@@ -1,34 +1,46 @@
-import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const { referenceid } = req.query;
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const referenceid = url.searchParams.get("referenceid");
 
-  if (!referenceid || typeof referenceid !== "string") {
-    return res.status(400).json({ message: "Missing or invalid referenceid" });
+  if (!referenceid) {
+    return new Response(JSON.stringify({ message: "Missing or invalid referenceid" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   try {
     const { data, error } = await supabase
       .from("endorsed-ticket")
       .select("*")
-      .eq("referenceid", referenceid)   // ✅ diretso referenceid
-      .eq("status", "Endorsed");         // ✅ filter kung kailangan
+      .eq("referenceid", referenceid)
+      .eq("status", "Endorsed");
 
     if (error) {
       console.error("Supabase fetch error:", error);
-      return res.status(500).json({ message: error.message });
+      return new Response(JSON.stringify({ message: error.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    return res.status(200).json({
-      activities: data ?? [],
-      cached: false,
-    });
+    return new Response(
+      JSON.stringify({
+        activities: data ?? [],
+        cached: false,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   } catch (err) {
     console.error("Server error:", err);
-    return res.status(500).json({ message: "Server error" });
+    return new Response(JSON.stringify({ message: "Server error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
