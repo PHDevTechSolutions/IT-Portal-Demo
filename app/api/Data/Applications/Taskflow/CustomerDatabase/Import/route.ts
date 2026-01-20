@@ -22,21 +22,17 @@ function getCompanyInitials(companyName: string): string {
   return (firstInitial + lastInitial).toUpperCase();
 }
 
-function getRegion(region: string): string {
-  const trimmedRegion = region.trim();
-  if (trimmedRegion === "") {
-    return "X";
-  }
-  return trimmedRegion.charAt(0).toUpperCase();
-}
-
 async function generateUniqueAccountReferenceNumber(
   sql: any,
   region: string,
   companyName: string
 ): Promise<string> {
   const initials = getCompanyInitials(companyName);
-  const regionCode = getRegion(region);
+  let regionCode = "XX"; // Default to "XX" if region is empty
+
+  // if (region.trim() !== "") {
+  //   regionCode = region.substring(0, 2).toUpperCase();
+  // }
 
   const result = await sql`
     SELECT MAX(
@@ -69,10 +65,19 @@ async function create(
   status: string,
   industry?: string,
 ) {
-    const safeRegion = getRegion(region);
+  let safeRegionForReference = "X"; // Default to "X" if region is empty
+  let safeRegionForDB = "X";
+
+  if (region && region.trim() !== "") {
+    safeRegionForReference = region.trim().toUpperCase().replace(/\s/g, ""); // Remove spaces for reference
+    safeRegionForDB = region.trim().toUpperCase(); // Just uppercase for DB
+  }
 
   try {
-    const account_reference_number = await generateUniqueAccountReferenceNumber(sql, safeRegion, company_name);
+    //const account_reference_number = await generateUniqueAccountReferenceNumber(sql, safeRegion, company_name);
+    const initials = getCompanyInitials(company_name);
+    const paddedNumber = (1 + Math.floor(Math.random() * 9999999)).toString().padStart(7, "0");
+    const account_reference_number = `${initials}-${safeRegionForReference}-${paddedNumber}`
 
     const Xchire_insert = await sql`
       INSERT INTO accounts (
@@ -103,7 +108,7 @@ async function create(
         ${type_client},
         ${address},
         ${delivery_address},
-        ${safeRegion},
+        ${safeRegionForDB},
         ${status},
         ${industry},
         NOW()
@@ -156,7 +161,7 @@ export async function POST(req: Request) {
           insertedCount++;
         } else {
           console.error("Failed to insert account:", Xchire_result.error);
-          failedAccounts.push({ ...account, error: Xchire_result.error }); 
+          failedAccounts.push({ ...account, error: Xchire_result.error });
         }
       } catch (error: any) {
         console.error("Failed to insert account due to validation:", error.message);
