@@ -22,13 +22,21 @@ function getCompanyInitials(companyName: string): string {
   return (firstInitial + lastInitial).toUpperCase();
 }
 
+function getRegion(region: string): string {
+  const trimmedRegion = region.trim();
+  if (trimmedRegion === "") {
+    return "X";
+  }
+  return trimmedRegion.charAt(0).toUpperCase();
+}
+
 async function generateUniqueAccountReferenceNumber(
   sql: any,
   region: string,
   companyName: string
 ): Promise<string> {
   const initials = getCompanyInitials(companyName);
-  const regionCode = region.toUpperCase();
+  const regionCode = getRegion(region);
 
   const result = await sql`
     SELECT MAX(
@@ -61,8 +69,10 @@ async function create(
   status: string,
   industry?: string,
 ) {
+    const safeRegion = getRegion(region);
+
   try {
-    const account_reference_number = await generateUniqueAccountReferenceNumber(sql, region, company_name);
+    const account_reference_number = await generateUniqueAccountReferenceNumber(sql, safeRegion, company_name);
 
     const Xchire_insert = await sql`
       INSERT INTO accounts (
@@ -93,7 +103,7 @@ async function create(
         ${type_client},
         ${address},
         ${delivery_address},
-        ${region},
+        ${safeRegion},
         ${status},
         ${industry},
         NOW()
@@ -121,35 +131,44 @@ export async function POST(req: Request) {
     }
 
     let insertedCount = 0;
-    for (const account of data) {
-      const Xchire_result = await create(
-        Xchire_sql,
-        account.referenceid,
-        account.manager,
-        account.tsm,
-        account.company_name,
-        account.contact_person,
-        account.contact_number,
-        account.email_address,
-        account.type_client,
-        account.address,
-        account.delivery_address,
-        account.region,
-        account.status,
-        account.industry
-      );
+    const failedAccounts = [];
 
-      if (Xchire_result.success) {
-        insertedCount++;
-      } else {
-        console.error("Failed to insert account:", Xchire_result.error);
+    for (const account of data) {
+      try {
+        const Xchire_result = await create(
+          Xchire_sql,
+          account.referenceid,
+          account.manager,
+          account.tsm,
+          account.company_name,
+          account.contact_person,
+          account.contact_number,
+          account.email_address,
+          account.type_client,
+          account.address,
+          account.delivery_address,
+          account.region,
+          account.status,
+          account.industry
+        );
+
+        if (Xchire_result.success) {
+          insertedCount++;
+        } else {
+          console.error("Failed to insert account:", Xchire_result.error);
+          failedAccounts.push({ ...account, error: Xchire_result.error }); 
+        }
+      } catch (error: any) {
+        console.error("Failed to insert account due to validation:", error.message);
+        failedAccounts.push({ ...account, error: error.message });
       }
     }
 
     return NextResponse.json({
-      success: true,
+      success: insertedCount === data.length,
       insertedCount,
       message: `${insertedCount} records imported successfully!`,
+      failed: failedAccounts,
     });
   } catch (Xchire_error: any) {
     console.error("Error in POST /api/importAccounts:", Xchire_error);
