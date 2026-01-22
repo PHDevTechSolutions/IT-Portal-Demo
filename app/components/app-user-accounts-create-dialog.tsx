@@ -340,7 +340,7 @@ export function CreateDialog({ open, onOpenChangeAction, setAccountsAction }: Cr
                     </div>
 
                     {/* Password */}
-                    <div className="flex flex-col gap-1">
+                    <div className="col-span-1 sm:col-span-2 flex flex-col gap-1">
                         <label className="text-sm font-medium text-gray-600">Password</label>
                         <div className="flex flex-col sm:flex-row gap-2">
                             <div className="relative flex-1">
