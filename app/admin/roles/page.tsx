@@ -44,7 +44,7 @@ interface UserAccount {
     Company: string
     Position: string
     Role: string
-    Password: string
+    Password?: string
     Status: string
     TargetQuota: string
     profilePicture?: string
@@ -329,8 +329,14 @@ export default function AccountPage() {
         }
     }
 
-    const handleEdit = (user: UserAccount) => {
-        setEditData(user)
+      const handleEdit = (user: UserAccount) => {
+        // Create a copy of the user object
+        const userCopy = { ...user };
+
+        // Remove the Password field from the copy
+        delete userCopy.Password;
+
+        setEditData(userCopy) // This is the corrected line
         setShowEditDialog(true)
     }
 
