@@ -27,11 +27,17 @@ export default async function updateAccount(req: NextApiRequest, res: NextApiRes
       LoginAttempts,
       TargetQuota,
       LockUntil,
+      Directories,       // <-- New: directories array from client
     } = req.body;
 
     // 🔹 Validate ID
     if (!id || !ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid or missing user ID." });
+    }
+
+    // Optional: Validate Directories is array if provided
+    if (Directories && !Array.isArray(Directories)) {
+      return res.status(400).json({ success: false, message: "Directories must be an array." });
     }
 
     const db = await connectToDatabase();
@@ -53,6 +59,11 @@ export default async function updateAccount(req: NextApiRequest, res: NextApiRes
       LockUntil,
       updatedAt: new Date(),
     };
+
+    // Add Directories if provided
+    if (Directories) {
+      updatedUser.Directories = Directories;
+    }
 
     // 🔹 Only hash new password if provided
     if (Password?.trim()) {

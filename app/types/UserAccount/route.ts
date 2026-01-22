@@ -15,4 +15,5 @@ export interface UserAccount {
   Status: string
   TargetQuota: string
   profilePicture?: string
+  Directories?: string[]
 }

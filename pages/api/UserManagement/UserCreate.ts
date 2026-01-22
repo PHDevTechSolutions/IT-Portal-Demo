@@ -38,6 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             Manager,
             TSM,
             ReferenceID, // optional
+            Directories, // <- dito natin idadagdag
         } = req.body
 
         // 🧾 Validate required fields
@@ -79,6 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             TargetQuota: Department === "Sales" ? TargetQuota || null : null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            Directories: Array.isArray(Directories) ? Directories : [], // ensure array
         }
 
         // 🧩 Include Manager + TSM if department is Sales
@@ -90,10 +92,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // 💾 Save to database
         const result = await users.insertOne(newUser)
 
+        // Huwag isama password sa response
+        const userToReturn = { ...newUser }
+        delete userToReturn.Password
+
         res.status(201).json({
             success: true,
             message: "User created successfully",
-            data: { _id: result.insertedId, ...newUser },
+            data: { _id: result.insertedId, ...userToReturn },
         })
     } catch (error) {
         console.error("Create User Error:", error)

@@ -30,6 +30,7 @@ export function CreateDialog({ open, onOpenChangeAction, setAccountsAction }: Cr
         Password: "",
         Status: "Active",
         TargetQuota: "",
+        Directories: [],
     })
     const [showCreatePassword, setShowCreatePassword] = useState(false)
     const [managers, setManagers] = useState<{ label: string; value: string }[]>([])
@@ -90,11 +91,105 @@ export function CreateDialog({ open, onOpenChangeAction, setAccountsAction }: Cr
                 TargetQuota: "",
                 Location: "",
                 ReferenceID: "",
+                Directories: [],
+
             })
         } catch (err) {
             toast.error((err as Error).message, { id: toastId })
         }
     }
+
+    const directories = [
+        {
+            key: "Ecodesk",
+            label: "Ecodesk",
+            description: "CSR ticketing system",
+        },
+        {
+            key: "Taskflow",
+            label: "Taskflow",
+            description: "Sales tracking, activity, time & motion",
+        },
+        {
+            key: "Acculog",
+            label: "Acculog",
+            description: "HRIS module (attendance, logs, records)",
+        },
+        {
+            key: "Help-Desk",
+            label: "Help Desk",
+            description: "IT ticketing system",
+        },
+        {
+            key: "Stash",
+            label: "Stash",
+            description: "IT inventory management",
+        },
+    ]
+
+    const ecodeskModules = [
+        "Dashboard",
+        "Inquiries",
+        "Customer Database",
+        "Reports",
+        "Taskflow",
+    ]
+
+    const taskflowModules = [
+        "Dashboard",
+        "Sales Performance",
+        "National Call Ranking",
+        "Customer Database",
+        "Work Management",
+        "Reports",
+        "Conversion Rates",
+    ]
+
+    const acculogModules = [
+        "Dashboard",
+        "Time Attendance",
+        "Recruitment",
+    ]
+
+    const hasDir = (key: string) =>
+        newUser.Directories?.includes(key)
+
+    const toggleDir = (key: string, checked: boolean) => {
+        setNewUser((prev) => {
+            const current = prev.Directories || [];
+
+            if (key === "Ecodesk") {
+                if (!checked) {
+                    return {
+                        ...prev,
+                        Directories: current.filter((d) => !d.startsWith("Ecodesk")),
+                    };
+                } else {
+                    if (!current.includes("Ecodesk")) {
+                        return {
+                            ...prev,
+                            Directories: [...current, "Ecodesk"],
+                        };
+                    }
+                }
+            }
+
+            if (checked) {
+                if (!current.includes(key)) {
+                    return {
+                        ...prev,
+                        Directories: [...current, key],
+                    };
+                }
+            } else {
+                return {
+                    ...prev,
+                    Directories: current.filter((d) => d !== key),
+                };
+            }
+            return prev;
+        });
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChangeAction}>
@@ -103,7 +198,7 @@ export function CreateDialog({ open, onOpenChangeAction, setAccountsAction }: Cr
                     <DialogTitle>Create New User</DialogTitle>
                 </DialogHeader>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 max-h-[500px] overflow-y-auto">
                     {/* Firstname */}
                     <div className="flex flex-col gap-1">
                         <label className="text-sm font-medium text-gray-600">Firstname</label>
@@ -368,6 +463,115 @@ export function CreateDialog({ open, onOpenChangeAction, setAccountsAction }: Cr
                             >
                                 Generate
                             </Button>
+                        </div>
+                    </div>
+
+                    {/* Directory */}
+                    <div className="col-span-1 sm:col-span-2 flex flex-col gap-1">
+                        <label className="text-sm font-medium text-gray-600">
+                            Directory Access
+                        </label>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {directories.map((dir) => (
+                                <div
+                                    key={dir.key}
+                                    className="rounded-md border p-3 hover:bg-gray-50"
+                                >
+                                    {/* MAIN DIRECTORY */}
+                                    <label className="flex items-start gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={hasDir(dir.key)}
+                                            onChange={(e) =>
+                                                toggleDir(dir.key, e.target.checked)
+                                            }
+                                            className="mt-1 h-4 w-4 rounded border-gray-300"
+                                        />
+
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium">
+                                                {dir.label}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {dir.description}
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    {/* 🔽 ECODESK SUB DIRECTORIES */}
+                                    {dir.key === "Ecodesk" && hasDir("Ecodesk") && (
+                                        <div className="mt-3 ml-7 space-y-2 border-l pl-4">
+                                            {ecodeskModules.map((sub) => {
+                                                const key = `Ecodesk:${sub}`
+                                                return (
+                                                    <label
+                                                        key={key}
+                                                        className="flex items-center gap-2 text-xs cursor-pointer"
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={hasDir(key)}
+                                                            onChange={(e) =>
+                                                                toggleDir(key, e.target.checked)
+                                                            }
+                                                            className="h-3.5 w-3.5 rounded border-gray-300"
+                                                        />
+                                                        {sub}
+                                                    </label>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {/* TASKFLOW SUB DIRECTORIES */}
+                                    {dir.key === "Taskflow" && hasDir("Taskflow") && (
+                                        <div className="mt-3 ml-7 space-y-2 border-l pl-4">
+                                            {taskflowModules.map((sub) => {
+                                                const key = `Taskflow:${sub}`;
+                                                return (
+                                                    <label
+                                                        key={key}
+                                                        className="flex items-center gap-2 text-xs cursor-pointer"
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={hasDir(key)}
+                                                            onChange={(e) => toggleDir(key, e.target.checked)}
+                                                            className="h-3.5 w-3.5 rounded border-gray-300"
+                                                        />
+                                                        {sub}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {/* ACCULOG SUB DIRECTORIES */}
+                                    {dir.key === "Acculog" && hasDir("Acculog") && (
+                                        <div className="mt-3 ml-7 space-y-2 border-l pl-4">
+                                            {acculogModules.map((sub) => {
+                                                const key = `Acculog:${sub}`;
+                                                return (
+                                                    <label
+                                                        key={key}
+                                                        className="flex items-center gap-2 text-xs cursor-pointer"
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={hasDir(key)}
+                                                            onChange={(e) => toggleDir(key, e.target.checked)}
+                                                            className="h-3.5 w-3.5 rounded border-gray-300"
+                                                        />
+                                                        {sub}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
