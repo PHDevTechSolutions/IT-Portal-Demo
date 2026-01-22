@@ -5,524 +5,273 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "../../components/app-sidebar";
 import { toast } from "sonner";
-import { Loader2, Search, Edit as EditIcon, Filter } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator, } from "@/components/ui/breadcrumb";
-import { Pagination } from "../../components/app-pagination"
 import { Separator } from "@/components/ui/separator";
-import type { DateRange } from "react-day-picker";
-import { Calendar23 } from "../../components/app-activity-daterange";
-import { Badge } from "@/components/ui/badge";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { supabase } from "@/utils/supabase";
+import { Input } from "@/components/ui/input";
 
-import EditActivityModal, { Activity } from "../../components/app-activity-edit-dialog";
-import { DeleteDialog } from "../../components/app-activity-delete-dialog";
-import BulkUpdateTargetQuotaModal from "../../components/app-activity-bulk-target-quota";
-import { ActivityFilterDialog } from "../../components/app-activity-filter-dialog";
-
-interface UserAccount {
-    referenceid: string;
-    targetquota: string;
+interface Activity {
+  id: string;
+  referenceid: string;
+  tsm: string;
+  manager: string;
+  date_created: string | null;
+  ticket_reference_number: string;
+  scheduled_date: string | null;
+  agent: string;
+  company_name: string;
+  contact_person: string;
+  contact_number: string;
+  email_address: string;
+  address: string;
+  type_client: string;
+  activity_reference_number: string;
 }
 
+const ROWS_PER_PAGE = 10;
+
 export default function ActivityLogsPage() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
-    const [activities, setActivities] = useState<Activity[]>([]);
-    const [accounts, setAccounts] = useState<UserAccount[]>([]);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [isFetching, setIsFetching] = useState(false);
-    const [search, setSearch] = useState("");
-    const [page, setPage] = useState(1);
-    const [rowsPerPage] = useState(20);
-    const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-    const [showEditDialog, setShowEditDialog] = useState(false);
-    const [range, setRange] = React.useState<DateRange | undefined>();
-    const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date } | undefined>(undefined);
-    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const [showBulkUpdateDialog, setShowBulkUpdateDialog] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [isFetching, setIsFetching] = useState(false);
 
-    const [showFilterDialog, setShowFilterDialog] = useState(false);
-    const [filterActivityStatus, setFilterActivityStatus] = useState<string | undefined>(undefined);
-    const [filterTypeClient, setFilterTypeClient] = useState<string | undefined>(undefined);
-    const [filterSource, setFilterSource] = useState<string | undefined>(undefined);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-    const resetFilters = () => {
-        setFilterActivityStatus("");
-        setFilterTypeClient("");
-        setFilterSource("");
-        setRange(undefined);
-        setDateRange(undefined);
-        setSearch("");
-        setPage(1);
-    };
+  // For modal
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
-    // Fetch activities
-    const fetchActivities = async () => {
-        try {
-            setIsFetching(true);
-            const response = await fetch("/api/Data/Applications/Taskflow/Activity/Fetch");
-            const json = await response.json();
-            if (!response.ok || json.success === false)
-                throw new Error(json.error || "Failed to fetch activities");
-            setActivities(json.data || []);
-        } catch (err: any) {
-            toast.error(`Error fetching activity logs: ${err.message}`);
-        } finally {
-            setIsFetching(false);
-        }
-    };
+  const fetchActivities = async () => {
+    setIsFetching(true);
+    const { data, error } = await supabase
+      .from("activity")
+      .select(
+        `
+      id,
+      referenceid,
+      tsm,
+      manager,
+      date_created,
+      ticket_reference_number,
+      scheduled_date,
+      agent,
+      company_name,
+      contact_person,
+      contact_number,
+      email_address,
+      address,
+      type_client,
+      activity_reference_number
+    `
+      )
+      .order("date_created", { ascending: false });
 
-    // Fetch accounts
-    const fetchAccounts = async () => {
-        try {
-            const res = await fetch("/api/UserManagement/Fetch");
-            const data = await res.json();
-            const normalized = (data || []).map((u: any) => ({
-                referenceid: (u.ReferenceID || u.referenceid || "").toString().trim().toLowerCase(),
-                targetquota: u.targetquota || "",
-            }));
-            setAccounts(normalized);
-        } catch (err) {
-            console.error("Error fetching accounts", err);
-        }
-    };
+    if (error) {
+      toast.error(`Error fetching activities: ${error.message}`);
+      setActivities([]);
+    } else {
+      setActivities(data || []);
+    }
+    setIsFetching(false);
+  };
 
-    useEffect(() => {
-        fetchActivities();
-        fetchAccounts();
-    }, []);
+  useEffect(() => {
+    fetchActivities();
+  }, []);
 
-    // Filter and paginate with search and dateRange
-    const filtered = useMemo(() => {
-        return activities
-            .filter((a) => {
-                // Search
-                if (
-                    search &&
-                    !Object.values(a).join(" ").toLowerCase().includes(search.toLowerCase())
-                )
-                    return false;
+  const filteredActivities = useMemo(() => {
+    if (!search.trim()) return activities;
 
-                // Date range
-                if (dateRange?.from || dateRange?.to) {
-                    if (!a.date_created) return false;
-                    const created = new Date(a.date_created);
-                    if (dateRange.from && created < dateRange.from) return false;
-                    if (dateRange.to && created > dateRange.to) return false;
-                }
+    const lowerSearch = search.toLowerCase();
 
-                if (filterActivityStatus && a.activitystatus !== filterActivityStatus)
-                    return false;
-                if (filterTypeClient && a.typeclient !== filterTypeClient)
-                    return false;
-                if (filterSource && a.source !== filterSource)
-                    return false;
-
-                return true;
-            })
-            .sort((a, b) => {
-                const dateA = new Date(a.date_created ?? 0).getTime();
-                const dateB = new Date(b.date_created ?? 0).getTime();
-                return dateB - dateA;
-            });
-    }, [activities, search, dateRange, filterActivityStatus, filterTypeClient, filterSource]);
-
-
-
-    const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
-    const current = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
-
-    // Checkbox logic
-    const toggleSelectAll = () => {
-        if (selectedIds.size === current.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(current.map((a) => a.id)));
-        }
-    };
-
-    const toggleSelect = (id: string) => {
-        setSelectedIds((prev) => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) newSet.delete(id);
-            else newSet.add(id);
-            return newSet;
-        });
-    };
-
-    // Edit dialog handlers
-    const openEditDialog = (activity: Activity) => {
-        setEditingActivity(activity);
-        setShowEditDialog(true);
-    };
-
-    const closeEditDialog = () => {
-        setEditingActivity(null);
-        setShowEditDialog(false);
-    };
-
-    // Save updated activity: call API and update state
-    const handleSaveEdit = async (updatedActivity: Activity) => {
-        try {
-            if (!updatedActivity.id) {
-                throw new Error("Missing activity id");
-            }
-
-            const {
-                id,
-                activitynumber,
-                companyname,
-                contactperson,
-                contactnumber,
-                emailaddress,
-                address,
-                area,
-                typeclient,
-                projectname,
-                projectcategory,
-                projecttype,
-                source,
-                targetquota,
-                activityremarks,
-                ticketreferencenumber,
-                wrapup,
-                inquiries,
-                csragent,
-                activitystatus,
-            } = updatedActivity;
-
-            const payload = {
-                id,
-                activitynumber,
-                companyname,
-                contactperson,
-                contactnumber,
-                emailaddress,
-                address,
-                area,
-                typeclient,
-                projectname,
-                projectcategory,
-                projecttype,
-                source,
-                targetquota,
-                activityremarks,
-                ticketreferencenumber,
-                wrapup,
-                inquiries,
-                csragent,
-                activitystatus,
-            };
-
-            const response = await fetch("/api/activity/update", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || "Failed to update activity");
-            }
-
-            setActivities((prev) =>
-                prev.map((a) => (a.id === updatedActivity.id ? result.updatedActivity : a))
-            );
-            closeEditDialog();
-            toast.success("Activity updated.");
-        } catch (error: any) {
-            toast.error(`Update failed: ${error.message}`);
-        }
-    };
-
-    const handleBulkUpdate = async (newQuota: string) => {
-        const toastId = toast.loading("Updating target quotas...");
-        try {
-            const res = await fetch("/api/activity/bulk-update-target-quota", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ids: Array.from(selectedIds),
-                    targetquota: newQuota,
-                }),
-            });
-            const result = await res.json();
-            if (!res.ok || !result.success) throw new Error(result.error || "Update failed");
-
-            // Update activities state with new targetquota for selected ids
-            setActivities((prev) =>
-                prev.map((a) =>
-                    selectedIds.has(a.id) ? { ...a, targetquota: newQuota } : a
-                )
-            );
-            toast.success("Target quotas updated.", { id: toastId });
-            setSelectedIds(new Set());
-            setShowBulkUpdateDialog(false);
-        } catch (err: any) {
-            toast.error(`Failed to update: ${err.message}`, { id: toastId });
-        }
-    };
-
-    const confirmDelete = async () => {
-        const toastId = toast.loading("Deleting activities...");
-        try {
-            const res = await fetch("/api/activity/delete", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ids: Array.from(selectedIds) }),
-            });
-            const result = await res.json();
-            if (!res.ok || !result.success) throw new Error("Delete failed");
-
-            setActivities((prev) => prev.filter((a) => !selectedIds.has(a.id)));
-            setSelectedIds(new Set());
-            toast.success("Selected activities deleted successfully.", { id: toastId });
-        } catch (err) {
-            toast.error("Error deleting activities.", { id: toastId });
-        } finally {
-            setShowDeleteDialog(false);
-        }
-    };
-
-    return (
-        <SidebarProvider>
-            <AppSidebar userId={userId} />
-            <SidebarInset>
-                {/* Header */}
-                <header className="flex h-16 items-center gap-2 px-4">
-                    <SidebarTrigger className="-ml-1" />
-                    <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-                        Home
-                    </Button>
-                    <Separator orientation="vertical" className="h-4" />
-                    <Breadcrumb>
-                        <BreadcrumbList>
-                            <BreadcrumbItem>
-                                <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
-                            </BreadcrumbItem>
-                            <BreadcrumbSeparator />
-                            <BreadcrumbItem>
-                                <BreadcrumbPage>Activity Logs</BreadcrumbPage>
-                            </BreadcrumbItem>
-                        </BreadcrumbList>
-                    </Breadcrumb>
-                </header>
-
-                {/* Search, Date Range, Actions */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
-                    <div className="relative w-full sm:max-w-xs">
-                        <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search activities..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="pl-8 w-full"
-                        />
-                        {isFetching && (
-                            <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={() => setShowFilterDialog(true)}
-                            className="h-9 w-9"
-                        >
-                            <Filter className="size-4" />
-                        </Button>
-
-                        <Calendar23
-                            range={range}
-                            onRangeChange={(newRange) => {
-                                setRange(newRange);
-                                setDateRange(newRange);
-                            }}
-                        />
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                                setSearch("");
-                                setRange(undefined);
-                                setDateRange(undefined);
-                                setPage(1);
-                            }}
-                        >
-                            Clear
-                        </Button>
-
-                        {/* Delete Selected Button on the right side */}
-                        {selectedIds.size > 0 && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => setShowBulkUpdateDialog(true)}
-                                    className="whitespace-nowrap"
-                                >
-                                    Update Target Quota ({selectedIds.size})
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => setShowDeleteDialog(true)}
-                                    className="whitespace-nowrap"
-                                >
-                                    Delete Selected ({selectedIds.size})
-                                </Button>
-                            </>
-                        )}
-
-                    </div>
-                </div>
-
-                {/* Table */}
-                <div className="mx-4 border border-border shadow-sm rounded-lg overflow-hidden">
-                    {isFetching ? (
-                        <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
-                            <Loader2 className="size-6 animate-spin" />
-                            <span>Loading activities...</span>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <Table className="min-w-[1150px] w-full text-sm">
-                                <TableHeader className="bg-muted sticky top-0 z-10">
-                                    <TableRow>
-                                        <TableHead className="w-10 text-center">
-                                            <Checkbox
-                                                checked={selectedIds.size === current.length && current.length > 0}
-                                                onCheckedChange={toggleSelectAll}
-                                            />
-                                        </TableHead>
-                                        <TableHead>Activity #</TableHead>
-                                        <TableHead>Company Info</TableHead>
-                                        <TableHead>Project Details</TableHead>
-                                        <TableHead>CSR Agent</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead className="w-16 text-center">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-
-                                <TableBody>
-                                    {current.map((act, index) => (
-                                        <TableRow key={act.id || `activity-${index}`} className="even:bg-muted/40 text-[11px]">
-                                            <TableCell className="text-center">
-                                                <Checkbox
-                                                    checked={selectedIds.has(act.id)}
-                                                    onCheckedChange={() => toggleSelect(act.id)}
-                                                />
-                                            </TableCell>
-
-                                            <TableCell>{act.activitynumber || "N/A"}</TableCell>
-
-                                            <TableCell className="text-[11px] leading-tight">
-                                                <strong>{act.companyname || "N/A"}</strong>
-                                                <br />
-                                                {act.contactperson} / {act.contactnumber}
-                                                <br />
-                                                {act.emailaddress}
-                                                <br />
-                                                <span className="text-muted-foreground break-words whitespace-normal">{act.address}</span>
-                                            </TableCell>
-
-                                            <TableCell className="text-[11px] leading-tight">
-                                                <div>
-                                                    <b>{act.projectname}</b> ({act.projectcategory})
-                                                </div>
-                                                <div>{act.projecttype}</div>
-                                                <div>Ref ID: {act.referenceid || "N/A"}</div>
-                                                <div>Source: {act.source}</div>
-                                                <div>
-                                                    {" "}
-                                                    Target:{" "}
-                                                    {act.targetquota ? (
-                                                        act.targetquota
-                                                    ) : (
-                                                        <span className="text-red-500 italic">Missing</span>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge className="text-[8px]">{act.activitystatus}</Badge>
-                                            </TableCell>
-                                            <TableCell>{act.csragent || "N/A"}</TableCell>
-                                            <TableCell>
-                                                Created:{" "}
-                                                {act.date_created ? new Date(act.date_created).toLocaleString() : "N/A"} <br /> Updated:{" "}
-                                                {act.date_updated ? new Date(act.date_updated).toLocaleString() : "N/A"}
-                                            </TableCell>
-
-                                            <TableCell className="text-center">
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={() => openEditDialog(act)}
-                                                    aria-label={`Edit activity ${act.activitynumber || act.id}`}
-                                                >
-                                                    <EditIcon className="w-4 h-4" />
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex justify-center items-center gap-4 my-4">
-                    {/* Pagination */}
-                    <Pagination
-                        page={page}
-                        totalPages={totalPages}
-                        onPageChangeAction={setPage}
-                    />
-                </div>
-
-                {/* Edit modal dialog */}
-                {showEditDialog && editingActivity && (
-                    <EditActivityModal
-                        activity={editingActivity}
-                        onCloseAction={closeEditDialog}
-                        onSaveAction={handleSaveEdit}
-                    />
-                )}
-
-                <BulkUpdateTargetQuotaModal
-                    open={showBulkUpdateDialog}
-                    count={selectedIds.size}
-                    onCloseAction={() => setShowBulkUpdateDialog(false)}
-                    onConfirmAction={handleBulkUpdate}
-                />
-
-                <DeleteDialog
-                    open={showDeleteDialog}
-                    count={selectedIds.size}
-                    onCancelAction={() => setShowDeleteDialog(false)}
-                    onConfirmAction={confirmDelete}
-                />
-
-                <ActivityFilterDialog
-                    open={showFilterDialog}
-                    onOpenChangeAction={setShowFilterDialog}
-                    activities={activities}
-                    filterActivityStatus={filterActivityStatus}
-                    filterTypeClient={filterTypeClient}
-                    filterSource={filterSource}
-                    setFilterActivityStatusAction={setFilterActivityStatus}
-                    setFilterTypeClientAction={setFilterTypeClient}
-                    setFilterSourceAction={setFilterSource}
-                    resetFiltersAction={resetFilters}
-                />
-
-            </SidebarInset>
-        </SidebarProvider>
+    return activities.filter((act) =>
+      [
+        act.referenceid,
+        act.tsm,
+        act.manager,
+        act.ticket_reference_number,
+        act.agent,
+        act.company_name,
+        act.contact_person,
+        act.contact_number,
+        act.email_address,
+        act.address,
+        act.type_client,
+        act.activity_reference_number,
+      ]
+        .filter(Boolean)
+        .some((field) => field.toLowerCase().includes(lowerSearch))
     );
+  }, [activities, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredActivities.length / ROWS_PER_PAGE));
+  const paginatedActivities = useMemo(() => {
+    const start = (page - 1) * ROWS_PER_PAGE;
+    return filteredActivities.slice(start, start + ROWS_PER_PAGE);
+  }, [filteredActivities, page]);
+
+  const goToPrevious = () => setPage((p) => Math.max(1, p - 1));
+  const goToNext = () => setPage((p) => Math.min(totalPages, p + 1));
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  const formatDate = (dateStr: string | null) =>
+    dateStr ? new Date(dateStr).toLocaleDateString() : "N/A";
+
+  return (
+    <SidebarProvider>
+      <AppSidebar userId={userId} />
+      <SidebarInset>
+        {/* Header */}
+        <header className="flex h-16 items-center gap-2 px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
+            Home
+          </Button>
+          <Separator orientation="vertical" className="h-4" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Activity Logs</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </header>
+
+        {/* Search */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search users..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 w-full"
+            />
+            {isFetching && (
+              <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="mx-4 border border-border shadow-sm rounded-lg overflow-auto">
+          {isFetching ? (
+            <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
+              <Loader2 className="size-6 animate-spin" />
+              <span>Loading activities...</span>
+            </div>
+          ) : (
+            <Table className="min-w-[800px] w-full text-sm whitespace-nowrap">
+              <TableHeader className="bg-muted sticky top-0 z-10">
+                <TableRow>
+                  <TableHead>Company Name</TableHead>
+                  <TableHead>Ref, TSM & Manager</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Date Created</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedActivities.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center">
+                      No activities found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedActivities.map((act) => (
+                    <TableRow key={act.id}>
+                      <TableCell>{act.company_name || "-"}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          <span><strong>Ref:</strong> {act.referenceid || "-"}</span>
+                          <span><strong>TSM:</strong> {act.tsm || "-"}</span>
+                          <span><strong>Manager:</strong> {act.manager || "-"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{act.agent || "-"}</TableCell>
+                      <TableCell>{formatDate(act.date_created)}</TableCell>
+                      <TableCell>
+                        <Button size="sm" onClick={() => setSelectedActivity(act)}>
+                          View Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+
+        {/* Pagination */}
+        <div className="flex justify-center items-center gap-4 my-4">
+          <Button variant="outline" onClick={goToPrevious} disabled={page === 1}>
+            Previous
+          </Button>
+          <span>
+            Page {page} of {totalPages}
+          </span>
+          <Button variant="outline" onClick={goToNext} disabled={page === totalPages}>
+            Next
+          </Button>
+        </div>
+
+        {/* Modal/Dialog */}
+        {selectedActivity && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"
+            onClick={() => setSelectedActivity(null)}
+          >
+            <div
+              className="bg-white rounded-lg max-w-lg w-full p-6 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-lg font-bold mb-4">Activity Details</h2>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><strong>Reference ID:</strong> {selectedActivity.referenceid || "-"}</div>
+                <div><strong>TSM:</strong> {selectedActivity.tsm || "-"}</div>
+                <div><strong>Manager:</strong> {selectedActivity.manager || "-"}</div>
+                <div><strong>Date Created:</strong> {formatDate(selectedActivity.date_created)}</div>
+                <div><strong>Scheduled Date:</strong> {formatDate(selectedActivity.scheduled_date)}</div>
+                <div><strong>Ticket Ref. Number:</strong> {selectedActivity.ticket_reference_number || "-"}</div>
+                <div><strong>Agent:</strong> {selectedActivity.agent || "-"}</div>
+                <div><strong>Company Name:</strong> {selectedActivity.company_name || "-"}</div>
+                <div><strong>Contact Person:</strong> {selectedActivity.contact_person || "-"}</div>
+                <div><strong>Contact Number:</strong> {selectedActivity.contact_number || "-"}</div>
+                <div><strong>Email Address:</strong> {selectedActivity.email_address || "-"}</div>
+                <div><strong>Address:</strong> {selectedActivity.address || "-"}</div>
+                <div><strong>Type Client:</strong> {selectedActivity.type_client || "-"}</div>
+                <div><strong>Activity Ref. Number:</strong> {selectedActivity.activity_reference_number || "-"}</div>
+              </div>
+
+              <Button className="mt-6" onClick={() => setSelectedActivity(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </SidebarInset>
+    </SidebarProvider>
+  );
 }
