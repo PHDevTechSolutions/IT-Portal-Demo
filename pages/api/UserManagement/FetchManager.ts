@@ -12,9 +12,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: "Role is required" });
       }
 
-      // Fetch users with the role "Manager" and include ReferenceID
+      // Fetch users with the role "Manager" AND Department "Sales"
       const users = await db.collection("users")
-        .find({ Role })
+        .find({ Role, Department: "Sales" })
         .project({ Firstname: 1, Lastname: 1, ReferenceID: 1, _id: 0 }) // Include ReferenceID
         .toArray();
 

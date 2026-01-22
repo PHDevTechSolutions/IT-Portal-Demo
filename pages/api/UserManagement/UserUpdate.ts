@@ -25,6 +25,8 @@ export default async function updateAccount(req: NextApiRequest, res: NextApiRes
       LoginAttempts,
       TargetQuota,
       LockUntil,
+      Manager,
+      TSM,
     } = req.body;
 
     // 🔹 Validate ID
@@ -47,6 +49,8 @@ export default async function updateAccount(req: NextApiRequest, res: NextApiRes
       Status,
       LoginAttempts,
       LockUntil,
+      Manager,
+      TSM,
       updatedAt: new Date(),
     };
 
