@@ -110,10 +110,6 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
       { name: "Taskflow Sales Management System", url: appendUserId("/taskflow"), icon: Frame },
       { name: "Ecodesk Ticketing System", url: appendUserId("/ecodesk"), icon: PieChart },
       { name: "Acculog HR Attendance System", url: appendUserId("/acculog"), icon: Frame },
-      { name: "IT Ticketing System", url: appendUserId("/it-ticketing"), icon: Frame },
-      { name: "IT Asset Management System", url: appendUserId("/it-asset"), icon: Frame },
-      { name: "Linker X Sharing Links Platform", url: appendUserId("/linker-x"), icon: Frame },
-      { name: "Shifts Room Reservation System", url: appendUserId("/shifts-room"), icon: Frame },
     ],
   }
 

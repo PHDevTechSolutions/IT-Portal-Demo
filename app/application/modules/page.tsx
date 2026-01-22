@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import ProtectedPageWrapper from "@/app/components/protected-page-wrapper";
 
 interface Item {
   id: number
@@ -60,129 +61,147 @@ export default function AccountPage() {
     },
     {
       id: 3,
+      title: "Taskflow V2 ( Internal Demo Server )",
+      description: "Manage and track activity time and motion efficiently.",
+      url: "https://taskflow-demo-v2.vercel.app/auth/login",
+    },
+    {
+      id: 4,
       title: "Ecodesk ( Current Live )",
       description: "Customer support ticketing system for seamless issue tracking.",
       url: "https://ecoshift-erp-system.vercel.app/",
     },
     {
-      id: 4,
+      id: 5,
+      title: "Ecodesk ( Demo Live )",
+      description: "Customer support ticketing system for seamless issue tracking.",
+      url: "https://ecodesk-erp.vercel.app/login",
+    },
+    {
+      id: 6,
       title: "Acculog ( Current Live )",
       description: "Attendance tracking system to monitor employee hours.",
       url: "https://acculog.vercel.app/",
     },
     {
-      id: 5,
+      id: 7,
       title: "Acculog ( Demo Server )",
       description: "Attendance tracking system to monitor employee hours.",
       url: "https://acculog-demo-navy.vercel.app/",
     },
     {
-      id: 6,
+      id: 8,
       title: "Room Reservation ( Demo Server )",
       description: "Reserve rooms and manage shift schedules easily.",
       url: "https://shift-reservation.vercel.app/Book",
     },
     {
-      id: 7,
+      id: 9,
       title: "Stash IT Asset ( Old Version )",
       description: "IT asset management system to track company equipment.",
       url: "https://stash-rouge-pi.vercel.app/",
     },
     {
-      id: 8,
+      id: 10,
       title: "Stash IT Asset ( New Version )",
       description: "IT asset management system to track company equipment.",
-      url: "https://stash-it-asset-management-system.vercel.app/",
+      url: "https://stash-demo.vercel.app/auth/login",
     },
     {
-      id: 9,
+      id: 11,
       title: "Know My Employee",
       description: "Employee analytics and HR insights platform.",
       url: "https://kme-orcin.vercel.app/Home",
     },
     {
-      id: 10,
+      id: 12,
       title: "Linker X",
       description: "Platform to store and share links securely.",
       url: "https://linker-x-delta.vercel.app/",
     },
     {
-      id: 11,
+      id: 13,
       title: "Ecoshift Corporation",
       description: "Official website of Ecoshift Corporation.",
       url: "https://www.ecoshiftcorp.com/",
     },
     {
-      id: 12,
+      id: 14,
       title: "Disruptive Solutions Inc",
       description: "Disruptive Solutions Inc official site.",
       url: "https://disruptivesolutionsinc.com/",
     },
     {
-      id: 13,
+      id: 15,
       title: "Ecoshift Shopify Admin",
       description: "Shopify admin login for Ecoshift.",
       url: "https://admin.shopify.com/login?ui_locales=en-PH&errorHint=no_cookie_session",
     },
     {
-      id: 14,
+      id: 16,
       title: "Ecoshift Shopify Website",
       description: "Ecoshift Shopify customer-facing website.",
       url: "https://eshome.ph/",
     },
     {
-      id: 15,
+      id: 17,
       title: "Elementor Pro",
       description: "Elementor Pro website login and management.",
       url: "https://my.elementor.com/login/?redirect_to=%2Fwebsites%2F",
     },
     {
-      id: 16,
+      id: 18,
       title: "Nitropack",
       description: "Nitropack dashboard for website speed optimization.",
       url: "https://app.nitropack.io/dashboard",
     },
     {
-      id: 17,
+      id: 19,
       title: "Vercel",
       description: "Vercel platform login for deployments.",
       url: "https://vercel.com/login",
     },
     {
-      id: 18,
+      id: 20,
       title: "VAH",
       description: "VAH official site.",
       url: "https://buildchem-nu.vercel.app/",
     },
     {
-      id: 19,
+      id: 21,
       title: "Neon PostgreSQL",
       description: "Neon cloud Postgres database console and management.",
       url: "https://console.neon.tech/realms/prod-realm/protocol/openid-connect/auth?client_id=neon-console&redirect_uri=https%3A%2F%2Fconsole.neon.tech%2Fauth%2Fkeycloak%2Fcallback&response_type=code&scope=openid+profile+email&state=AbXDgr_yQo6C3WZ9xHF_mA%3D%3D%2C%2C%2C",
     },
     {
-      id: 20,
+      id: 22,
       title: "MongoDB",
       description: "MongoDB cloud account and database management.",
       url: "https://account.mongodb.com/account/login?n=https%3A%2F%2Fcloud.mongodb.com%2Fv2%2F6891bf020016b943a3459440&nextHash=%23metrics%2FreplicaSet%2F6891bf5e52da71245672c0d1%2Fexplorer%2FLinkerX%2Fnotes%2Ffind&signedOut=true",
     },
     {
-      id: 21,
+      id: 23,
       title: "Supabase",
       description: "Supabase dashboard for backend database and authentication.",
       url: "https://supabase.com/dashboard/sign-in",
     },
     {
-      id: 22,
+      id: 24,
       title: "Redis",
       description: "Redis Cloud subscription and metrics dashboard.",
       url: "https://cloud.redis.io/#/subscriptions/subscription/2915038/bdb-view/13569236/metric",
     },
     {
-      id: 23,
+      id: 25,
       title: "Firebase",
       description: "Firebase console for Firestore and project management.",
       url: "https://console.firebase.google.com/u/0/project/taskflow-4605f/firestore/databases/-default-/indexes",
+    },
+    {
+      id: 26,
+      title: "IT Ticketing",
+      description: "IT Ticketing.",
+      url: "https://ticketing-demo-dusky.vercel.app/auth/login",
     },
   ]
 
@@ -210,109 +229,111 @@ export default function AccountPage() {
   const generatePages = (total: number) => Array.from({ length: total }, (_, i) => i + 1)
 
   return (
-    <SidebarProvider>
-      <AppSidebar userId={userId} />
-      <SidebarInset>
-        {/* Header */}
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
-            <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-              Back
-            </Button>
-            <Separator orientation="vertical" className="h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink href="#">Applications</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Modules</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        </header>
+    <ProtectedPageWrapper>
+      <SidebarProvider>
+        <AppSidebar userId={userId} />
+        <SidebarInset>
+          {/* Header */}
+          <header className="flex h-16 shrink-0 items-center gap-2 px-4">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="-ml-1" />
+              <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
+                Back
+              </Button>
+              <Separator orientation="vertical" className="h-4" />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="#">Applications</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>Modules</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+          </header>
 
-        {/* Main content */}
-        <div className="flex flex-col gap-4 p-4 pt-0">
-          <Input
-            type="search"
-            placeholder="Search by title or description..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-md"
-          />
+          {/* Main content */}
+          <div className="flex flex-col gap-4 p-4 pt-0">
+            <Input
+              type="search"
+              placeholder="Search by title or description..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-md"
+            />
 
-          <Table>
-            <TableCaption>
-              List of applications and sites (filtered: {filteredItems.length} result
-              {filteredItems.length !== items.length ? `s` : ""})
-            </TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Link</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedItems.length === 0 ? (
+            <Table>
+              <TableCaption>
+                List of applications and sites (filtered: {filteredItems.length} result
+                {filteredItems.length !== items.length ? `s` : ""})
+              </TableCaption>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
-                    No results found.
-                  </TableCell>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Link</TableHead>
                 </TableRow>
-              ) : (
-                paginatedItems.map((item) => (
-                  <TableRow key={item.id} className="hover:bg-muted/50">
-                    <TableCell className="font-medium">{item.title}</TableCell>
-                    <TableCell>{item.description}</TableCell>
-                    <TableCell>
-                      <Button variant="link" size="sm" asChild>
-                        <a href={item.url} target="_blank" rel="noopener noreferrer">
-                          Open Link
-                        </a>
-                      </Button>
+              </TableHeader>
+              <TableBody>
+                {paginatedItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      No results found.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  paginatedItems.map((item) => (
+                    <TableRow key={item.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{item.title}</TableCell>
+                      <TableCell>{item.description}</TableCell>
+                      <TableCell>
+                        <Button variant="link" size="sm" asChild>
+                          <a href={item.url} target="_blank" rel="noopener noreferrer">
+                            Open Link
+                          </a>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
 
-          {totalPages > 1 && (
-            <Pagination className="mt-4 justify-center">
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationLink
-                    onClick={() => page > 1 && setPage(page - 1)}
-                    className={page === 1 ? "pointer-events-none opacity-50" : ""}
-                  >
-                    Prev
-                  </PaginationLink>
-                </PaginationItem>
-                {generatePages(totalPages).map((p) => (
-                  <PaginationItem key={p}>
-                    <PaginationLink onClick={() => setPage(p)} isActive={p === page}>
-                      {p}
+            {totalPages > 1 && (
+              <Pagination className="mt-4 justify-center">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationLink
+                      onClick={() => page > 1 && setPage(page - 1)}
+                      className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                    >
+                      Prev
                     </PaginationLink>
                   </PaginationItem>
-                ))}
-                <PaginationItem>
-                  <PaginationLink
-                    onClick={() => page < totalPages && setPage(page + 1)}
-                    className={page === totalPages ? "pointer-events-none opacity-50" : ""}
-                  >
-                    Next
-                  </PaginationLink>
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          )}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+                  {generatePages(totalPages).map((p) => (
+                    <PaginationItem key={p}>
+                      <PaginationLink onClick={() => setPage(p)} isActive={p === page}>
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationLink
+                      onClick={() => page < totalPages && setPage(page + 1)}
+                      className={page === totalPages ? "pointer-events-none opacity-50" : ""}
+                    >
+                      Next
+                    </PaginationLink>
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </ProtectedPageWrapper>
   )
 }

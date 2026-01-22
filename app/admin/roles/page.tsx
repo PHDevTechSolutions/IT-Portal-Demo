@@ -48,6 +48,7 @@ interface UserAccount {
     Status: string
     TargetQuota: string
     profilePicture?: string
+    Directory?: string[]
 }
 
 type SortKey = keyof Pick<UserAccount, "Firstname" | "Lastname" | "Email" | "Department" | "Company" | "Position">
@@ -106,6 +107,7 @@ export default function AccountPage() {
                     u.Position,
                     u.TSM,
                     u.Manager,
+                    u.Status
                 ]
                     .map(v => (v?.length || 0) + 3)
                     .reduce((a, b) => a + b, 0)

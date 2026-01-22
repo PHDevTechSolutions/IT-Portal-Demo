@@ -1,37 +1,41 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { validateUser } from "@/lib/ModuleGlobal/mongodb";
+import { validateUser, connectToDatabase } from "@/lib/ModuleGlobal/mongodb";
 import { serialize } from "cookie";
-import { connectToDatabase } from "@/lib/ModuleGlobal/mongodb";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { Email, Password } = req.body;
+  const { Email, Password, deviceId } = req.body;
 
-  if (!Email || !Password) {
-    return res.status(400).json({ message: "All fields are required." });
+  if (!Email || !Password || !deviceId) {
+    return res.status(400).json({
+      message: "Email, Password, and deviceId are required.",
+    });
   }
 
   const db = await connectToDatabase();
   const usersCollection = db.collection("users");
 
-  // Find the user by email
+  // 🔍 Find user
   const user = await usersCollection.findOne({ Email });
 
   if (!user) {
     return res.status(401).json({ message: "Invalid credentials." });
   }
 
-  // 🔐 IT Department filter
+  // 🔐 IT Department only
   if (user.Department !== "IT") {
     return res.status(403).json({
       message: "Access denied. Only IT Department accounts are allowed.",
     });
   }
 
-  // Validate user credentials
+  // 🔑 Validate password
   const result = await validateUser({ Email, Password });
 
   if (!result.success || !result.user) {
@@ -40,9 +44,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
+  // ✅ Save deviceId on successful login
+  await usersCollection.updateOne(
+    { Email },
+    {
+      $set: {
+        DeviceId: deviceId,
+        LastLoginAt: new Date(),
+      },
+    }
+  );
+
   const userId = result.user._id.toString();
 
-  // Set a session cookie
+  // 🍪 Set session cookie
   res.setHeader(
     "Set-Cookie",
     serialize("session", userId, {

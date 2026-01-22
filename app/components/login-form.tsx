@@ -17,6 +17,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 
+import { v4 as uuidv4 } from "uuid";
+
 export function LoginForm({
   className,
   ...props
@@ -27,6 +29,15 @@ export function LoginForm({
   const [progress, setProgress] = useState(0)
   const [showOverlay, setShowOverlay] = useState(false)
   const router = useRouter()
+
+  function getDeviceId() {
+    let deviceId = localStorage.getItem("deviceId");
+    if (!deviceId) {
+      deviceId = uuidv4();
+      localStorage.setItem("deviceId", deviceId);
+    }
+    return deviceId;
+  }
 
   // ✅ Progress animation for overlay
   useEffect(() => {
@@ -47,40 +58,43 @@ export function LoginForm({
   }, [showOverlay, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
+
+    const deviceId = getDeviceId();  // kunin deviceId mula localStorage o generate kung wala
 
     if (!email || !password) {
-      toast.error("All fields are required!")
-      return
+      toast.error("All fields are required!");
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
       const response = await fetch("/api/developerLogin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ Email: email, Password: password }),
-      })
+        body: JSON.stringify({
+          Email: email,
+          Password: password,
+          deviceId,   // dito mo ipinapasa deviceId
+        }),
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (response.ok) {
-        toast.success("Login successful!")
+        toast.success("Login successful!");
 
-        // ✅ Store the user ID and token (if provided)
         if (result.userId) {
-          localStorage.setItem("userId", result.userId)
+          localStorage.setItem("userId", result.userId);
         }
         if (result.token) {
-          localStorage.setItem("token", result.token)
+          localStorage.setItem("token", result.token);
         }
+        localStorage.setItem("userEmail", email);
 
-        // ✅ Optionally store email for quick display
-        localStorage.setItem("userEmail", email)
+        setShowOverlay(true);
 
-        setShowOverlay(true)
-
-        // ✅ Log activity (non-blocking)
+        // Log activity (optional)
         fetch("/api/log-activity", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -88,18 +102,20 @@ export function LoginForm({
             email,
             status: "login",
             timestamp: new Date().toISOString(),
+            deviceId,   // Pwede mo rin i-log deviceId dito kung gusto mo
           }),
-        }).catch(console.error)
+        }).catch(console.error);
       } else {
-        toast.error(result.message || "Login failed!")
+        toast.error(result.message || "Login failed!");
       }
     } catch (error) {
-      console.error("Login error:", error)
-      toast.error("An error occurred while logging in!")
+      console.error("Login error:", error);
+      toast.error("An error occurred while logging in!");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
 
   return (
     <div className={cn("relative flex flex-col gap-6", className)} {...props}>

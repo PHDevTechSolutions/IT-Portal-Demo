@@ -69,32 +69,62 @@ export function ImportDialog() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager")
-      .then((res) => res.json())
-      .then((data) =>
-        setTsmOptions(
-          data.map((u: any) => ({
-            value: u.ReferenceID,
-            label: `${u.Firstname} ${u.Lastname}`,
-          }))
-        )
+    // Fetch TSMs based on the selected Manager
+    if (selectedManager) {
+      fetch(
+        `/api/UserManagement/FetchTSM?Role=Territory Sales Manager&managerReferenceID=${selectedManager.value}`
       )
-      .catch((err) => console.error("Error fetching TSM:", err));
-  }, []);
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setTsmOptions(
+              data.map((u: any) => ({
+                value: u.ReferenceID,
+                label: `${u.Firstname} ${u.Lastname}`,
+              }))
+            );
+          } else {
+            console.warn("Data is not an array:", data);
+            setTsmOptions([]); // Set to empty array to avoid errors
+          }
+        })
+        .catch((err) => console.error("Error fetching TSM:", err));
+    } else {
+      // If no manager is selected, clear the TSM options
+      setTsmOptions([]);
+    }
+    // Reset selected TSM when manager changes
+    setSelectedTSM(null);
+  }, [selectedManager]);
 
   useEffect(() => {
-    fetch("/api/UserManagement/FetchTSA?Role=Territory Sales Associate")
-      .then((res) => res.json())
-      .then((data) =>
-        setTsaOptions(
-          data.map((u: any) => ({
-            value: u.ReferenceID,
-            label: `${u.Firstname} ${u.Lastname}`,
-          }))
-        )
+    // Fetch TSAs based on the selected Manager
+    if (selectedTSM) {
+      fetch(
+        `/api/UserManagement/FetchTSA?Role=Territory Sales Associate&managerReferenceID=${selectedTSM.value}`
       )
-      .catch((err) => console.error("Error fetching TSA:", err));
-  }, []);
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setTsaOptions(
+              data.map((u: any) => ({
+                value: u.ReferenceID,
+                label: `${u.Firstname} ${u.Lastname}`,
+              }))
+            );
+          } else {
+            console.warn("Data is not an array:", data);
+            setTsaOptions([]); // Set to empty array to avoid errors
+          }
+        })
+        .catch((err) => console.error("Error fetching TSA:", err));
+    } else {
+      // If no manager is selected, clear the TSA options
+      setTsaOptions([]);
+    }
+    // Reset selected TSA when manager changes
+    setSelectedTSA(null);
+  }, [selectedTSM]);
 
   const parseExcel = async (file: File) => {
     const reader = new FileReader();
@@ -210,7 +240,7 @@ export function ImportDialog() {
       setIsLoading(false);
     }
   };
-      const handleDownloadFailed = () => {
+  const handleDownloadFailed = () => {
     if (failedRows.length === 0) {
       toast.info("No failed rows to download.");
       return;
@@ -219,20 +249,20 @@ export function ImportDialog() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Failed Rows");
 
-        // Add headers
-        worksheet.addRow([
-            "company_name",
-            "contact_person",
-            "contact_number",
-            "email_address",
-            "type_client",
-            "address",
-            "region",
-            "status",
-            "company_group",
-            "delivery_address",
-            "industry",
-        ]);
+    // Add headers
+    worksheet.addRow([
+      "company_name",
+      "contact_person",
+      "contact_number",
+      "email_address",
+      "type_client",
+      "address",
+      "region",
+      "status",
+      "company_group",
+      "delivery_address",
+      "industry",
+    ]);
 
     // Add data rows
     failedRows.forEach((row) => {
@@ -287,11 +317,12 @@ export function ImportDialog() {
           <div className="flex gap-2">
             <Select
               value={selectedManager?.value || ""}
-              onValueChange={(v) =>
-                setSelectedManager(
-                  managerOptions.find((m) => m.value === v) || null
-                )
-              }
+              onValueChange={(v) => {
+                const manager = managerOptions.find((m) => m.value === v) || null;
+                setSelectedManager(manager);
+                setSelectedTSM(null);
+                setSelectedTSA(null);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select Manager" />
@@ -307,9 +338,13 @@ export function ImportDialog() {
 
             <Select
               value={selectedTSM?.value || ""}
-              onValueChange={(v) =>
-                setSelectedTSM(tsmOptions.find((t) => t.value === v) || null)
-              }
+              // onValueChange={(v) => setSelectedTSM(tsmOptions.find((t) => t.value === v) || null)}
+              disabled={!selectedManager}
+              onValueChange={(v) => {
+                const tsm = tsmOptions.find((t) => t.value === v) || null;
+                setSelectedTSM(tsm);
+                setSelectedTSA(null);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select TSM" />
@@ -325,9 +360,12 @@ export function ImportDialog() {
 
             <Select
               value={selectedTSA?.value || ""}
-              onValueChange={(v) =>
-                setSelectedTSA(tsaOptions.find((t) => t.value === v) || null)
-              }
+              // onValueChange={(v) => setSelectedTSA(tsaOptions.find((t) => t.value === v) || null)}
+              disabled={!selectedManager}
+              onValueChange={(v) => {
+                const tsa = tsaOptions.find((t) => t.value === v) || null;
+                setSelectedTSA(tsa);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select TSA" />
