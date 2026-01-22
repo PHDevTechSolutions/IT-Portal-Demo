@@ -22,6 +22,15 @@ import { EditDialog } from "../../components/app-user-accounts-edit-dialog"
 import { TransferDialog } from "../../components/app-user-accounts-transfer-dialog"
 import { ConvertEmailDialog } from "../../components/app-user-accounts-convert-dialog"
 import { SpinnerItem } from "../../components/app-user-accounts-download-spinner"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 const statusColors: Record<string, string> = {
     active: "bg-green-500 text-white",
@@ -48,7 +57,7 @@ interface UserAccount {
     Status: string
     TargetQuota: string
     profilePicture?: string
-    Directory?: string[]
+    Directories?: string[]
 }
 
 type SortKey = keyof Pick<UserAccount, "Firstname" | "Lastname" | "Email" | "Department" | "Company" | "Position">
@@ -88,6 +97,8 @@ export default function AccountPage() {
     const [showConvertDialog, setShowConvertDialog] = useState(false)
 
     const [isDownloading, setIsDownloading] = useState(false)
+    const [openDialog, setOpenDialog] = useState(false);
+    const [selectedDirectories, setSelectedDirectories] = useState<string[]>([]);
 
     const handleDownload = async () => {
         if (filtered.length === 0) return;
@@ -301,6 +312,12 @@ export default function AccountPage() {
         else setSelectedIds(new Set(current.map(u => u._id)))
     }
 
+    const openDirectoryDialog = (directories: string[] = []) => {
+        setSelectedDirectories(directories);
+        setOpenDialog(true);
+    };
+
+
     const toggleSelect = (id: string) => {
         setSelectedIds(prev => {
             const copy = new Set(prev)
@@ -331,7 +348,7 @@ export default function AccountPage() {
         }
     }
 
-      const handleEdit = (user: UserAccount) => {
+    const handleEdit = (user: UserAccount) => {
         // Create a copy of the user object
         const userCopy = { ...user };
 
@@ -564,68 +581,86 @@ export default function AccountPage() {
                                             </div>
                                         </TableHead>
                                     ))}
+                                    {/* New header for Directory Access */}
+                                    <TableHead>Directory Access</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
+
                             <TableBody>
                                 {current.map(u => (
-                                    <TableRow key={u._id}>
-                                        <TableCell className="text-center">
-                                            <Checkbox
-                                                checked={selectedIds.has(u._id)}
-                                                onCheckedChange={() => toggleSelect(u._id)}
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            {u.profilePicture ? (
-                                                <img src={u.profilePicture} alt="profile" className="w-10 h-10 rounded-full object-cover" />
-                                            ) : (
-                                                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs">
-                                                    N/A
+                                    <React.Fragment key={u._id}>
+                                        <TableRow>
+                                            <TableCell className="text-center">
+                                                <Checkbox
+                                                    checked={selectedIds.has(u._id)}
+                                                    onCheckedChange={() => toggleSelect(u._id)}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                {u.profilePicture ? (
+                                                    <img src={u.profilePicture} alt="profile" className="w-10 h-10 rounded-full object-cover" />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs">
+                                                        N/A
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="capitalize">{u.Firstname}, {u.Lastname}</TableCell>
+                                            <TableCell>{u.Email}<br /><span className="text-[10px] italic">{u.ReferenceID}</span></TableCell>
+                                            <TableCell>
+                                                <Badge className={`${getBadgeColor(
+                                                    (u.Position === "Guest" ||
+                                                        u.Position === "Senior Fullstack Developer" ||
+                                                        u.Position === "IT - OJT")
+                                                        ? "Dev-Team"
+                                                        : u.Department
+                                                )} font-medium`}>
+                                                    {(u.Position === "Guest" ||
+                                                        u.Position === "Senior Fullstack Developer" ||
+                                                        u.Position === "IT - OJT")
+                                                        ? "Dev Team"
+                                                        : (u.Department || "—")}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>{u.Company || "—"}<br />{u.Location || "—"}</TableCell>
+                                            <TableCell>{u.Position || "—"}<br />{u.Role === "Territory Sales Associate" && (
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    TQ: {u.TargetQuota || "—"}<br />
+                                                    TSM: {u.TSM || "—"}<br />
+                                                    Manager: {u.Manager || "—"}
                                                 </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="capitalize">{u.Firstname}, {u.Lastname}</TableCell>
-                                        <TableCell>{u.Email}<br /><span className="text-[10px] italic">{u.ReferenceID}</span></TableCell>
-                                        <TableCell>
-                                            <Badge className={`${getBadgeColor(
-                                                (u.Position === "Guest" ||
-                                                    u.Position === "Senior Fullstack Developer" ||
-                                                    u.Position === "IT - OJT")
-                                                    ? "Dev-Team"
-                                                    : u.Department
-                                            )} font-medium`}>
-                                                {(u.Position === "Guest" ||
-                                                    u.Position === "Senior Fullstack Developer" ||
-                                                    u.Position === "IT - OJT")
-                                                    ? "Dev Team"
-                                                    : (u.Department || "—")}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>{u.Company || "—"}<br />{u.Location || "—"}</TableCell>
-                                        <TableCell>{u.Position || "—"}<br />{u.Role === "Territory Sales Associate" && (
-                                            <div className="text-xs text-gray-500 mt-1">
-                                                TQ: {u.TargetQuota || "—"}<br />
-                                                TSM: {u.TSM || "—"}<br />
-                                                Manager: {u.Manager || "—"}
-                                            </div>
-                                        )}</TableCell>
-                                        <TableCell className="capitalize">
-                                            <Badge className={statusColors[u.Status.toLowerCase()] || "bg-gray-300"}>
-                                                {u.Status}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleEdit(u)}
-                                                disabled={u.Position === "Senior Fullstack Developer" || u.Position === "IT - OJT"}
-                                            >
-                                                <Pencil className="w-4 h-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
+                                            )}</TableCell>
+                                            <TableCell className="capitalize">
+                                                <Badge className={statusColors[u.Status.toLowerCase()] || "bg-gray-300"}>
+                                                    {u.Status}
+                                                </Badge>
+                                            </TableCell>
+
+                                            {/* New Directory Access cell */}
+                                            <TableCell className="text-center">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => openDirectoryDialog(u.Directories || [])}
+                                                >
+                                                    View Directory Access ({u.Directories?.length || 0})
+                                                </Button>
+
+                                            </TableCell>
+
+                                            <TableCell>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleEdit(u)}
+                                                    disabled={u.Position === "Senior Fullstack Developer" || u.Position === "IT - OJT"}
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    </React.Fragment>
                                 ))}
                             </TableBody>
                         </Table>
@@ -633,6 +668,31 @@ export default function AccountPage() {
                         <div className="py-10 text-center text-xs text-muted-foreground">No user found.</div>
                     )}
                 </div>
+
+                {/* Expandable row for directories */}
+                <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                    <DialogContent className="sm:max-w-lg max-w-[90vw]">
+                        <DialogHeader>
+                            <DialogTitle className="mb-2">Directory Access</DialogTitle>
+                            <DialogDescription>
+                                {selectedDirectories.length > 0 ? (
+                                    <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 max-h-60 overflow-auto">
+                                        {selectedDirectories.map((dir, idx) => (
+                                            <li key={idx}>{dir}</li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-sm italic text-muted-foreground">
+                                        No directory access assigned.
+                                    </p>
+                                )}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button onClick={() => setOpenDialog(false)}>Close</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Edit Dialog */}
                 <EditDialog
