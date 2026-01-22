@@ -148,6 +148,8 @@ export function CreateDialog({ open, onOpenChangeAction, setAccountsAction }: Cr
     const acculogModules = [
         "Dashboard",
         "Time Attendance",
+        "Button - Site Visit",
+        "Button - Client Visit",
         "Recruitment",
     ]
 

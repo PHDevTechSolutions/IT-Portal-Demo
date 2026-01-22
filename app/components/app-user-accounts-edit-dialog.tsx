@@ -67,6 +67,8 @@ export function EditDialog({
       submodules: [
         "Dashboard",
         "Time Attendance",
+        "Button - Site Visit",
+        "Button - Client Visit",
         "Recruitment",
       ],
     },
