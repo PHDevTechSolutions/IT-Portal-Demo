@@ -140,6 +140,7 @@ export default function AccountPage() {
                 "Position",
                 "TSM",
                 "Manager",
+                "Status"
             ].join(",");
 
             // ✅ Map user data to match new header order
@@ -154,6 +155,7 @@ export default function AccountPage() {
                     u.Position,
                     u.TSM,
                     u.Manager,
+                    u.Status
                 ]
                     .map(v => `"${v || ""}"`)
                     .join(",")
