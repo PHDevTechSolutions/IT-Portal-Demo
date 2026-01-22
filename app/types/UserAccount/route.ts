@@ -11,7 +11,7 @@ export interface UserAccount {
   Company: string
   Position: string
   Role: string
-  Password: string
+  Password?: string
   Status: string
   TargetQuota: string
   profilePicture?: string
