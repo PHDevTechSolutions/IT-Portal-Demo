@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,11 @@ interface EditDialogProps {
 
 export function EditDialog({ open, onOpenChangeAction, editData, setEditDataAction, onSaveAction }: EditDialogProps) {
     const [showPassword, setShowPassword] = useState(false)
+    const [localPassword, setLocalPassword] = useState("")
+    
+    useEffect(() => {
+        setLocalPassword("")
+    }, [editData])
 
     if (!editData) return null
 
@@ -157,7 +162,6 @@ export function EditDialog({ open, onOpenChangeAction, editData, setEditDataActi
                             <option value="Resigned">Resigned</option>
                         </select>
                     </div>
-
                     {/* Password */}
                     <div className="col-span-1 sm:col-span-2 flex flex-col gap-1">
                         <label className="text-sm font-medium text-gray-600">Password</label>
@@ -165,9 +169,9 @@ export function EditDialog({ open, onOpenChangeAction, editData, setEditDataActi
                             <div className="relative flex-1">
                                 <Input
                                     type={showPassword ? "text" : "password"}
-                                    placeholder="Password"
-                                    value={editData.Password || ""}
-                                    onChange={e => setEditDataAction(prev => ({ ...prev!, Password: e.target.value }))}
+                                    placeholder="Password (leave blank to keep unchanged)"
+                                    value={localPassword}
+                                    onChange={e => setLocalPassword(e.target.value)}
                                 />
                                 <button
                                     type="button"
@@ -181,7 +185,7 @@ export function EditDialog({ open, onOpenChangeAction, editData, setEditDataActi
                                 variant="secondary"
                                 onClick={() => {
                                     const generated = Math.random().toString(36).slice(-10)
-                                    setEditDataAction(prev => ({ ...prev!, Password: generated }))
+                                    setLocalPassword(generated)
                                     toast.info("New password generated!")
                                 }}
                             >
@@ -196,10 +200,16 @@ export function EditDialog({ open, onOpenChangeAction, editData, setEditDataActi
                         onClick={async () => {
                             const toastId = toast.loading("💾 Saving changes...")
                             try {
-                                await onSaveAction(editData)
+                                const updatedData: any = { ...editData }
+                                if (localPassword.trim() !== "") {
+                                    updatedData.Password = localPassword
+                                }
+                                await onSaveAction(updatedData)
                                 toast.success("✅ Account updated successfully!", { id: toastId })
                             } catch (err) {
                                 toast.error("❌ Failed to update account", { id: toastId })
+                            } finally {
+                                onOpenChangeAction(false)
                             }
                         }}
                         className="w-full sm:w-auto"
