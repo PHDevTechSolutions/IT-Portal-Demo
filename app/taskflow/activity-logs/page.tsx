@@ -38,6 +38,13 @@ interface Activity {
   activity_reference_number: string;
 }
 
+interface Agent {
+  ReferenceID: string;
+  Firstname: string;
+  Lastname: string;
+  profilePicture?: string;
+}
+
 const ROWS_PER_PAGE = 10;
 
 export default function ActivityLogsPage() {
@@ -50,9 +57,15 @@ export default function ActivityLogsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  // For modal
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
+  // Agent list and user details states
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [errorAgents, setErrorAgents] = useState<string | null>(null);
+  // Replace with your actual userDetails or pass as prop
+  const userDetails = { referenceid: userId || "" };
+
+  // Fetch activities from supabase
   const fetchActivities = async () => {
     setIsFetching(true);
     const { data, error } = await supabase
@@ -87,9 +100,45 @@ export default function ActivityLogsPage() {
     setIsFetching(false);
   };
 
+  // Fetch agents using userDetails.referenceid
+  useEffect(() => {
+    if (!userDetails.referenceid) return;
+
+    const fetchAgents = async () => {
+      try {
+        const response = await fetch(
+          `/api/UserManagement/UserFetch=${encodeURIComponent(userDetails.referenceid)}`
+        );
+        if (!response.ok) throw new Error("Failed to fetch agents");
+
+        const data = await response.json();
+        setAgents(data);
+      } catch (err) {
+        console.error("Error fetching agents:", err);
+        setErrorAgents("Failed to load agents.");
+      }
+    };
+
+    fetchAgents();
+  }, [userDetails.referenceid]);
+
   useEffect(() => {
     fetchActivities();
   }, []);
+
+  // Create a map from agent ReferenceID to agent info for quick lookup
+  const agentMap = useMemo(() => {
+    const map: Record<string, { name: string; profilePicture?: string }> = {};
+    agents.forEach((agent) => {
+      if (agent.ReferenceID && agent.Firstname && agent.Lastname) {
+        map[agent.ReferenceID.toLowerCase()] = {
+          name: `${agent.Firstname} ${agent.Lastname}`,
+          profilePicture: agent.profilePicture,
+        };
+      }
+    });
+    return map;
+  }, [agents]);
 
   const filteredActivities = useMemo(() => {
     if (!search.trim()) return activities;
@@ -208,7 +257,20 @@ export default function ActivityLogsPage() {
                           <span><strong>Manager:</strong> {act.manager || "-"}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{act.agent || "-"}</TableCell>
+                      <TableCell className="flex items-center gap-2">
+                        {agentMap[act.agent?.toLowerCase() || ""]?.profilePicture ? (
+                          <img
+                            src={agentMap[act.agent.toLowerCase()]!.profilePicture}
+                            alt={agentMap[act.agent.toLowerCase()]!.name}
+                            className="w-6 h-6 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
+                            N/A
+                          </div>
+                        )}
+                        <span>{agentMap[act.agent?.toLowerCase()]?.name || act.agent || "-"}</span>
+                      </TableCell>
                       <TableCell>{formatDate(act.date_created)}</TableCell>
                       <TableCell>
                         <Button size="sm" onClick={() => setSelectedActivity(act)}>
