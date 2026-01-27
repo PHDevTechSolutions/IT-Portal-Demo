@@ -27,7 +27,9 @@ export default async function updateAccount(req: NextApiRequest, res: NextApiRes
       LoginAttempts,
       TargetQuota,
       LockUntil,
-      Directories,       // <-- New: directories array from client
+      Directories,
+      TSMName,
+      ManagerName,
     } = req.body;
 
     // 🔹 Validate ID
@@ -54,7 +56,10 @@ export default async function updateAccount(req: NextApiRequest, res: NextApiRes
       Role,
       Status,
       Manager,
+      ManagerName,
       TSM,
+      TSMName,
+      TargetQuota,
       LoginAttempts,
       LockUntil,
       updatedAt: new Date(),

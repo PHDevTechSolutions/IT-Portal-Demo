@@ -91,6 +91,7 @@ export function AppSidebar({ userId, ...props }: AppSidebarProps) {
         isActive: pathname?.startsWith("/admin"),
         items: [
           { title: "Roles", url: appendUserId("/admin/roles") },
+          { title: "Resigned and Terminated", url: appendUserId("/admin/roles-status") },
           { title: "Sessions", url: appendUserId("/admin/sessions") },
         ],
       },

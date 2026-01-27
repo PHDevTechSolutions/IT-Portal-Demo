@@ -83,19 +83,11 @@ export default function AccountPage() {
     const [editData, setEditData] = useState<UserAccount | null>(null)
     const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
-    // State for create user
-    const [showCreateDialog, setShowCreateDialog] = useState(false)
-
     // 🔹 Manager & TSM lists
     const [managers, setManagers] = useState<{ label: string; value: string }[]>([])
     const [tsms, setTsms] = useState<{ label: string; value: string }[]>([])
 
     const [showTransferDialog, setShowTransferDialog] = useState(false)
-    const [transferType, setTransferType] = useState<"TSM" | "Manager" | null>(null)
-    const [transferSelection, setTransferSelection] = useState<string>("")
-
-    const [showConvertDialog, setShowConvertDialog] = useState(false)
-
     const [isDownloading, setIsDownloading] = useState(false)
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedDirectories, setSelectedDirectories] = useState<string[]>([]);
@@ -269,11 +261,10 @@ export default function AccountPage() {
     const filtered = useMemo(() => {
         const list = accounts
             .filter(a =>
-                !["resigned", "terminated"].includes(
-                    (a.Status || "").trim().toLowerCase()
+                ["resigned", "terminated"].includes(
+                    (a.Status || "").toLowerCase()
                 )
             )
-
             .filter(a =>
                 [a.Firstname, a.Lastname, a.Email, a.Department, a.Company, a.Position]
                     .some(f => f?.toLowerCase().includes(search.toLowerCase()))
@@ -415,7 +406,7 @@ export default function AccountPage() {
                             </BreadcrumbItem>
                             <BreadcrumbSeparator />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>User Accounts</BreadcrumbPage>
+                                <BreadcrumbPage>Resigned and Terminated</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -436,22 +427,6 @@ export default function AccountPage() {
 
                     <div className="flex flex-wrap gap-2 items-center">
                         <ButtonGroup>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-10 text-sm"
-                                onClick={() => setShowConvertDialog(true)}
-                            >
-                                <Repeat2 className="w-4 h-4" /> Convert Emails
-                            </Button>
-
-                            <ConvertEmailDialog
-                                open={showConvertDialog}
-                                onOpenChangeAction={setShowConvertDialog}
-                                accounts={accounts}
-                                setAccountsAction={setAccounts}
-                            />
-
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -488,45 +463,6 @@ export default function AccountPage() {
                                 </SelectContent>
                             </Select>
 
-                            {filterDepartment === "Sales" && (
-                                <>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-10 text-sm"
-                                        disabled={selectedIds.size === 0}
-                                        onClick={() => {
-                                            setTransferType("TSM");
-                                            setShowTransferDialog(true);
-                                        }}
-                                    >
-                                        <ArrowRight className="w-4 h-4" /> Transfer to TSM
-                                    </Button>
-
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-10 text-sm"
-                                        disabled={selectedIds.size === 0}
-                                        onClick={() => {
-                                            setTransferType("Manager");
-                                            setShowTransferDialog(true);
-                                        }}
-                                    >
-                                        <ArrowRight className="w-4 h-4" /> Transfer to Manager
-                                    </Button>
-                                </>
-                            )}
-
-                            <Button
-                                variant="default"
-                                size="sm"
-                                className="h-10 text-sm"
-                                onClick={() => setShowCreateDialog(true)}
-                            >
-                                <Plus className="w-4 h-4" /> Create
-                            </Button>
-
                             {selectedIds.size > 0 && (
                                 <Button
                                     variant="destructive"
@@ -538,18 +474,6 @@ export default function AccountPage() {
                                 </Button>
                             )}
 
-                            <TransferDialog
-                                open={showTransferDialog}
-                                onOpenChangeAction={setShowTransferDialog}
-                                transferType={transferType}
-                                transferSelection={transferSelection}
-                                setTransferSelectionAction={setTransferSelection}
-                                selectedIds={selectedIds}
-                                setSelectedIdsAction={setSelectedIds}
-                                setAccountsAction={setAccounts}
-                                tsms={tsms}
-                                managers={managers}
-                            />
                         </ButtonGroup>
                     </div>
                 </div>
@@ -706,13 +630,6 @@ export default function AccountPage() {
                     editData={editData}
                     setEditDataAction={setEditData}
                     onSaveAction={handleSaveEdit}
-                />
-
-                {/* Create User Dialog */}
-                <CreateDialog
-                    open={showCreateDialog}
-                    onOpenChangeAction={setShowCreateDialog}
-                    setAccountsAction={setAccounts}
                 />
 
                 <DeleteDialog

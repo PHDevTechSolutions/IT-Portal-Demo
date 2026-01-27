@@ -238,12 +238,32 @@ export function EditDialog({
                 />
               </div>
               <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-600">Manager Name</label>
+                <Input
+                  value={(editData as any).ManagerName || ""}
+                  onChange={(e) =>
+                    setEditDataAction((prev) => ({ ...prev!, ManagerName: e.target.value }))
+                  }
+                  className="capitalize"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-600">TSM</label>
                 <Input
                   value={(editData as any).TSM || ""}
                   onChange={(e) =>
                     setEditDataAction((prev) => ({ ...prev!, TSM: e.target.value }))
                   }
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-600">TSM Name</label>
+                <Input
+                  value={(editData as any).TSMName || ""}
+                  onChange={(e) =>
+                    setEditDataAction((prev) => ({ ...prev!, TSMName: e.target.value }))
+                  }
+                  className="capitalize"
                 />
               </div>
             </>
