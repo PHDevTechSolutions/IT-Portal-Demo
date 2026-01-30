@@ -659,7 +659,7 @@ export default function AccountPage() {
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={() => handleEdit(u)}
-                                                    disabled={u.Position === "Senior Fullstack Developer" || u.Position === "IT - OJT"}
+                                                   
                                                 >
                                                     <Pencil className="w-4 h-4" />
                                                 </Button>
