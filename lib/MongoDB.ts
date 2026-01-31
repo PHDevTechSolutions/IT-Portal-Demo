@@ -1,6 +1,5 @@
-import { MongoClient, ObjectId } from "mongodb";
+import { MongoClient, ObjectId, Db } from "mongodb";
 import bcrypt from "bcrypt";
-import { Server } from "socket.io";
 
 // Ensure the MONGODB_URI environment variable is defined
 if (!process.env.MONGODB_URI) {
@@ -8,53 +7,58 @@ if (!process.env.MONGODB_URI) {
 }
 
 const uri = process.env.MONGODB_URI;
-let client: MongoClient | null = null;
+
+// 🔹 Reuse Mongo client across hot reloads in dev
+let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 
-// MongoDB connection handling
+declare global {
+  // extend global type para iwas TS errors
+  // eslint-disable-next-line no-var
+  var _mongoClient: MongoClient | undefined;
+}
+
 if (process.env.NODE_ENV === "development") {
   if (!global._mongoClient) {
-    client = new MongoClient(uri);
-    global._mongoClient = client;
-  } else {
-    client = global._mongoClient;
+    global._mongoClient = new MongoClient(uri);
   }
+  client = global._mongoClient;
   clientPromise = client.connect();
 } else {
   client = new MongoClient(uri);
   clientPromise = client.connect();
 }
 
-// Export the promise to be used for database connections
-export default clientPromise;
-
-// Connect to the database
-export async function connectToDatabase() {
+// 🔹 Exported function for database connection
+export async function connectToDatabase(): Promise<Db> {
   const client = await clientPromise;
-  return client.db("ecoshift"); // Return the 'ecoshift' database
+  return client.db("ecoshift"); // Main DB
 }
 
-// Function to broadcast new posts
-let io: Server | null = null;
-export function setSocketServer(server: Server) {
-  io = server;
-}
 
-// Register a new user
-export async function registerUser({ userName, Email, Password, }: { userName: string; Email: string; Password: string;}) {
+// 🔹 Register a new user
+export async function registerUser({
+  userName,
+  Email,
+  Password,
+}: {
+  userName: string;
+  Email: string;
+  Password: string;
+}) {
   const db = await connectToDatabase();
   const usersCollection = db.collection("users");
 
-  // Check if the email already exists in the database
+  // Check if email already exists
   const existingUser = await usersCollection.findOne({ Email });
   if (existingUser) {
     return { success: false, message: "Email already in use" };
   }
 
-  // Hash the password before saving it to the database
+  // Hash password
   const hashedPassword = await bcrypt.hash(Password, 10);
 
-  // Insert the new user into the collection
+  // Insert new user
   await usersCollection.insertOne({
     userName,
     Email,
@@ -65,23 +69,40 @@ export async function registerUser({ userName, Email, Password, }: { userName: s
   return { success: true };
 }
 
-// Validate user credentials
-export async function validateUser({ Email, Password, Department,}: { Email: string; Password: string; Department: string;}) {
+// 🔹 Validate user credentials (with caching layer optional)
+const userCache = new Map<string, any>(); // simple in-memory cache (FDT style)
+
+export async function validateUser({
+  Email,
+  Password,
+}: {
+  Email: string;
+  Password: string;
+}) {
+  // Check cache first (avoid DB hit)
+  if (userCache.has(Email)) {
+    const cachedUser = userCache.get(Email);
+    const isValidPassword = await bcrypt.compare(Password, cachedUser.Password);
+    if (isValidPassword) return { success: true, user: cachedUser };
+  }
+
   const db = await connectToDatabase();
   const usersCollection = db.collection("users");
 
-  // Find the user by email
+  // Find user in DB
   const user = await usersCollection.findOne({ Email });
   if (!user) {
     return { success: false, message: "Invalid email or password" };
   }
 
-  // Compare the provided password with the stored hashed password
+  // Validate password
   const isValidPassword = await bcrypt.compare(Password, user.Password);
   if (!isValidPassword) {
     return { success: false, message: "Invalid email or password" };
   }
 
-  return { success: true, user }; // Return the user object along with success status
-}
+  // Save to cache for faster next access
+  userCache.set(Email, user);
 
+  return { success: true, user };
+}

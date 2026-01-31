@@ -24,6 +24,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { ButtonGroup } from "@/components/ui/button-group"
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import {
     Dialog,
     DialogContent,
@@ -531,441 +532,443 @@ export default function AccountPage() {
     }
 
     return (
-        <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset>
-                {/* Header */}
-                <header className="flex h-16 shrink-0 items-center gap-2 px-4">
-                    <SidebarTrigger className="-ml-1" />
-                    <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-                        Home
-                    </Button>
-                    <Separator orientation="vertical" className="h-4" />
-                    <Breadcrumb>
-                        <BreadcrumbList>
-                            <BreadcrumbItem>
-                                <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
-                            </BreadcrumbItem>
-                            <BreadcrumbSeparator />
-                            <BreadcrumbItem>
-                                <BreadcrumbPage>Customer Database</BreadcrumbPage>
-                            </BreadcrumbItem>
-                        </BreadcrumbList>
-                    </Breadcrumb>
-                </header>
+        <ProtectedPageWrapper>
+            <SidebarProvider>
+                <AppSidebar />
+                <SidebarInset>
+                    {/* Header */}
+                    <header className="flex h-16 shrink-0 items-center gap-2 px-4">
+                        <SidebarTrigger className="-ml-1" />
+                        <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
+                            Home
+                        </Button>
+                        <Separator orientation="vertical" className="h-4" />
+                        <Breadcrumb>
+                            <BreadcrumbList>
+                                <BreadcrumbItem>
+                                    <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
+                                </BreadcrumbItem>
+                                <BreadcrumbSeparator />
+                                <BreadcrumbItem>
+                                    <BreadcrumbPage>Customer Database</BreadcrumbPage>
+                                </BreadcrumbItem>
+                            </BreadcrumbList>
+                        </Breadcrumb>
+                    </header>
 
-                {/* 🔍 Search + Filters */}
-                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 px-4 py-3">
-                    {/* 🔎 Search Input */}
-                    <div className="relative w-full sm:max-w-xs">
-                        <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search customers..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="pl-8 w-full pr-8"
-                        />
-                        {isFiltering && (
-                            <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
-                        )}
-                    </div>
-
-                    {/* 🧩 Right-Side Button Group */}
-                    <div className="flex flex-wrap items-center justify-end w-full gap-2 sm:w-auto">
-                        <Button variant="outline" onClick={() => setShowFilters((prev) => !prev)}> <Filter /> </Button>
-                        <Calendar
-                            startDate={startDate}
-                            endDate={endDate}
-                            setStartDateAction={setStartDate}
-                            setEndDateAction={setEndDate}
-                        />
-                        <ImportDialog />
-                        <Download data={filtered} filename="CustomerDatabase" />
-                        {selectedIds.size > 0 && (
-                            <>
-                                <Button variant="outline" onClick={() => setShowTransferDialog(true)}> <ArrowRight className="w-4 h-4" /> Transfer </Button>
-                                <Button onClick={handleAutoGenerate} disabled={isGenerating} > {isGenerating ? "Generating..." : "Auto-Generate ID"} ({selectedIds.size}) </Button>
-                                <Button onClick={handleBulkDelete} variant="destructive" > Delete Selected ({selectedIds.size}) </Button>
-                            </>
-                        )}
-
-                        {!isAuditView ? (
-                            <Audit
-                                customers={customers}
-                                setAuditedAction={setAudited}
-                                setDuplicateIdsAction={setDuplicateIds}
-                                setIsAuditViewAction={setIsAuditView}
+                    {/* 🔍 Search + Filters */}
+                    <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 px-4 py-3">
+                        {/* 🔎 Search Input */}
+                        <div className="relative w-full sm:max-w-xs">
+                            <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search customers..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="pl-8 w-full pr-8"
                             />
-                        ) : (
-                            <Button variant="outline" onClick={handleReturn}> Return to List </Button>
-                        )}
+                            {isFiltering && (
+                                <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
+                            )}
+                        </div>
 
-                        <TransferDialog
-                            open={showTransferDialog}
-                            onOpenChangeAction={(open) => {
-                                setShowTransferDialog(open);
-                                if (!open) {
-                                    setTransferSelection("");
-                                    setTransferType(null);
-                                }
-                            }}
-                            selectedIds={new Set(Array.from(selectedIds).map(String))}
-                            setSelectedIdsAction={(ids: Set<string>) => {
-                                const newIds = new Set(Array.from(ids).map((id) => Number(id)));
-                                setSelectedIdsAction(newIds);
-                            }}
-                            setAccountsAction={(updateFn) => setCustomers((prev) => updateFn(prev))}
-                            tsas={tsas}
-                            tsms={tsms}
-                            managers={managers}
-                        />
+                        {/* 🧩 Right-Side Button Group */}
+                        <div className="flex flex-wrap items-center justify-end w-full gap-2 sm:w-auto">
+                            <Button variant="outline" onClick={() => setShowFilters((prev) => !prev)}> <Filter /> </Button>
+                            <Calendar
+                                startDate={startDate}
+                                endDate={endDate}
+                                setStartDateAction={setStartDate}
+                                setEndDateAction={setEndDate}
+                            />
+                            <ImportDialog />
+                            <Download data={filtered} filename="CustomerDatabase" />
+                            {selectedIds.size > 0 && (
+                                <>
+                                    <Button variant="outline" onClick={() => setShowTransferDialog(true)}> <ArrowRight className="w-4 h-4" /> Transfer </Button>
+                                    <Button onClick={handleAutoGenerate} disabled={isGenerating} > {isGenerating ? "Generating..." : "Auto-Generate ID"} ({selectedIds.size}) </Button>
+                                    <Button onClick={handleBulkDelete} variant="destructive" > Delete Selected ({selectedIds.size}) </Button>
+                                </>
+                            )}
+
+                            {!isAuditView ? (
+                                <Audit
+                                    customers={customers}
+                                    setAuditedAction={setAudited}
+                                    setDuplicateIdsAction={setDuplicateIds}
+                                    setIsAuditViewAction={setIsAuditView}
+                                />
+                            ) : (
+                                <Button variant="outline" onClick={handleReturn}> Return to List </Button>
+                            )}
+
+                            <TransferDialog
+                                open={showTransferDialog}
+                                onOpenChangeAction={(open) => {
+                                    setShowTransferDialog(open);
+                                    if (!open) {
+                                        setTransferSelection("");
+                                        setTransferType(null);
+                                    }
+                                }}
+                                selectedIds={new Set(Array.from(selectedIds).map(String))}
+                                setSelectedIdsAction={(ids: Set<string>) => {
+                                    const newIds = new Set(Array.from(ids).map((id) => Number(id)));
+                                    setSelectedIdsAction(newIds);
+                                }}
+                                setAccountsAction={(updateFn) => setCustomers((prev) => updateFn(prev))}
+                                tsas={tsas}
+                                tsms={tsms}
+                                managers={managers}
+                            />
+                        </div>
+
+                        {showFilters && (
+                            <FilterDialog
+                                open={showFilters}
+                                onOpenChange={setShowFilters}
+                                filterTSA={filterTSA}
+                                setFilterTSA={setFilterTSA}
+                                filterType={filterType}
+                                setFilterType={setFilterType}
+                                filterStatus={filterStatus}
+                                setFilterStatus={setFilterStatus}
+                                rowsPerPage={rowsPerPage}
+                                setRowsPerPage={setRowsPerPage}
+                                tsaList={tsaList}
+                                typeOptions={typeOptions}
+                                statusOptions={statusOptions}
+                                sortOrder={sortOrder}
+                                setSortOrder={setSortOrder}
+                                onClose={() => setShowFilters(false)}
+                            />
+                        )}
                     </div>
 
-                    {showFilters && (
-                        <FilterDialog
-                            open={showFilters}
-                            onOpenChange={setShowFilters}
-                            filterTSA={filterTSA}
-                            setFilterTSA={setFilterTSA}
-                            filterType={filterType}
-                            setFilterType={setFilterType}
-                            filterStatus={filterStatus}
-                            setFilterStatus={setFilterStatus}
-                            rowsPerPage={rowsPerPage}
-                            setRowsPerPage={setRowsPerPage}
-                            tsaList={tsaList}
-                            typeOptions={typeOptions}
-                            statusOptions={statusOptions}
-                            sortOrder={sortOrder}
-                            setSortOrder={setSortOrder}
-                            onClose={() => setShowFilters(false)}
-                        />
-                    )}
-                </div>
+                    {isAuditView && (
+                        <div className="mx-4 mb-2 mt-1 flex flex-col gap-2 bg-muted/50 rounded-md px-4 py-2 border border-border text-[13px]">
+                            {/* 🔍 Top Row: Summary + Buttons */}
+                            <div className="flex justify-between items-center flex-wrap gap-2">
+                                {/* 🧾 Audit Summary (left) */}
+                                <div
+                                    className="font-medium cursor-pointer select-none underline text-red-600"
+                                    onClick={() => {
+                                        // Default: lahat ng audit type unchecked
+                                        setAuditSelection({
+                                            duplicates: true,      // pwede default checked
+                                            missingType: true,
+                                            missingStatus: true,
+                                        });
+                                        setShowAuditDialog(true);
+                                    }}
+                                >
+                                    🧾 Audit Summary: <span className="font-semibold text-red-600">{audited.length}</span> total issues found
+                                </div>
 
-                {isAuditView && (
-                    <div className="mx-4 mb-2 mt-1 flex flex-col gap-2 bg-muted/50 rounded-md px-4 py-2 border border-border text-[13px]">
-                        {/* 🔍 Top Row: Summary + Buttons */}
-                        <div className="flex justify-between items-center flex-wrap gap-2">
-                            {/* 🧾 Audit Summary (left) */}
-                            <div
-                                className="font-medium cursor-pointer select-none underline text-red-600"
-                                onClick={() => {
-                                    // Default: lahat ng audit type unchecked
-                                    setAuditSelection({
-                                        duplicates: true,      // pwede default checked
-                                        missingType: true,
-                                        missingStatus: true,
-                                    });
-                                    setShowAuditDialog(true);
-                                }}
-                            >
-                                🧾 Audit Summary: <span className="font-semibold text-red-600">{audited.length}</span> total issues found
-                            </div>
-
-                            {/* 🧩 Button Group Filters (right side) */}
-                            <div className="flex flex-wrap gap-2 justify-end ml-auto">
-                                <ButtonGroup aria-label="Audit Filter Buttons" className="flex">
-                                    <Button
-                                        size="sm"
-                                        variant={auditFilter === "missingType" ? "secondary" : "outline"}
-                                        className={`rounded-l-md ${auditFilter === "missingType" ? "bg-yellow-100 text-yellow-900" : ""
-                                            }`}
-                                        onClick={() =>
-                                            setAuditFilter(auditFilter === "missingType" ? "" : "missingType")
-                                        }
-                                    >
-                                        ⚠ Missing Type:{" "}
-                                        {audited.filter((c) => !c.type_client?.trim() && c.status?.trim()).length}
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant={auditFilter === "missingStatus" ? "secondary" : "outline"}
-                                        className={
-                                            auditFilter === "missingStatus"
-                                                ? "bg-yellow-100 text-yellow-900"
-                                                : ""
-                                        }
-                                        onClick={() =>
-                                            setAuditFilter(auditFilter === "missingStatus" ? "" : "missingStatus")
-                                        }
-                                    >
-                                        ⚠ Missing Status:{" "}
-                                        {audited.filter((c) => !c.status?.trim() && c.type_client?.trim()).length}
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant={auditFilter === "duplicates" ? "secondary" : "outline"}
-                                        className={`rounded-r-md ${auditFilter === "duplicates" ? "bg-red-100 text-red-900" : ""
-                                            }`}
-                                        onClick={() =>
-                                            setAuditFilter(auditFilter === "duplicates" ? "" : "duplicates")
-                                        }
-                                    >
-                                        🔁 Duplicates: {Array.from(duplicateIds).length}
-                                    </Button>
-                                </ButtonGroup>
+                                {/* 🧩 Button Group Filters (right side) */}
+                                <div className="flex flex-wrap gap-2 justify-end ml-auto">
+                                    <ButtonGroup aria-label="Audit Filter Buttons" className="flex">
+                                        <Button
+                                            size="sm"
+                                            variant={auditFilter === "missingType" ? "secondary" : "outline"}
+                                            className={`rounded-l-md ${auditFilter === "missingType" ? "bg-yellow-100 text-yellow-900" : ""
+                                                }`}
+                                            onClick={() =>
+                                                setAuditFilter(auditFilter === "missingType" ? "" : "missingType")
+                                            }
+                                        >
+                                            ⚠ Missing Type:{" "}
+                                            {audited.filter((c) => !c.type_client?.trim() && c.status?.trim()).length}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant={auditFilter === "missingStatus" ? "secondary" : "outline"}
+                                            className={
+                                                auditFilter === "missingStatus"
+                                                    ? "bg-yellow-100 text-yellow-900"
+                                                    : ""
+                                            }
+                                            onClick={() =>
+                                                setAuditFilter(auditFilter === "missingStatus" ? "" : "missingStatus")
+                                            }
+                                        >
+                                            ⚠ Missing Status:{" "}
+                                            {audited.filter((c) => !c.status?.trim() && c.type_client?.trim()).length}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant={auditFilter === "duplicates" ? "secondary" : "outline"}
+                                            className={`rounded-r-md ${auditFilter === "duplicates" ? "bg-red-100 text-red-900" : ""
+                                                }`}
+                                            onClick={() =>
+                                                setAuditFilter(auditFilter === "duplicates" ? "" : "duplicates")
+                                            }
+                                        >
+                                            🔁 Duplicates: {Array.from(duplicateIds).length}
+                                        </Button>
+                                    </ButtonGroup>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                <DeleteDialog
-                    open={showDeleteDialog}
-                    onOpenChange={setShowDeleteDialog}
-                    selectedCount={selectedIds.size}
-                    onConfirm={executeBulkDelete}
-                />
-
-                <AuditDialog
-                    showAuditDialog={showAuditDialog}
-                    setShowAuditDialogAction={setShowAuditDialog}
-                    audited={audited}
-                    duplicateIds={duplicateIds}
-                    auditSelection={auditSelection}
-                    toggleAuditSelectionAction={toggleAuditSelection}
-                    setAuditFilterAction={setAuditFilter}
-                    setCustomersAction={setCustomers}
-                />
-
-                {/* Table */}
-                <div className="p-4">
-                    <div className="flex justify-start mb-2">
-                        <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
-                    </div>
-                    <div className="overflow-auto min-h-[200px] flex items-center justify-center">
-                        {isFetching ? (
-                            <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
-                                <Loader2 className="size-6 animate-spin" />
-                                <span>Loading customers...</span>
-                            </div>
-
-                        ) : current.length > 0 ? (
-                            <Table className="whitespace-nowrap text-[13px] min-w-full">
-                                <TableHeader className="bg-muted sticky top-0 z-10">
-                                    <TableRow>
-                                        <TableHead className="w-8 text-center"><input type="checkbox" checked={selectAll} onChange={handleSelectAll} /></TableHead>
-                                        <TableHead className="text-center">Actions</TableHead>
-                                        <TableHead>Company</TableHead>
-                                        <TableHead>Contact</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Area</TableHead>
-                                        <TableHead>TSA</TableHead>
-                                        <TableHead>TSM</TableHead>
-                                        <TableHead>Manager</TableHead>
-                                        <TableHead>Date Created</TableHead>
-                                        <TableHead>Date Updated</TableHead>
-                                        <TableHead>Next Available</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-
-                                <TableBody className="text-[12px]">
-                                    {current.map((c) => {
-                                        const isMissingType = !c.type_client?.trim()
-                                        const isMissingStatus = !c.status?.trim()
-                                        const isDuplicate = duplicateIds.has(c.id)
-                                        const isSelected = selectedIds.has(c.id)
-
-                                        return (
-                                            <TableRow key={c.id}>
-                                                <TableCell className="text-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelected}
-                                                        onChange={() => toggleSelect(c.id)}
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            setEditingCustomer(c)
-                                                            setShowEditDialog(true)
-                                                        }}
-                                                    >
-                                                        Edit
-                                                    </Button>
-                                                </TableCell>
-
-                                                <TableCell
-                                                    className="uppercase whitespace-normal break-words max-w-[250px]"
-                                                >
-                                                    <span
-                                                        className={
-                                                            isDuplicate || isMissingType || isMissingStatus
-                                                                ? "line-through underline decoration-red-500 decoration-2"
-                                                                : ""
-                                                        }
-                                                    >
-                                                        {c.company_name} <br />{c.account_reference_number}
-                                                    </span>
-                                                </TableCell>
-
-                                                <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
-                                                    {c.contact_person}
-                                                </TableCell>
-                                                <TableCell className="whitespace-normal break-words max-w-[250px]">
-                                                    {c.email_address}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span
-                                                        className={
-                                                            isMissingType
-                                                                ? "line-through underline decoration-red-500 decoration-2"
-                                                                : ""
-                                                        }
-                                                    >
-                                                        {c.type_client || "—"}
-                                                    </span>
-                                                </TableCell>
-
-                                                <TableCell className="text-center">
-                                                    {c.status ? (
-                                                        (() => {
-                                                            const status = c.status.trim().toLowerCase()
-                                                            switch (status) {
-                                                                case "active":
-                                                                    return (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="bg-green-500/90 hover:bg-green-600 text-white dark:bg-green-600 dark:hover:bg-green-700 flex items-center gap-1 transition-colors duration-200"
-                                                                        >
-                                                                            <BadgeCheck className="size-3.5" />
-                                                                            Active
-                                                                        </Badge>
-                                                                    )
-                                                                case "new client":
-                                                                    return (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="bg-blue-500/90 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-700 flex items-center gap-1 transition-colors duration-200"
-                                                                        >
-                                                                            <UserCheck className="size-3.5" />
-                                                                            New Client
-                                                                        </Badge>
-                                                                    )
-                                                                case "non-buying":
-                                                                    return (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="bg-yellow-500/90 hover:bg-yellow-600 text-white dark:bg-yellow-600 dark:hover:bg-yellow-700 flex items-center gap-1 transition-colors duration-200"
-                                                                        >
-                                                                            <AlertTriangle className="size-3.5" />
-                                                                            Non-Buying
-                                                                        </Badge>
-                                                                    )
-                                                                case "inactive":
-                                                                    return (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="bg-red-500/90 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 flex items-center gap-1 transition-colors duration-200"
-                                                                        >
-                                                                            <XCircle className="size-3.5" />
-                                                                            Inactive
-                                                                        </Badge>
-                                                                    )
-                                                                case "on hold":
-                                                                    return (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="bg-stone-500/90 hover:bg-stone-600 text-white dark:bg-stone-600 dark:hover:bg-stone-700 flex items-center gap-1 transition-colors duration-200"
-                                                                        >
-                                                                            <PauseCircle className="size-3.5" />
-                                                                            On Hold
-                                                                        </Badge>
-                                                                    )
-                                                                case "used":
-                                                                    return (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1 transition-colors duration-200"
-                                                                        >
-                                                                            <Clock className="size-3.5" />
-                                                                            Used
-                                                                        </Badge>
-                                                                    )
-                                                                case "for deletion":
-                                                                case "remove":
-                                                                    return (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:hover:bg-red-800 flex items-center gap-1 transition-colors duration-200"
-                                                                        >
-                                                                            <UserX className="size-3.5" />
-                                                                            {c.status}
-                                                                        </Badge>
-                                                                    )
-                                                                default:
-                                                                    return (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className="text-muted-foreground hover:bg-muted transition-colors duration-200"
-                                                                        >
-                                                                            {c.status}
-                                                                        </Badge>
-                                                                    )
-                                                            }
-                                                        })()
-                                                    ) : (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="text-muted-foreground hover:bg-muted transition-colors duration-200"
-                                                        >
-                                                            —
-                                                        </Badge>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>{c.region}</TableCell>
-                                                <TableCell className="capitalize">
-                                                    {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-"}
-                                                </TableCell>
-
-                                                <TableCell>{c.tsm}</TableCell>
-                                                <TableCell>{c.manager}</TableCell>
-                                                <TableCell>{new Date(c.date_created).toLocaleDateString()}</TableCell>
-                                                <TableCell>{new Date(c.date_updated).toLocaleDateString()}</TableCell>
-                                                <TableCell>
-                                                    {c.next_available_date
-                                                        ? new Date(c.next_available_date).toLocaleDateString()
-                                                        : "-"}
-                                                </TableCell>
-                                            </TableRow>
-                                        )
-                                    })}
-                                </TableBody>
-                            </Table>
-                        ) : (
-                            <div className="py-10 text-center text-xs text-muted-foreground">
-                                No customers found.
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <EditCustomerDialog
-                    open={showEditDialog}
-                    onOpenChange={setShowEditDialog}
-                    customer={editingCustomer}
-                    onSave={(updated) => {
-                        setCustomers(prev =>
-                            prev.map(c => c.id === updated.id ? updated : c)
-                        )
-                    }}
-                />
-
-                {/* Pagination */}
-                <div className="flex justify-center items-center gap-4 my-4">
-                    {/* Pagination */}
-                    <Pagination
-                        page={page}
-                        totalPages={totalPages}
-                        onPageChangeAction={setPage}
+                    <DeleteDialog
+                        open={showDeleteDialog}
+                        onOpenChange={setShowDeleteDialog}
+                        selectedCount={selectedIds.size}
+                        onConfirm={executeBulkDelete}
                     />
-                </div>
-            </SidebarInset>
-        </SidebarProvider>
+
+                    <AuditDialog
+                        showAuditDialog={showAuditDialog}
+                        setShowAuditDialogAction={setShowAuditDialog}
+                        audited={audited}
+                        duplicateIds={duplicateIds}
+                        auditSelection={auditSelection}
+                        toggleAuditSelectionAction={toggleAuditSelection}
+                        setAuditFilterAction={setAuditFilter}
+                        setCustomersAction={setCustomers}
+                    />
+
+                    {/* Table */}
+                    <div className="p-4">
+                        <div className="flex justify-start mb-2">
+                            <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
+                        </div>
+                        <div className="overflow-auto min-h-[200px] flex items-center justify-center">
+                            {isFetching ? (
+                                <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
+                                    <Loader2 className="size-6 animate-spin" />
+                                    <span>Loading customers...</span>
+                                </div>
+
+                            ) : current.length > 0 ? (
+                                <Table className="whitespace-nowrap text-[13px] min-w-full">
+                                    <TableHeader className="bg-muted sticky top-0 z-10">
+                                        <TableRow>
+                                            <TableHead className="w-8 text-center"><input type="checkbox" checked={selectAll} onChange={handleSelectAll} /></TableHead>
+                                            <TableHead className="text-center">Actions</TableHead>
+                                            <TableHead>Company</TableHead>
+                                            <TableHead>Contact</TableHead>
+                                            <TableHead>Email</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Area</TableHead>
+                                            <TableHead>TSA</TableHead>
+                                            <TableHead>TSM</TableHead>
+                                            <TableHead>Manager</TableHead>
+                                            <TableHead>Date Created</TableHead>
+                                            <TableHead>Date Updated</TableHead>
+                                            <TableHead>Next Available</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+
+                                    <TableBody className="text-[12px]">
+                                        {current.map((c) => {
+                                            const isMissingType = !c.type_client?.trim()
+                                            const isMissingStatus = !c.status?.trim()
+                                            const isDuplicate = duplicateIds.has(c.id)
+                                            const isSelected = selectedIds.has(c.id)
+
+                                            return (
+                                                <TableRow key={c.id}>
+                                                    <TableCell className="text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => toggleSelect(c.id)}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                setEditingCustomer(c)
+                                                                setShowEditDialog(true)
+                                                            }}
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                    </TableCell>
+
+                                                    <TableCell
+                                                        className="uppercase whitespace-normal break-words max-w-[250px]"
+                                                    >
+                                                        <span
+                                                            className={
+                                                                isDuplicate || isMissingType || isMissingStatus
+                                                                    ? "line-through underline decoration-red-500 decoration-2"
+                                                                    : ""
+                                                            }
+                                                        >
+                                                            {c.company_name} <br />{c.account_reference_number}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
+                                                        {c.contact_person}
+                                                    </TableCell>
+                                                    <TableCell className="whitespace-normal break-words max-w-[250px]">
+                                                        {c.email_address}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span
+                                                            className={
+                                                                isMissingType
+                                                                    ? "line-through underline decoration-red-500 decoration-2"
+                                                                    : ""
+                                                            }
+                                                        >
+                                                            {c.type_client || "—"}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        {c.status ? (
+                                                            (() => {
+                                                                const status = c.status.trim().toLowerCase()
+                                                                switch (status) {
+                                                                    case "active":
+                                                                        return (
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="bg-green-500/90 hover:bg-green-600 text-white dark:bg-green-600 dark:hover:bg-green-700 flex items-center gap-1 transition-colors duration-200"
+                                                                            >
+                                                                                <BadgeCheck className="size-3.5" />
+                                                                                Active
+                                                                            </Badge>
+                                                                        )
+                                                                    case "new client":
+                                                                        return (
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="bg-blue-500/90 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-700 flex items-center gap-1 transition-colors duration-200"
+                                                                            >
+                                                                                <UserCheck className="size-3.5" />
+                                                                                New Client
+                                                                            </Badge>
+                                                                        )
+                                                                    case "non-buying":
+                                                                        return (
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="bg-yellow-500/90 hover:bg-yellow-600 text-white dark:bg-yellow-600 dark:hover:bg-yellow-700 flex items-center gap-1 transition-colors duration-200"
+                                                                            >
+                                                                                <AlertTriangle className="size-3.5" />
+                                                                                Non-Buying
+                                                                            </Badge>
+                                                                        )
+                                                                    case "inactive":
+                                                                        return (
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="bg-red-500/90 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 flex items-center gap-1 transition-colors duration-200"
+                                                                            >
+                                                                                <XCircle className="size-3.5" />
+                                                                                Inactive
+                                                                            </Badge>
+                                                                        )
+                                                                    case "on hold":
+                                                                        return (
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="bg-stone-500/90 hover:bg-stone-600 text-white dark:bg-stone-600 dark:hover:bg-stone-700 flex items-center gap-1 transition-colors duration-200"
+                                                                            >
+                                                                                <PauseCircle className="size-3.5" />
+                                                                                On Hold
+                                                                            </Badge>
+                                                                        )
+                                                                    case "used":
+                                                                        return (
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1 transition-colors duration-200"
+                                                                            >
+                                                                                <Clock className="size-3.5" />
+                                                                                Used
+                                                                            </Badge>
+                                                                        )
+                                                                    case "for deletion":
+                                                                    case "remove":
+                                                                        return (
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:hover:bg-red-800 flex items-center gap-1 transition-colors duration-200"
+                                                                            >
+                                                                                <UserX className="size-3.5" />
+                                                                                {c.status}
+                                                                            </Badge>
+                                                                        )
+                                                                    default:
+                                                                        return (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className="text-muted-foreground hover:bg-muted transition-colors duration-200"
+                                                                            >
+                                                                                {c.status}
+                                                                            </Badge>
+                                                                        )
+                                                                }
+                                                            })()
+                                                        ) : (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="text-muted-foreground hover:bg-muted transition-colors duration-200"
+                                                            >
+                                                                —
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>{c.region}</TableCell>
+                                                    <TableCell className="capitalize">
+                                                        {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-"}
+                                                    </TableCell>
+
+                                                    <TableCell>{c.tsm}</TableCell>
+                                                    <TableCell>{c.manager}</TableCell>
+                                                    <TableCell>{new Date(c.date_created).toLocaleDateString()}</TableCell>
+                                                    <TableCell>{new Date(c.date_updated).toLocaleDateString()}</TableCell>
+                                                    <TableCell>
+                                                        {c.next_available_date
+                                                            ? new Date(c.next_available_date).toLocaleDateString()
+                                                            : "-"}
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            ) : (
+                                <div className="py-10 text-center text-xs text-muted-foreground">
+                                    No customers found.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <EditCustomerDialog
+                        open={showEditDialog}
+                        onOpenChange={setShowEditDialog}
+                        customer={editingCustomer}
+                        onSave={(updated) => {
+                            setCustomers(prev =>
+                                prev.map(c => c.id === updated.id ? updated : c)
+                            )
+                        }}
+                    />
+
+                    {/* Pagination */}
+                    <div className="flex justify-center items-center gap-4 my-4">
+                        {/* Pagination */}
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            onPageChangeAction={setPage}
+                        />
+                    </div>
+                </SidebarInset>
+            </SidebarProvider>
+        </ProtectedPageWrapper>
     )
 }
