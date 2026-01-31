@@ -1,63 +1,61 @@
-"use client"
+"use client";
 
-import React, { useState, useMemo } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "../../components/app-sidebar"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-import { Button } from "@/components/ui/button"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-} from "@/components/ui/pagination"
-import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import ProtectedPageWrapper from "@/app/components/protected-page-wrapper";
+import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { SidebarProvider, SidebarInset, SidebarTrigger, } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator, } from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle, } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+
+import { UserProvider } from "@/contexts/UserContext";
+import { FormatProvider } from "@/contexts/FormatContext";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { Pagination } from "@/components/app-pagination";
+import { Star, ExternalLink } from "lucide-react";
 
 interface Item {
-  id: number
-  title: string
-  description: string
-  url: string
+  id: number;
+  title: string;
+  description: string;
+  url: string;
 }
 
 export default function AccountPage() {
-  const searchParams = useSearchParams()
-  const queryUserId = searchParams?.get("userId")
-  const [userId] = useState<string | null>(queryUserId ?? null)
-  const router = useRouter()
+  const [userId, setUserId] = useState<string | null>(null);
+  const [visitCounts, setVisitCounts] = useState<Record<string, number>>({});
+  const [lastVisitedUrl, setLastVisitedUrl] = useState<string | null>(null);
+  const router = useRouter();
 
-  // All items combined
+  // Load userId, visit counts and last visited url from localStorage on mount
+  useEffect(() => {
+    const storedUserId = localStorage.getItem("userId");
+    setUserId(storedUserId);
+
+    const storedCounts = localStorage.getItem("visitCounts");
+    setVisitCounts(storedCounts ? JSON.parse(storedCounts) : {});
+
+    const lastUrl = localStorage.getItem("lastVisitedUrl");
+    setLastVisitedUrl(lastUrl);
+  }, []);
+
   const items: Item[] = [
     {
       id: 1,
-      title: "Taskflow ( Current Live )",
+      title: "Taskflow",
       description: "Manage and track activity time and motion efficiently.",
-      url: "https://ecoshift-erp-system.vercel.app/",
+      url: "https://taskflow-crm.vercel.app/auth/login",
     },
     {
       id: 2,
-      title: "Taskflow ( Demo Server )",
+      title: "Taskflow ( Demo )",
       description: "Manage and track activity time and motion efficiently.",
-      url: "https://taskflow-tau-seven.vercel.app/",
+      url: "https://ecoshift-erp-system.vercel.app/Login",
     },
     {
       id: 3,
@@ -67,43 +65,37 @@ export default function AccountPage() {
     },
     {
       id: 4,
-      title: "Ecodesk ( Current Live )",
+      title: "Ecodesk",
       description: "Customer support ticketing system for seamless issue tracking.",
-      url: "https://ecoshift-erp-system.vercel.app/",
+      url: "https://ecodesk-erp.vercel.app/login",
     },
     {
       id: 5,
-      title: "Ecodesk ( Demo Live )",
+      title: "Ecodesk ( OLD )",
       description: "Customer support ticketing system for seamless issue tracking.",
       url: "https://ecodesk-erp.vercel.app/login",
     },
     {
       id: 6,
-      title: "Acculog ( Current Live )",
+      title: "Acculog ( Sales Only )",
+      description: "Attendance tracking system to monitor employee hours.",
+      url: "https://acculog-hris.vercel.app/Login",
+    },
+    {
+      id: 7,
+      title: "Acculog ( Regular User )",
       description: "Attendance tracking system to monitor employee hours.",
       url: "https://acculog.vercel.app/",
     },
     {
-      id: 7,
-      title: "Acculog ( Demo Server )",
-      description: "Attendance tracking system to monitor employee hours.",
-      url: "https://acculog-demo-navy.vercel.app/",
-    },
-    {
       id: 8,
-      title: "Room Reservation ( Demo Server )",
+      title: "Room Reservation",
       description: "Reserve rooms and manage shift schedules easily.",
       url: "https://shift-reservation.vercel.app/Book",
     },
     {
-      id: 9,
-      title: "Stash IT Asset ( Old Version )",
-      description: "IT asset management system to track company equipment.",
-      url: "https://stash-rouge-pi.vercel.app/",
-    },
-    {
       id: 10,
-      title: "Stash IT Asset ( New Version )",
+      title: "Stash IT Asset",
       description: "IT asset management system to track company equipment.",
       url: "https://stash-demo.vercel.app/auth/login",
     },
@@ -205,135 +197,205 @@ export default function AccountPage() {
     },
   ]
 
-  const [search, setSearch] = useState("")
-
+  // Filter items based on search
+  const [search, setSearch] = useState("");
   const filteredItems = useMemo(() => {
-    if (!search.trim()) return items
+    if (!search.trim()) return items;
     return items.filter(
       (item) =>
         item.title.toLowerCase().includes(search.toLowerCase()) ||
         item.description.toLowerCase().includes(search.toLowerCase())
-    )
-  }, [search, items])
+    );
+  }, [search, items]);
 
-  const itemsPerPage = 10
-  const [page, setPage] = useState(1)
-  const totalPages = Math.ceil(filteredItems.length / itemsPerPage)
+  // Pagination variables
+  const itemsPerPage = 10;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
 
-  const paginatedItems = filteredItems.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+  const paginatedItems = filteredItems.slice(
+    (page - 1) * itemsPerPage,
+    page * itemsPerPage
+  );
 
-  React.useEffect(() => {
-    setPage(1)
-  }, [search])
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
-  const generatePages = (total: number) => Array.from({ length: total }, (_, i) => i + 1)
+  // Update visit counts in localStorage and state
+  const handleVisit = (url: string) => {
+    // Open in new tab
+    window.open(url, "_blank", "noopener noreferrer");
+
+    // Update visit counts
+    setVisitCounts((prev) => {
+      const newCounts = { ...prev };
+      newCounts[url] = (newCounts[url] || 0) + 1;
+
+      // Save back to localStorage
+      localStorage.setItem("visitCounts", JSON.stringify(newCounts));
+
+      return newCounts;
+    });
+
+    // Update last visited url
+    setLastVisitedUrl(url);
+    localStorage.setItem("lastVisitedUrl", url);
+  };
+
+  // Get top 5 most visited URLs sorted descending
+  const topVisited = useMemo(() => {
+    // Map visitCounts to entries, sort descending by count, limit 5
+    const sortedUrls = Object.entries(visitCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([url]) => url);
+
+    // Return item details for the URLs found, ignore if url not in items list
+    return sortedUrls
+      .map((url) => items.find((item) => item.url === url))
+      .filter((item): item is Item => !!item); // filter out undefined
+  }, [visitCounts, items]);
+
+  const generatePages = (total: number) => Array.from({ length: total }, (_, i) => i + 1);
 
   return (
-    <ProtectedPageWrapper>
-      <SidebarProvider>
-        <AppSidebar userId={userId} />
-        <SidebarInset>
-          {/* Header */}
-          <header className="flex h-16 shrink-0 items-center gap-2 px-4">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="-ml-1" />
-              <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-                Back
-              </Button>
-              <Separator orientation="vertical" className="h-4" />
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbLink href="#">Applications</BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>Modules</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
-            </div>
-          </header>
+    <UserProvider>
+      <FormatProvider>
+        <ProtectedPageWrapper>
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset>
+              {/* Header */}
+              <header className="flex h-16 shrink-0 items-center gap-2 px-4">
+                <div className="flex items-center gap-2">
+                  <SidebarTrigger className="-ml-1" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/dashboard")}
+                  >
+                    Back
+                  </Button>
+                  <Separator orientation="vertical" className="h-4" />
+                  <Breadcrumb>
+                    <BreadcrumbList>
+                      <BreadcrumbItem>
+                        <BreadcrumbLink href="#">Applications</BreadcrumbLink>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbItem>
+                        <BreadcrumbPage>Modules</BreadcrumbPage>
+                      </BreadcrumbItem>
+                    </BreadcrumbList>
+                  </Breadcrumb>
+                </div>
+              </header>
 
-          {/* Main content */}
-          <div className="flex flex-col gap-4 p-4 pt-0">
-            <Input
-              type="search"
-              placeholder="Search by title or description..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
-            />
+              {/* Two column layout */}
 
-            <Table>
-              <TableCaption>
-                List of applications and sites (filtered: {filteredItems.length} result
-                {filteredItems.length !== items.length ? `s` : ""})
-              </TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Link</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedItems.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">
-                      No results found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedItems.map((item) => (
-                    <TableRow key={item.id} className="hover:bg-muted/50">
-                      <TableCell className="font-medium">{item.title}</TableCell>
-                      <TableCell>{item.description}</TableCell>
-                      <TableCell>
-                        <Button variant="link" size="sm" asChild>
-                          <a href={item.url} target="_blank" rel="noopener noreferrer">
-                            Open Link
-                          </a>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+              <div className="flex gap-2 p-6 pt-2 h-[calc(100vh-64px)] overflow-hidden">
+                {/* Left column: Top 5 Most Visited */}
+                <Card className="w-1/3 border-gray-200 shadow-md overflow-hidden flex flex-col">
+                  <CardHeader className="pb-2 flex items-left gap-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Star className="w-5 h-5 text-yellow-400" />
+                      Top 5 Most Visited
+                    </CardTitle>
+                  </CardHeader>
 
-            {totalPages > 1 && (
-              <Pagination className="mt-4 justify-center">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationLink
-                      onClick={() => page > 1 && setPage(page - 1)}
-                      className={page === 1 ? "pointer-events-none opacity-50" : ""}
-                    >
-                      Prev
-                    </PaginationLink>
-                  </PaginationItem>
-                  {generatePages(totalPages).map((p) => (
-                    <PaginationItem key={p}>
-                      <PaginationLink onClick={() => setPage(p)} isActive={p === page}>
-                        {p}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationLink
-                      onClick={() => page < totalPages && setPage(page + 1)}
-                      className={page === totalPages ? "pointer-events-none opacity-50" : ""}
-                    >
-                      Next
-                    </PaginationLink>
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            )}
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    </ProtectedPageWrapper>
-  )
+                  <ScrollArea className="flex-grow">
+                    <CardContent className="p-2">
+                      {topVisited.length === 0 ? (
+                        <p className="text-center text-gray-500 italic p-4">No visits yet.</p>
+                      ) : (
+                        <ul>
+                          {topVisited.map((item) => (
+                            <li
+                              key={item.id}
+                              onClick={() => handleVisit(item.url)}
+                              title={`${item.description} (Visited ${visitCounts[item.url] ?? 0} times)`}
+                              className="cursor-pointer px-4 py-3 flex justify-between items-center rounded-md border-b"
+                            >
+                              <span className="font-medium truncate">{item.title}</span>
+                              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                                <Star className="w-3 h-3 text-yellow-400" />
+                                {visitCounts[item.url] ?? 0} visits
+                              </Badge>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </ScrollArea>
+                </Card>
+
+                {/* Right column: Search + List */}
+                <Card className="w-2/3 flex flex-col shadow-md border-gray-200">
+                  <CardContent className="flex flex-col p-6 space-y-4">
+                    <Input
+                      type="search"
+                      placeholder="Search by title or description..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="max-w-lg"
+                    />
+
+                    <ScrollArea className="flex-grow rounded-md border border-gray-200 p-2">
+                      <Table className="min-w-full">
+                        <TableCaption className="text-muted-foreground">
+                          List of applications and sites (filtered: {filteredItems.length} result
+                          {filteredItems.length !== items.length ? "s" : ""})
+                        </TableCaption>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-left">Title</TableHead>
+                            <TableHead className="text-left">Description</TableHead>
+                            <TableHead className="text-center">Link</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedItems.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center text-muted-foreground py-8 italic">
+                                No results found.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            paginatedItems.map((item) => (
+                              <TableRow
+                                key={item.id}
+                                className="cursor-pointer"
+                              >
+                                <TableCell className="font-semibold">{item.title}</TableCell>
+                                <TableCell>{item.description}</TableCell>
+                                <TableCell className="text-center">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleVisit(item.url)}
+                                    className="inline-flex items-center gap-1"
+                                  >
+                                    Open Link <ExternalLink className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+
+                    <Pagination page={page} totalPages={totalPages} onPageChangeAction={setPage} />
+
+                  </CardContent>
+                </Card>
+              </div>
+
+            </SidebarInset>
+          </SidebarProvider>
+        </ProtectedPageWrapper>
+      </FormatProvider>
+    </UserProvider>
+  );
 }

@@ -1,119 +1,174 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "../../components/app-sidebar";
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-} from "@/components/ui/card";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+
+import { UserProvider, useUser } from "@/contexts/UserContext";
+import { FormatProvider, useFormat } from "@/contexts/FormatContext";
+
+import { AppSidebar } from "@/components/app-sidebar";
+
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { useTheme } from "@/components/ThemeProvider";
+import { SidebarInset, SidebarProvider, SidebarTrigger, } from "@/components/ui/sidebar";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
+import { type DateRange } from "react-day-picker";
+
+import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
-export default function SettingsPage() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
-    const { theme, setTheme } = useTheme();
-    const [isSaving, setIsSaving] = useState(false);
+function SettingsContent() {
+  const searchParams = useSearchParams();
+  const { userId, setUserId } = useUser();
 
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            await new Promise((res) => setTimeout(res, 1000)); // simulate delay
+  // Get userId from URL query param and sync to context
+  const queryUserId = searchParams?.get("id") ?? "";
+  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
+    useState<DateRange | undefined>(undefined);
 
-            // Save to local storage (you can later integrate API persistence)
-            localStorage.setItem("theme", theme);
+  useEffect(() => {
+    if (queryUserId && queryUserId !== userId) {
+      setUserId(queryUserId);
+    }
+  }, [queryUserId, userId, setUserId]);
 
-            toast.success("Theme saved successfully!");
-        } catch (err) {
-            console.error(err);
-            toast.error("Failed to save theme");
-        } finally {
-            setIsSaving(false);
-        }
-    };
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
+  const { theme, setTheme } = useTheme();
+  const { timeFormat, setTimeFormat, dateFormat, setDateFormat } = useFormat();
+
+  const onTimeFormatChange = (val: string) => {
+    setTimeFormat(val);
+    toast.success(`Time format set to ${val}`);
+  };
+
+  const onDateFormatChange = (val: string) => {
+    setDateFormat(val);
+    toast.success(`Date format set to ${val}`);
+  };
+
+  if (!mounted) {
     return (
-        <SidebarProvider>
-            <AppSidebar userId={userId} />
-            <SidebarInset>
-                {/* Header & Breadcrumb */}
-                <header className="flex h-16 items-center gap-2 px-4">
-                    <SidebarTrigger className="-ml-1" />
-                    <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-                        Home
-                    </Button>
-                    <Separator orientation="vertical" className="h-4" />
-                    <Breadcrumb>
-                        <BreadcrumbList>
-                            <BreadcrumbItem>
-                                <BreadcrumbLink href="#">Settings</BreadcrumbLink>
-                            </BreadcrumbItem>
-                            <BreadcrumbSeparator />
-                            <BreadcrumbItem>
-                                <BreadcrumbPage>General</BreadcrumbPage>
-                            </BreadcrumbItem>
-                        </BreadcrumbList>
-                    </Breadcrumb>
-                </header>
-
-                <div className="px-4 py-6">
-                    <Card className="mx-auto">
-                        <CardHeader>
-                            <CardTitle>Theme Settings</CardTitle>
-                            <CardDescription>Choose your preferred theme for the application.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <RadioGroup
-                                value={theme}
-                                onValueChange={(v) => setTheme(v as "light" | "dark" | "system")}
-                                className="flex flex-row items-center space-x-6"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <RadioGroupItem value="light" id="light" />
-                                    <label htmlFor="light">Light Mode</label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <RadioGroupItem value="dark" id="dark" />
-                                    <label htmlFor="dark">Dark Mode</label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <RadioGroupItem value="system" id="system" />
-                                    <label htmlFor="system">System Default</label>
-                                </div>
-                            </RadioGroup>
-
-
-                            <Button
-                                onClick={handleSave}
-                                className="mt-4 px-6 py-2 flex items-center gap-2"
-                                disabled={isSaving}
-                            >
-                                {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                                Save Changes
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
-            </SidebarInset>
-        </SidebarProvider>
+      <></>
     );
+  }
+
+  return (
+    <>
+      <ProtectedPageWrapper>
+        <AppSidebar />
+        <SidebarInset>
+          {/* Header */}
+          <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
+            <div className="flex flex-1 items-center gap-2 px-3">
+              <SidebarTrigger />
+              <Separator
+                orientation="vertical"
+                className="mr-2 data-[orientation=vertical]:h-4"
+              />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-base font-semibold">
+                      Settings
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <div className="flex flex-1 flex-col gap-4 p-4">
+            <div className="mx-auto w-full max-w-3xl space-y-6">
+              {/* Theme Settings */}
+              <Card className="border border-muted shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">Theme Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="theme">Select Theme</Label>
+                    <Select value={theme} onValueChange={setTheme}>
+                      <SelectTrigger id="theme" className="w-[160px]">
+                        <SelectValue placeholder="Select theme" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Time & Date Format Settings */}
+              <Card className="border border-muted shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">Time & Date Format</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Time Format */}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="time-format">Time Format</Label>
+                    <Select
+                      value={timeFormat}
+                      onValueChange={onTimeFormatChange}
+                    >
+                      <SelectTrigger id="time-format" className="w-[160px]">
+                        <SelectValue placeholder="Select time format" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="12h">12-Hour</SelectItem>
+                        <SelectItem value="24h">24-Hour</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Format */}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="date-format">Date Format</Label>
+                    <Select
+                      value={dateFormat}
+                      onValueChange={onDateFormatChange}
+                    >
+                      <SelectTrigger id="date-format" className="w-[160px]">
+                        <SelectValue placeholder="Select date format" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="short">MM/DD/YYYY</SelectItem>
+                        <SelectItem value="long">Monday, November 11, 2025</SelectItem>
+                        <SelectItem value="iso">2025-11-11</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </SidebarInset>
+      </ProtectedPageWrapper>
+    </>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <UserProvider>
+      <FormatProvider>
+        <SidebarProvider>
+          <Suspense fallback={<div>Loading...</div>}>
+            <SettingsContent />
+          </Suspense>
+        </SidebarProvider>
+      </FormatProvider>
+    </UserProvider>
+  );
 }

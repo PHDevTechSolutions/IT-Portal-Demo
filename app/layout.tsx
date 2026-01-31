@@ -1,42 +1,41 @@
-// layout.tsx (server component)
+import React from "react";
 
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import "./globals.css";
-import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Toaster } from "@/components/ui/sonner"
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { Inter, JetBrains_Mono } from "next/font/google";
 
+import "./globals.css";
+import RootLayoutClient from "./root"; // Client-side wrapper component
+
+// Load Google Fonts with CSS variables for easy usage
 const inter = Inter({
-  weight: "100",
-  subsets: ["latin"],
   variable: "--font-inter",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "IT Portal",
-  description: "Created in NextJs Developed By Leroux Y Xchire",
+  title: "IT Portal ERP System",
+  description: "Developed by IT Team and Leroux Y Xchire",
   icons: {
     icon: "/xchire-logo.png",
+    shortcut: "/xchire-logo.png",
+    apple: "/xchire-logo.png",
   },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} antialiased`}>
-        <ThemeProvider>
-          <ToastContainer />
-          {children}
-          <Analytics />
-          <SpeedInsights />
-          <Toaster richColors />
-        </ThemeProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${inter.variable} ${jetbrainsMono.variable} antialiased font-sans`}>
+        <RootLayoutClient>{children}</RootLayoutClient>
       </body>
     </html>
   );
 }
-

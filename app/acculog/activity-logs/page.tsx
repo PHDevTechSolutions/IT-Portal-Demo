@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "../../components/app-sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 import { toast } from "sonner";
 import { Loader2, Search, Edit as EditIcon, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,15 +11,15 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator, } from "@/components/ui/breadcrumb";
-import { Pagination } from "../../components/app-pagination";
+import { Pagination } from "@/components/app-pagination";
 import { Separator } from "@/components/ui/separator";
 import type { DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 
-import EditActivityModal, { Log } from "../../components/app-acculog-edit-dialog";
-import { Calendar23 } from "../../components/app-acculog-daterange";
-import { DeleteDialog } from "../../components/app-acculog-delete-dialog";
-import { ActivityFilterDialog } from "../../components/app-acculog-filter-dialog";
+import EditActivityModal, { Log } from "@/components/acculog/edit";
+import { Calendar23 } from "@/components/acculog/daterange";
+import { DeleteDialog } from "@/components/acculog/delete";
+import { ActivityFilterDialog } from "@/components/acculog/filter";
 
 interface UserAccount {
     ReferenceID: string;
@@ -208,7 +208,7 @@ export default function ActivityLogsPage() {
 
     return (
         <SidebarProvider>
-            <AppSidebar userId={userId} />
+            <AppSidebar />
             <SidebarInset>
                 {/* Header */}
                 <header className="flex h-16 items-center gap-2 px-4">
@@ -293,9 +293,9 @@ export default function ActivityLogsPage() {
                             <span>Loading activities...</span>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto p-2">
                             <Table className="min-w-[900px] w-full text-sm">
-                                <TableHeader className="bg-muted sticky top-0 z-10">
+                                <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-10 text-center">
                                             <Checkbox

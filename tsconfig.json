@@ -16,11 +16,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "incremental": true,
-    "typeRoots": [
-      "./types",
-      "./node_modules/@types"
-    ],
+    "incremental": false,
     "paths": {
       "@/*": [
         "./*"
@@ -37,11 +33,10 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "app/ModuleCSR/Dashboard/components/Navbar",
-    "app/ModuleBD/components/Task/ScheduledActivity/HiddenFields",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next"
   ]
 }

@@ -3,20 +3,15 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "../../components/app-sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 import { toast } from "sonner";
 import { Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator, } from "@/components/ui/breadcrumb";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, } from "@/components/ui/dialog";
+
 import { supabase } from "@/utils/supabase";
 import { Input } from "@/components/ui/input";
 
@@ -58,12 +53,14 @@ export default function ActivityLogsPage() {
   const [page, setPage] = useState(1);
 
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState<Partial<Activity>>({});
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Agent list and user details states
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [errorAgents, setErrorAgents] = useState<string | null>(null);
-  // Replace with your actual userDetails or pass as prop
-  const userDetails = { referenceid: userId || "" };
 
   // Fetch activities from supabase
   const fetchActivities = async () => {
@@ -100,31 +97,16 @@ export default function ActivityLogsPage() {
     setIsFetching(false);
   };
 
-  // Fetch agents using userDetails.referenceid
-  useEffect(() => {
-    if (!userDetails.referenceid) return;
-
-    const fetchAgents = async () => {
-      try {
-        const response = await fetch(
-          `/api/UserManagement/UserFetch=${encodeURIComponent(userDetails.referenceid)}`
-        );
-        if (!response.ok) throw new Error("Failed to fetch agents");
-
-        const data = await response.json();
-        setAgents(data);
-      } catch (err) {
-        console.error("Error fetching agents:", err);
-        setErrorAgents("Failed to load agents.");
-      }
-    };
-
-    fetchAgents();
-  }, [userDetails.referenceid]);
-
   useEffect(() => {
     fetchActivities();
   }, []);
+
+  useEffect(() => {
+    if (selectedActivity) {
+      setFormData(selectedActivity);
+      setIsEditing(false);
+    }
+  }, [selectedActivity]);
 
   // Create a map from agent ReferenceID to agent info for quick lookup
   const agentMap = useMemo(() => {
@@ -181,9 +163,78 @@ export default function ActivityLogsPage() {
   const formatDate = (dateStr: string | null) =>
     dateStr ? new Date(dateStr).toLocaleDateString() : "N/A";
 
+  const handleChange = (key: keyof Activity, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedActivity?.id) return;
+
+    const { error } = await supabase
+      .from("activity")
+      .update({
+        tsm: formData.tsm,
+        manager: formData.manager,
+        company_name: formData.company_name,
+        contact_person: formData.contact_person,
+        contact_number: formData.contact_number,
+        email_address: formData.email_address,
+        address: formData.address,
+        type_client: formData.type_client,
+        scheduled_date: formData.scheduled_date,
+      })
+      .eq("id", selectedActivity.id);
+
+    if (error) {
+      toast.error("Failed to update activity");
+      return;
+    }
+
+    toast.success("Activity updated successfully");
+    await fetchActivities();
+    setIsEditing(false);
+    setSelectedActivity(null);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const pageIds = paginatedActivities.map((a) => a.id);
+    const allSelected = pageIds.every((id) => selectedIds.includes(id));
+
+    setSelectedIds(allSelected
+      ? selectedIds.filter((id) => !pageIds.includes(id))
+      : [...new Set([...selectedIds, ...pageIds])]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    const { error } = await supabase
+      .from("activity")
+      .delete()
+      .in("id", selectedIds);
+
+    if (error) {
+      toast.error("Failed to delete selected activities");
+      return;
+    }
+
+    toast.success(`${selectedIds.length} activity deleted`);
+    setSelectedIds([]);
+    setShowDeleteConfirm(false);
+    fetchActivities();
+  };
+
+
   return (
     <SidebarProvider>
-      <AppSidebar userId={userId} />
+      <AppSidebar />
       <SidebarInset>
         {/* Header */}
         <header className="flex h-16 items-center gap-2 px-4">
@@ -207,6 +258,7 @@ export default function ActivityLogsPage() {
 
         {/* Search */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
+          {/* Search */}
           <div className="relative w-full sm:max-w-xs">
             <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
             <Input
@@ -219,10 +271,21 @@ export default function ActivityLogsPage() {
               <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
             )}
           </div>
+
+          {/* Delete Selected Button (Right Side) */}
+          {selectedIds.length > 0 && (
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-full sm:w-auto"
+            >
+              Delete Selected ({selectedIds.length})
+            </Button>
+          )}
         </div>
 
         {/* Table */}
-        <div className="mx-4 border border-border shadow-sm rounded-lg overflow-auto">
+        <div className="mx-4 border border-border shadow-sm rounded-lg overflow-auto p-2">
           {isFetching ? (
             <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
               <Loader2 className="size-6 animate-spin" />
@@ -230,15 +293,25 @@ export default function ActivityLogsPage() {
             </div>
           ) : (
             <Table className="min-w-[800px] w-full text-sm whitespace-nowrap">
-              <TableHeader className="bg-muted sticky top-0 z-10">
+              <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      checked={
+                        paginatedActivities.length > 0 &&
+                        paginatedActivities.every((a) => selectedIds.includes(a.id))
+                      }
+                      onChange={toggleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead>Company Name</TableHead>
                   <TableHead>Ref, TSM & Manager</TableHead>
-                  <TableHead>Agent</TableHead>
                   <TableHead>Date Created</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {paginatedActivities.length === 0 ? (
                   <TableRow>
@@ -249,35 +322,37 @@ export default function ActivityLogsPage() {
                 ) : (
                   paginatedActivities.map((act) => (
                     <TableRow key={act.id}>
-                      <TableCell>{act.company_name || "-"}</TableCell>
                       <TableCell>
-                        <div className="flex flex-col gap-0.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(act.id)}
+                          onChange={() => toggleSelect(act.id)}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        {act.company_name || "-"}
+                        <br />
+                        <span className="text-[10px]">{act.activity_reference_number}</span>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5 text-xs">
                           <span><strong>Ref:</strong> {act.referenceid || "-"}</span>
                           <span><strong>TSM:</strong> {act.tsm || "-"}</span>
                           <span><strong>Manager:</strong> {act.manager || "-"}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="flex items-center gap-2">
-                        {agentMap[act.agent?.toLowerCase() || ""]?.profilePicture ? (
-                          <img
-                            src={agentMap[act.agent.toLowerCase()]!.profilePicture}
-                            alt={agentMap[act.agent.toLowerCase()]!.name}
-                            className="w-6 h-6 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs text-gray-600">
-                            N/A
-                          </div>
-                        )}
-                        <span>{agentMap[act.agent?.toLowerCase()]?.name || act.agent || "-"}</span>
-                      </TableCell>
+
                       <TableCell>{formatDate(act.date_created)}</TableCell>
+
                       <TableCell>
                         <Button size="sm" onClick={() => setSelectedActivity(act)}>
                           View Details
                         </Button>
                       </TableCell>
                     </TableRow>
+
                   ))
                 )}
               </TableBody>
@@ -299,40 +374,159 @@ export default function ActivityLogsPage() {
         </div>
 
         {/* Modal/Dialog */}
-        {selectedActivity && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"
-            onClick={() => setSelectedActivity(null)}
-          >
-            <div
-              className="bg-white rounded-lg max-w-lg w-full p-6 relative"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-lg font-bold mb-4">Activity Details</h2>
+        <Dialog
+          open={!!selectedActivity}
+          onOpenChange={(open) => {
+            if (!open) setSelectedActivity(null);
+          }}
+        >
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Activity Details</DialogTitle>
+            </DialogHeader>
 
+            {selectedActivity && (
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><strong>Reference ID:</strong> {selectedActivity.referenceid || "-"}</div>
-                <div><strong>TSM:</strong> {selectedActivity.tsm || "-"}</div>
-                <div><strong>Manager:</strong> {selectedActivity.manager || "-"}</div>
-                <div><strong>Date Created:</strong> {formatDate(selectedActivity.date_created)}</div>
-                <div><strong>Scheduled Date:</strong> {formatDate(selectedActivity.scheduled_date)}</div>
-                <div><strong>Ticket Ref. Number:</strong> {selectedActivity.ticket_reference_number || "-"}</div>
-                <div><strong>Agent:</strong> {selectedActivity.agent || "-"}</div>
-                <div><strong>Company Name:</strong> {selectedActivity.company_name || "-"}</div>
-                <div><strong>Contact Person:</strong> {selectedActivity.contact_person || "-"}</div>
-                <div><strong>Contact Number:</strong> {selectedActivity.contact_number || "-"}</div>
-                <div><strong>Email Address:</strong> {selectedActivity.email_address || "-"}</div>
-                <div><strong>Address:</strong> {selectedActivity.address || "-"}</div>
-                <div><strong>Type Client:</strong> {selectedActivity.type_client || "-"}</div>
-                <div><strong>Activity Ref. Number:</strong> {selectedActivity.activity_reference_number || "-"}</div>
-              </div>
+                {/* TSM */}
+                <div>
+                  <strong>TSM:</strong>
+                  {isEditing ? (
+                    <Input
+                      value={formData.tsm || ""}
+                      onChange={(e) => handleChange("tsm", e.target.value)}
+                    />
+                  ) : (
+                    <span> {selectedActivity.tsm || "-"}</span>
+                  )}
+                </div>
 
-              <Button className="mt-6" onClick={() => setSelectedActivity(null)}>
-                Close
+                {/* Manager */}
+                <div>
+                  <strong>Manager:</strong>
+                  {isEditing ? (
+                    <Input
+                      value={formData.manager || ""}
+                      onChange={(e) => handleChange("manager", e.target.value)}
+                    />
+                  ) : (
+                    <span> {selectedActivity.manager || "-"}</span>
+                  )}
+                </div>
+
+                {/* Company Name */}
+                <div>
+                  <strong>Company Name:</strong>
+                  {isEditing ? (
+                    <Input
+                      value={formData.company_name || ""}
+                      onChange={(e) => handleChange("company_name", e.target.value)}
+                    />
+                  ) : (
+                    <span> {selectedActivity.company_name || "-"}</span>
+                  )}
+                </div>
+
+                {/* Contact Person */}
+                <div>
+                  <strong>Contact Person:</strong>
+                  {isEditing ? (
+                    <Input
+                      value={formData.contact_person || ""}
+                      onChange={(e) => handleChange("contact_person", e.target.value)}
+                    />
+                  ) : (
+                    <span> {selectedActivity.contact_person || "-"}</span>
+                  )}
+                </div>
+
+                {/* Contact Number */}
+                <div>
+                  <strong>Contact Number:</strong>
+                  {isEditing ? (
+                    <Input
+                      value={formData.contact_number || ""}
+                      onChange={(e) => handleChange("contact_number", e.target.value)}
+                    />
+                  ) : (
+                    <span> {selectedActivity.contact_number || "-"}</span>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <strong>Email Address:</strong>
+                  {isEditing ? (
+                    <Input
+                      value={formData.email_address || ""}
+                      onChange={(e) => handleChange("email_address", e.target.value)}
+                    />
+                  ) : (
+                    <span> {selectedActivity.email_address || "-"}</span>
+                  )}
+                </div>
+
+                {/* Address */}
+                <div className="col-span-2">
+                  <strong>Address:</strong>
+                  {isEditing ? (
+                    <Input
+                      value={formData.address || ""}
+                      onChange={(e) => handleChange("address", e.target.value)}
+                    />
+                  ) : (
+                    <span> {selectedActivity.address || "-"}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+
+            <DialogFooter className="flex justify-between">
+              {!isEditing ? (
+                <>
+                  <Button variant="outline" onClick={() => setSelectedActivity(null)}>
+                    Close
+                  </Button>
+                  <Button onClick={() => setIsEditing(true)}>
+                    Edit
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={() => setIsEditing(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleUpdate}>
+                    Save Changes
+                  </Button>
+                </>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Confirm Delete</DialogTitle>
+            </DialogHeader>
+
+            <p className="text-sm">
+              Are you sure you want to delete{" "}
+              <strong>{selectedIds.length}</strong> selected activities?
+              This action cannot be undone.
+            </p>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+                Cancel
               </Button>
-            </div>
-          </div>
-        )}
+              <Button variant="destructive" onClick={handleBulkDelete}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarInset>
     </SidebarProvider>
   );

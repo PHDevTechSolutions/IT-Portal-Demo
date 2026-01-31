@@ -3,8 +3,8 @@
 import React, { useEffect, useState, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "../../components/app-sidebar"
-import { Pagination } from "../../components/app-pagination"
+import { AppSidebar } from "@/components/app-sidebar"
+import { Pagination } from "@/components/app-pagination"
 import { toast } from "sonner"
 import { Loader2, Search, ArrowUpDown, Trash2, Pencil, Repeat2, Plus, ArrowRight, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -16,21 +16,17 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { ButtonGroup } from "@/components/ui/button-group"
-import { DeleteDialog } from "../../components/app-user-accounts-delete-dialog"
-import { CreateDialog } from "../../components/app-user-accounts-create-dialog"
-import { EditDialog } from "../../components/app-user-accounts-edit-dialog"
-import { TransferDialog } from "../../components/app-user-accounts-transfer-dialog"
-import { ConvertEmailDialog } from "../../components/app-user-accounts-convert-dialog"
-import { SpinnerItem } from "../../components/app-user-accounts-download-spinner"
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-    DialogTrigger,
-} from "@/components/ui/dialog";
+import { DeleteDialog } from "@/components/admin/roles/delete"
+import { CreateDialog } from "@/components/admin/roles/create"
+import { EditDialog } from "@/components/admin/roles/edit"
+import { TransferDialog } from "@/components/admin/roles/transfer"
+import { ConvertEmailDialog } from "@/components/admin/roles/convert"
+import { SpinnerItem } from "@/components/admin/roles/download"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, } from "@/components/ui/dialog";
+
+import { UserProvider } from "@/contexts/UserContext";
+import { FormatProvider } from "@/contexts/FormatContext";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 const statusColors: Record<string, string> = {
     active: "bg-green-500 text-white",
@@ -398,334 +394,340 @@ export default function AccountPage() {
     }
 
     return (
-        <SidebarProvider>
-            <AppSidebar userId={userId} />
-            <SidebarInset>
-                {/* Header */}
-                <header className="flex h-16 items-center gap-2 px-4">
-                    <SidebarTrigger className="-ml-1" />
-                    <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-                        Home
-                    </Button>
-                    <Separator orientation="vertical" className="h-4" />
-                    <Breadcrumb>
-                        <BreadcrumbList>
-                            <BreadcrumbItem>
-                                <BreadcrumbLink href="#">Admin</BreadcrumbLink>
-                            </BreadcrumbItem>
-                            <BreadcrumbSeparator />
-                            <BreadcrumbItem>
-                                <BreadcrumbPage>User Accounts</BreadcrumbPage>
-                            </BreadcrumbItem>
-                        </BreadcrumbList>
-                    </Breadcrumb>
-                </header>
-
-                {/* Filters + Search */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
-                    <div className="relative w-full sm:max-w-xs">
-                        <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search users..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="pl-8 w-full"
-                        />
-                        {isFetching && <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />}
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 items-center">
-                        <ButtonGroup>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-10 text-sm"
-                                onClick={() => setShowConvertDialog(true)}
-                            >
-                                <Repeat2 className="w-4 h-4" /> Convert Emails
-                            </Button>
-
-                            <ConvertEmailDialog
-                                open={showConvertDialog}
-                                onOpenChangeAction={setShowConvertDialog}
-                                accounts={accounts}
-                                setAccountsAction={setAccounts}
-                            />
-
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-10 text-sm"
-                                disabled={filtered.length === 0 || isDownloading}
-                                onClick={handleDownload}
-                            >
-                                <Download className="w-4 h-4" /> Download
-                            </Button>
-
-                            <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-                                <SelectTrigger className="w-[200px] h-10 text-sm">
-                                    <SelectValue placeholder="Filter by Department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departmentOptions.map(d => (
-                                        <SelectItem key={d} value={d}>
-                                            {d === "all" ? "All Departments" : d}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            <Select value={filterCompany} onValueChange={setFilterCompany}>
-                                <SelectTrigger className="w-[200px] h-10 text-sm">
-                                    <SelectValue placeholder="Filter by Company" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {companyOptions.map(c => (
-                                        <SelectItem key={c} value={c}>
-                                            {c === "all" ? "All Companies" : c}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            {filterDepartment === "Sales" && (
-                                <>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-10 text-sm"
-                                        disabled={selectedIds.size === 0}
-                                        onClick={() => {
-                                            setTransferType("TSM");
-                                            setShowTransferDialog(true);
-                                        }}
-                                    >
-                                        <ArrowRight className="w-4 h-4" /> Transfer to TSM
-                                    </Button>
-
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-10 text-sm"
-                                        disabled={selectedIds.size === 0}
-                                        onClick={() => {
-                                            setTransferType("Manager");
-                                            setShowTransferDialog(true);
-                                        }}
-                                    >
-                                        <ArrowRight className="w-4 h-4" /> Transfer to Manager
-                                    </Button>
-                                </>
-                            )}
-
-                            <Button
-                                variant="default"
-                                size="sm"
-                                className="h-10 text-sm"
-                                onClick={() => setShowCreateDialog(true)}
-                            >
-                                <Plus className="w-4 h-4" /> Create
-                            </Button>
-
-                            {selectedIds.size > 0 && (
-                                <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    className="h-10 text-sm flex items-center gap-1"
-                                    onClick={() => setShowDeleteDialog(true)}
-                                >
-                                    <Trash2 className="w-4 h-4" /> Delete {selectedIds.size}
+        <UserProvider>
+            <FormatProvider>
+                <ProtectedPageWrapper>
+                    <SidebarProvider>
+                        <AppSidebar />
+                        <SidebarInset>
+                            {/* Header */}
+                            <header className="flex h-16 items-center gap-2 px-4">
+                                <SidebarTrigger className="-ml-1" />
+                                <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
+                                    Home
                                 </Button>
-                            )}
+                                <Separator orientation="vertical" className="h-4" />
+                                <Breadcrumb>
+                                    <BreadcrumbList>
+                                        <BreadcrumbItem>
+                                            <BreadcrumbLink href="#">Admin</BreadcrumbLink>
+                                        </BreadcrumbItem>
+                                        <BreadcrumbSeparator />
+                                        <BreadcrumbItem>
+                                            <BreadcrumbPage>User Accounts</BreadcrumbPage>
+                                        </BreadcrumbItem>
+                                    </BreadcrumbList>
+                                </Breadcrumb>
+                            </header>
 
-                            <TransferDialog
-                                open={showTransferDialog}
-                                onOpenChangeAction={setShowTransferDialog}
-                                transferType={transferType}
-                                transferSelection={transferSelection}
-                                setTransferSelectionAction={setTransferSelection}
-                                selectedIds={selectedIds}
-                                setSelectedIdsAction={setSelectedIds}
-                                setAccountsAction={setAccounts}
-                                tsms={tsms}
-                                managers={managers}
-                            />
-                        </ButtonGroup>
-                    </div>
-                </div>
+                            {/* Filters + Search */}
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
+                                <div className="relative w-full sm:max-w-xs">
+                                    <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search users..."
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        className="pl-8 w-full"
+                                    />
+                                    {isFetching && <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />}
+                                </div>
 
-                {/* Table */}
-                <div className="mx-4 border border-border shadow-sm rounded-lg overflow-auto">
-                    {isFetching ? (
-                        <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
-                            <Loader2 className="size-6 animate-spin" />
-                            <span>Loading accounts...</span>
-                        </div>
-                    ) : current.length > 0 ? (
-                        <Table className="text-sm whitespace-nowrap">
-                            <TableHeader className="bg-muted sticky top-0 z-10">
-                                <TableRow>
-                                    <TableHead className="w-10 text-center">
-                                        <Checkbox
-                                            checked={selectedIds.size === current.length}
-                                            onCheckedChange={toggleSelectAll}
-                                        />
-                                    </TableHead>
-                                    <TableHead>Profile</TableHead>
-                                    {["Fullname", "Email", "Department", "Company", "Position", "Status"].map((key) => (
-                                        <TableHead
-                                            key={key}
-                                            onClick={() => handleSort(key as SortKey)}
-                                            className="cursor-pointer select-none"
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    <ButtonGroup>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-10 text-sm"
+                                            onClick={() => setShowConvertDialog(true)}
                                         >
-                                            <div className="flex items-center gap-1">
-                                                {key}
-                                                <ArrowUpDown
-                                                    className={`size-4 transition-transform ${sortKey === key ? "text-primary" : "text-muted-foreground"}`}
-                                                />
-                                            </div>
-                                        </TableHead>
-                                    ))}
-                                    {/* New header for Directory Access */}
-                                    <TableHead>Directory Access</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
+                                            <Repeat2 className="w-4 h-4" /> Convert Emails
+                                        </Button>
 
-                            <TableBody>
-                                {current.map(u => (
-                                    <React.Fragment key={u._id}>
-                                        <TableRow>
-                                            <TableCell className="text-center">
-                                                <Checkbox
-                                                    checked={selectedIds.has(u._id)}
-                                                    onCheckedChange={() => toggleSelect(u._id)}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                {u.profilePicture ? (
-                                                    <img src={u.profilePicture} alt="profile" className="w-10 h-10 rounded-full object-cover" />
-                                                ) : (
-                                                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs">
-                                                        N/A
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="capitalize">{u.Firstname}, {u.Lastname}</TableCell>
-                                            <TableCell>{u.Email}<br /><span className="text-[10px] italic">{u.ReferenceID}</span></TableCell>
-                                            <TableCell>
-                                                <Badge className={`${getBadgeColor(
-                                                    (u.Position === "Guest" ||
-                                                        u.Position === "Senior Fullstack Developer" ||
-                                                        u.Position === "IT - OJT")
-                                                        ? "Dev-Team"
-                                                        : u.Department
-                                                )} font-medium`}>
-                                                    {(u.Position === "Guest" ||
-                                                        u.Position === "Senior Fullstack Developer" ||
-                                                        u.Position === "IT - OJT")
-                                                        ? "Dev Team"
-                                                        : (u.Department || "—")}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>{u.Company || "—"}<br />{u.Location || "—"}</TableCell>
-                                            <TableCell>{u.Position || "—"}<br />{u.Role === "Territory Sales Associate" && (
-                                                <div className="text-xs text-gray-500 mt-1">
-                                                    TQ: {u.TargetQuota || "—"}<br />
-                                                    TSM: {u.TSM || "—"}<br />
-                                                    Manager: {u.Manager || "—"}
-                                                </div>
-                                            )}</TableCell>
-                                            <TableCell className="capitalize">
-                                                <Badge className={statusColors[u.Status.toLowerCase()] || "bg-gray-300"}>
-                                                    {u.Status}
-                                                </Badge>
-                                            </TableCell>
+                                        <ConvertEmailDialog
+                                            open={showConvertDialog}
+                                            onOpenChangeAction={setShowConvertDialog}
+                                            accounts={accounts}
+                                            setAccountsAction={setAccounts}
+                                        />
 
-                                            {/* New Directory Access cell */}
-                                            <TableCell className="text-center">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-10 text-sm"
+                                            disabled={filtered.length === 0 || isDownloading}
+                                            onClick={handleDownload}
+                                        >
+                                            <Download className="w-4 h-4" /> Download
+                                        </Button>
+
+                                        <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+                                            <SelectTrigger className="w-[200px] h-10 text-sm">
+                                                <SelectValue placeholder="Filter by Department" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {departmentOptions.map(d => (
+                                                    <SelectItem key={d} value={d}>
+                                                        {d === "all" ? "All Departments" : d}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        <Select value={filterCompany} onValueChange={setFilterCompany}>
+                                            <SelectTrigger className="w-[200px] h-10 text-sm">
+                                                <SelectValue placeholder="Filter by Company" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {companyOptions.map(c => (
+                                                    <SelectItem key={c} value={c}>
+                                                        {c === "all" ? "All Companies" : c}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        {filterDepartment === "Sales" && (
+                                            <>
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => openDirectoryDialog(u.Directories || [])}
+                                                    className="h-10 text-sm"
+                                                    disabled={selectedIds.size === 0}
+                                                    onClick={() => {
+                                                        setTransferType("TSM");
+                                                        setShowTransferDialog(true);
+                                                    }}
                                                 >
-                                                    View Directory Access ({u.Directories?.length || 0})
+                                                    <ArrowRight className="w-4 h-4" /> Transfer to TSM
                                                 </Button>
 
-                                            </TableCell>
-
-                                            <TableCell>
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => handleEdit(u)}
-                                                   
+                                                    className="h-10 text-sm"
+                                                    disabled={selectedIds.size === 0}
+                                                    onClick={() => {
+                                                        setTransferType("Manager");
+                                                        setShowTransferDialog(true);
+                                                    }}
                                                 >
-                                                    <Pencil className="w-4 h-4" />
+                                                    <ArrowRight className="w-4 h-4" /> Transfer to Manager
                                                 </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    </React.Fragment>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    ) : (
-                        <div className="py-10 text-center text-xs text-muted-foreground">No user found.</div>
-                    )}
-                </div>
+                                            </>
+                                        )}
 
-                {/* Expandable row for directories */}
-                <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                    <DialogContent className="sm:max-w-lg max-w-[90vw]">
-                        <DialogHeader>
-                            <DialogTitle className="mb-2">Directory Access</DialogTitle>
-                            <DialogDescription>
-                                {selectedDirectories.length > 0 ? (
-                                    <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 max-h-60 overflow-auto">
-                                        {selectedDirectories.map((dir, idx) => (
-                                            <li key={idx}>{dir}</li>
-                                        ))}
-                                    </ul>
+                                        <Button
+                                            variant="default"
+                                            size="sm"
+                                            className="h-10 text-sm"
+                                            onClick={() => setShowCreateDialog(true)}
+                                        >
+                                            <Plus className="w-4 h-4" /> Create
+                                        </Button>
+
+                                        {selectedIds.size > 0 && (
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                className="h-10 text-sm flex items-center gap-1"
+                                                onClick={() => setShowDeleteDialog(true)}
+                                            >
+                                                <Trash2 className="w-4 h-4" /> Delete {selectedIds.size}
+                                            </Button>
+                                        )}
+
+                                        <TransferDialog
+                                            open={showTransferDialog}
+                                            onOpenChangeAction={setShowTransferDialog}
+                                            transferType={transferType}
+                                            transferSelection={transferSelection}
+                                            setTransferSelectionAction={setTransferSelection}
+                                            selectedIds={selectedIds}
+                                            setSelectedIdsAction={setSelectedIds}
+                                            setAccountsAction={setAccounts}
+                                            tsms={tsms}
+                                            managers={managers}
+                                        />
+                                    </ButtonGroup>
+                                </div>
+                            </div>
+
+                            {/* Table */}
+                            <div className="mx-4 border border-border shadow-sm rounded-lg overflow-auto p-2">
+                                {isFetching ? (
+                                    <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
+                                        <Loader2 className="size-6 animate-spin" />
+                                        <span>Loading accounts...</span>
+                                    </div>
+                                ) : current.length > 0 ? (
+                                    <Table className="text-sm whitespace-nowrap">
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead className="w-10 text-center">
+                                                    <Checkbox
+                                                        checked={selectedIds.size === current.length}
+                                                        onCheckedChange={toggleSelectAll}
+                                                    />
+                                                </TableHead>
+                                                <TableHead>Profile</TableHead>
+                                                {["Fullname", "Email", "Department", "Company", "Position", "Status"].map((key) => (
+                                                    <TableHead
+                                                        key={key}
+                                                        onClick={() => handleSort(key as SortKey)}
+                                                        className="cursor-pointer select-none"
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            {key}
+                                                            <ArrowUpDown
+                                                                className={`size-4 transition-transform ${sortKey === key ? "text-primary" : "text-muted-foreground"}`}
+                                                            />
+                                                        </div>
+                                                    </TableHead>
+                                                ))}
+                                                {/* New header for Directory Access */}
+                                                <TableHead>Directory Access</TableHead>
+                                                <TableHead>Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+
+                                        <TableBody>
+                                            {current.map(u => (
+                                                <React.Fragment key={u._id}>
+                                                    <TableRow>
+                                                        <TableCell className="text-center">
+                                                            <Checkbox
+                                                                checked={selectedIds.has(u._id)}
+                                                                onCheckedChange={() => toggleSelect(u._id)}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {u.profilePicture ? (
+                                                                <img src={u.profilePicture} alt="profile" className="w-10 h-10 rounded-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs">
+                                                                    N/A
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="capitalize">{u.Firstname}, {u.Lastname}</TableCell>
+                                                        <TableCell>{u.Email}<br /><span className="text-[10px] italic">{u.ReferenceID}</span></TableCell>
+                                                        <TableCell>
+                                                            <Badge className={`${getBadgeColor(
+                                                                (u.Position === "Guest" ||
+                                                                    u.Position === "Senior Fullstack Developer" ||
+                                                                    u.Position === "IT - OJT")
+                                                                    ? "Dev-Team"
+                                                                    : u.Department
+                                                            )} font-medium`}>
+                                                                {(u.Position === "Guest" ||
+                                                                    u.Position === "Senior Fullstack Developer" ||
+                                                                    u.Position === "IT - OJT")
+                                                                    ? "Dev Team"
+                                                                    : (u.Department || "—")}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell>{u.Company || "—"}<br />{u.Location || "—"}</TableCell>
+                                                        <TableCell>{u.Position || "—"}<br />{u.Role === "Territory Sales Associate" && (
+                                                            <div className="text-xs text-gray-500 mt-1">
+                                                                TQ: {u.TargetQuota || "—"}<br />
+                                                                TSM: {u.TSM || "—"}<br />
+                                                                Manager: {u.Manager || "—"}
+                                                            </div>
+                                                        )}</TableCell>
+                                                        <TableCell className="capitalize">
+                                                            <Badge className={statusColors[u.Status.toLowerCase()] || "bg-gray-300"}>
+                                                                {u.Status}
+                                                            </Badge>
+                                                        </TableCell>
+
+                                                        {/* New Directory Access cell */}
+                                                        <TableCell className="text-center">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => openDirectoryDialog(u.Directories || [])}
+                                                            >
+                                                                View Directory Access ({u.Directories?.length || 0})
+                                                            </Button>
+
+                                                        </TableCell>
+
+                                                        <TableCell>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleEdit(u)}
+
+                                                            >
+                                                                <Pencil className="w-4 h-4" />
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                </React.Fragment>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
                                 ) : (
-                                    <p className="text-sm italic text-muted-foreground">
-                                        No directory access assigned.
-                                    </p>
+                                    <div className="py-10 text-center text-xs text-muted-foreground">No user found.</div>
                                 )}
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                            <Button onClick={() => setOpenDialog(false)}>Close</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                            </div>
 
-                {/* Edit Dialog */}
-                <EditDialog
-                    open={showEditDialog}
-                    onOpenChangeAction={setShowEditDialog}
-                    editData={editData}
-                    setEditDataAction={setEditData}
-                    onSaveAction={handleSaveEdit}
-                />
+                            {/* Expandable row for directories */}
+                            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                                <DialogContent className="sm:max-w-lg max-w-[90vw]">
+                                    <DialogHeader>
+                                        <DialogTitle className="mb-2">Directory Access</DialogTitle>
+                                        <DialogDescription>
+                                            {selectedDirectories.length > 0 ? (
+                                                <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 max-h-60 overflow-auto">
+                                                    {selectedDirectories.map((dir, idx) => (
+                                                        <li key={idx}>{dir}</li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-sm italic text-muted-foreground">
+                                                    No directory access assigned.
+                                                </p>
+                                            )}
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <DialogFooter>
+                                        <Button onClick={() => setOpenDialog(false)}>Close</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
 
-                {/* Create User Dialog */}
-                <CreateDialog
-                    open={showCreateDialog}
-                    onOpenChangeAction={setShowCreateDialog}
-                    setAccountsAction={setAccounts}
-                />
+                            {/* Edit Dialog */}
+                            <EditDialog
+                                open={showEditDialog}
+                                onOpenChangeAction={setShowEditDialog}
+                                editData={editData}
+                                setEditDataAction={setEditData}
+                                onSaveAction={handleSaveEdit}
+                            />
 
-                <DeleteDialog
-                    open={showDeleteDialog}
-                    count={selectedIds.size}
-                    onCancelAction={() => setShowDeleteDialog(false)}
-                    onConfirmAction={confirmDelete}
-                />
+                            {/* Create User Dialog */}
+                            <CreateDialog
+                                open={showCreateDialog}
+                                onOpenChangeAction={setShowCreateDialog}
+                                setAccountsAction={setAccounts}
+                            />
 
-                <div className="flex justify-center items-center gap-4 my-4">
-                    <Pagination page={page} totalPages={totalPages} onPageChangeAction={setPage} />
-                </div>
-            </SidebarInset>
-        </SidebarProvider>
+                            <DeleteDialog
+                                open={showDeleteDialog}
+                                count={selectedIds.size}
+                                onCancelAction={() => setShowDeleteDialog(false)}
+                                onConfirmAction={confirmDelete}
+                            />
+
+                            <div className="flex justify-center items-center gap-4 my-4">
+                                <Pagination page={page} totalPages={totalPages} onPageChangeAction={setPage} />
+                            </div>
+                        </SidebarInset>
+                    </SidebarProvider>
+                </ProtectedPageWrapper>
+            </FormatProvider>
+        </UserProvider>
     )
 }

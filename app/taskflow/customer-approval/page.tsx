@@ -3,12 +3,12 @@
 import React, { useEffect, useState, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "../../components/app-sidebar"
-import { Pagination } from "../../components/app-pagination"
-import { Calendar } from "../../components/app-customer-database-calendar";
-import { DeleteDialog } from "../../components/app-customer-database-delete-dialog"
-import { ApproveDialog } from "../../components/app-customer-database-approval-dialog"
-import { FilterDialog } from "../../components/app-customer-database-filter-dialog"
+import { AppSidebar } from "@/components/app-sidebar"
+import { Pagination } from "@/components/app-pagination"
+import { Calendar } from "@/components/taskflow/customer-database/calendar";
+import { DeleteDialog } from "@/components/taskflow/customer-database/delete"
+import { ApproveDialog } from "@/components/taskflow/customer-database/approval"
+import { FilterDialog } from "@/components/taskflow/customer-database/filter-dialog"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import { BadgeCheck, AlertTriangle, Clock, XCircle, PauseCircle, UserX, UserCheck, ArrowRight } from "lucide-react"
@@ -388,7 +388,7 @@ export default function AccountPage() {
 
     return (
         <SidebarProvider>
-            <AppSidebar userId={userId} />
+            <AppSidebar />
             <SidebarInset>
                 {/* Header */}
                 <header className="flex h-16 shrink-0 items-center gap-2 px-4">

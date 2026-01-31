@@ -3,16 +3,16 @@
 import React, { useEffect, useState, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "../../components/app-sidebar"
-import { Pagination } from "../../components/app-pagination"
-import { Download } from "../../components/app-customer-database-download"
-import { Audit } from "../../components/app-customer-database-audit"
-import { Calendar } from "../../components/app-customer-database-calendar";
-import { ImportDialog } from "../../components/app-customer-database-import"
-import { AuditDialog } from "../../components/app-customer-database-audit-dialog"
-import { DeleteDialog } from "../../components/app-customer-database-delete-dialog"
-import { TransferDialog } from "../../components/app-customer-database-transfer"
-import { FilterDialog } from "../../components/app-customer-database-filter"
+import { AppSidebar } from "@/components/app-sidebar"
+import { Pagination } from "@/components/app-pagination"
+import { Download } from "@/components/taskflow/customer-database/download"
+import { Audit } from "@/components/taskflow/customer-database/audit"
+import { Calendar } from "@/components/taskflow/customer-database/calendar";
+import { ImportDialog } from "@/components/taskflow/customer-database/import"
+import { AuditDialog } from "@/components/taskflow/customer-database/audit-dialog"
+import { DeleteDialog } from "@/components/taskflow/customer-database/delete"
+import { TransferDialog } from "@/components/taskflow/customer-database/transfer"
+import { FilterDialog } from "@/components/taskflow/customer-database/filter"
 import { toast } from "sonner"
 import { Loader2, Filter } from "lucide-react"
 import { BadgeCheck, AlertTriangle, Clock, XCircle, PauseCircle, UserX, UserCheck, ArrowRight } from "lucide-react"
@@ -24,6 +24,15 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { ButtonGroup } from "@/components/ui/button-group"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogFooter
+} from "@/components/ui/dialog"
 type AuditKey = "duplicates" | "missingType" | "missingStatus";
 
 interface Customer {
@@ -76,6 +85,9 @@ export default function AccountPage() {
 
     const [showAuditDialog, setShowAuditDialog] = useState(false);
     const [auditSelection, setAuditSelection] = useState<Record<AuditKey, boolean>>({ duplicates: false, missingType: false, missingStatus: false, });
+
+    const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+    const [showEditDialog, setShowEditDialog] = useState(false)
 
     // 🔹 Manager & TSM lists
     const [tsas, setTsas] = useState<{ label: string; value: string }[]>([])
@@ -197,12 +209,15 @@ export default function AccountPage() {
     }, [search, filterType, filterStatus])
 
     // 🔍 Filtered + Search
-    useEffect(() => setPage(1), [search, filterType, filterStatus])
-    const filtered = useMemo(() =>
-        customers
+    useEffect(() => setPage(1), [search, filterType, filterStatus]);
+
+    const filtered = useMemo(() => {
+        return customers
             .filter((c) =>
                 [c.company_name, c.contact_person, c.email_address, c.region, c.manager, c.tsm]
-                    .some((field) => field?.toLowerCase().includes(search.toLowerCase()))
+                    .some((field) =>
+                        field?.toLowerCase().includes(search.toLowerCase())
+                    )
             )
             .filter((c) => (filterType === "all" ? true : c.type_client === filterType))
             .filter((c) => (filterStatus === "all" ? true : c.status === filterStatus))
@@ -213,23 +228,34 @@ export default function AccountPage() {
             )
             .filter((c) => {
                 if (!startDate && !endDate) return true;
-                const created = new Date(c.date_created);
-                const start = startDate ? new Date(startDate) : null;
-                const end = endDate ? new Date(endDate) : null;
+
+                const created = new Date(c.date_created).getTime();
+                const start = startDate ? new Date(startDate).getTime() : null;
+                const end = endDate ? new Date(endDate).getTime() : null;
+
                 if (start && created < start) return false;
                 if (end && created > end) return false;
+
                 return true;
             })
             .sort((a, b) => {
-                const nameA = a.company_name?.toLowerCase() || "";
-                const nameB = b.company_name?.toLowerCase() || "";
+                const dateA = new Date(a.date_created).getTime();
+                const dateB = new Date(b.date_created).getTime();
 
-                if (nameA < nameB) return sortOrder === "asc" ? -1 : 1;
-                if (nameA > nameB) return sortOrder === "asc" ? 1 : -1;
-                return 0;
-            }),
-        [customers, search, filterType, filterStatus, filterTSA, startDate, endDate, sortOrder]
-    );
+                return sortOrder === "asc"
+                    ? dateA - dateB
+                    : dateB - dateA;
+            });
+    }, [
+        customers,
+        search,
+        filterType,
+        filterStatus,
+        filterTSA,
+        startDate,
+        endDate,
+        sortOrder,
+    ]);
 
     // 🧭 Pagination + display switch
     const displayData = useMemo(() => {
@@ -392,9 +418,121 @@ export default function AccountPage() {
         }
     };
 
+    function EditCustomerDialog({
+        open,
+        onOpenChange,
+        customer,
+        onSave,
+    }: {
+        open: boolean
+        onOpenChange: (open: boolean) => void
+        customer: Customer | null
+        onSave: (updated: Customer) => void
+    }) {
+        const [form, setForm] = useState<Customer | null>(customer)
+
+        useEffect(() => {
+            setForm(customer)
+        }, [customer])
+
+        if (!form) return null
+
+        const handleChange = (key: keyof Customer, value: string) => {
+            setForm(prev => prev ? { ...prev, [key]: value } : prev)
+        }
+
+        const handleSubmit = async () => {
+            try {
+                const res = await fetch(
+                    `/api/Data/Applications/Taskflow/CustomerDatabase/Edit`,
+                    {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(form),
+                    }
+                )
+
+                const result = await res.json()
+
+                if (!result.success) {
+                    toast.error(result.error || "Update failed")
+                    return
+                }
+
+                onSave(form)
+                toast.success("Customer updated successfully")
+                onOpenChange(false)
+            } catch (err) {
+                toast.error("Something went wrong")
+            }
+        }
+
+        return (
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Edit Customer</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                        <Input
+                            placeholder="Company Name"
+                            value={form.company_name}
+                            onChange={(e) => handleChange("company_name", e.target.value)}
+                        />
+                        <Input
+                            placeholder="Contact Person"
+                            value={form.contact_person}
+                            onChange={(e) => handleChange("contact_person", e.target.value)}
+                        />
+                        <Input
+                            placeholder="Contact Number"
+                            value={form.contact_number}
+                            onChange={(e) => handleChange("contact_number", e.target.value)}
+                        />
+                        <Input
+                            placeholder="Email Address"
+                            value={form.email_address}
+                            onChange={(e) => handleChange("email_address", e.target.value)}
+                        />
+                        <Input
+                            placeholder="Type"
+                            value={form.type_client}
+                            onChange={(e) => handleChange("type_client", e.target.value)}
+                        />
+                        <Input
+                            placeholder="Status"
+                            value={form.status}
+                            onChange={(e) => handleChange("status", e.target.value)}
+                        />
+                        <Input
+                            placeholder="Region"
+                            value={form.region}
+                            onChange={(e) => handleChange("region", e.target.value)}
+                        />
+                        <Input
+                            placeholder="Remarks"
+                            value={form.remarks}
+                            onChange={(e) => handleChange("remarks", e.target.value)}
+                        />
+                    </div>
+
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => onOpenChange(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSubmit}>
+                            Save Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        )
+    }
+
     return (
         <SidebarProvider>
-            <AppSidebar userId={userId} />
+            <AppSidebar />
             <SidebarInset>
                 {/* Header */}
                 <header className="flex h-16 shrink-0 items-center gap-2 px-4">
@@ -483,7 +621,6 @@ export default function AccountPage() {
                         />
                     </div>
 
-                    {/* 🧮 Filters Section (collapsible) */}
                     {showFilters && (
                         <FilterDialog
                             open={showFilters}
@@ -608,7 +745,7 @@ export default function AccountPage() {
                                 <TableHeader className="bg-muted sticky top-0 z-10">
                                     <TableRow>
                                         <TableHead className="w-8 text-center"><input type="checkbox" checked={selectAll} onChange={handleSelectAll} /></TableHead>
-                                        <TableHead>#</TableHead>
+                                        <TableHead className="text-center">Actions</TableHead>
                                         <TableHead>Company</TableHead>
                                         <TableHead>Contact</TableHead>
                                         <TableHead>Email</TableHead>
@@ -640,9 +777,19 @@ export default function AccountPage() {
                                                         onChange={() => toggleSelect(c.id)}
                                                     />
                                                 </TableCell>
-                                                <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
-                                                    {c.account_reference_number}
+                                                <TableCell className="text-center">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setEditingCustomer(c)
+                                                            setShowEditDialog(true)
+                                                        }}
+                                                    >
+                                                        Edit
+                                                    </Button>
                                                 </TableCell>
+
                                                 <TableCell
                                                     className="uppercase whitespace-normal break-words max-w-[250px]"
                                                 >
@@ -653,7 +800,7 @@ export default function AccountPage() {
                                                                 : ""
                                                         }
                                                     >
-                                                        {c.company_name}
+                                                        {c.company_name} <br />{c.account_reference_number}
                                                     </span>
                                                 </TableCell>
 
@@ -797,6 +944,17 @@ export default function AccountPage() {
                         )}
                     </div>
                 </div>
+
+                <EditCustomerDialog
+                    open={showEditDialog}
+                    onOpenChange={setShowEditDialog}
+                    customer={editingCustomer}
+                    onSave={(updated) => {
+                        setCustomers(prev =>
+                            prev.map(c => c.id === updated.id ? updated : c)
+                        )
+                    }}
+                />
 
                 {/* Pagination */}
                 <div className="flex justify-center items-center gap-4 my-4">

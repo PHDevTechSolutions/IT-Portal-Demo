@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, deleteDoc, doc, Timestamp, } from "firebase/firestore";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "../../components/app-sidebar";
-import { Pagination } from "../../components/app-pagination";
+import { AppSidebar } from "@/components/app-sidebar";
+import { Pagination } from "@/components/app-pagination";
 import { toast } from "sonner";
 import { Loader2, Search, Trash2, Download as DownloadIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,8 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ButtonGroup } from "@/components/ui/button-group";
-import { DeleteDialog } from "../../components/app-user-accounts-delete-dialog";
-import { SpinnerItem } from "../../components/app-user-accounts-download-spinner";
+import { DeleteDialog } from "@/components/admin/roles/delete";
+import { SpinnerItem } from "@/components/admin/roles/download";
 
 interface ActivityLog {
   id: string;
@@ -266,7 +266,7 @@ export default function AccountPage() {
 
   return (
     <SidebarProvider>
-      <AppSidebar userId={userId} />
+      <AppSidebar />
       <SidebarInset>
         {/* Header & Breadcrumb */}
         <header className="flex h-16 items-center gap-2 px-4">
@@ -340,7 +340,7 @@ export default function AccountPage() {
         </div>
 
         {/* Table */}
-        <div className="mx-4 border border-border shadow-sm rounded-lg">
+        <div className="mx-4 border border-border shadow-sm rounded-lg p-2">
           {isFetching ? (
             <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
               <Loader2 className="size-6 animate-spin" />
@@ -348,7 +348,7 @@ export default function AccountPage() {
             </div>
           ) : current.length > 0 ? (
             <Table className="text-sm overflow-auto">
-              <TableHeader className="bg-muted sticky top-0 z-10">
+              <TableHeader>
                 <TableRow>
                   <TableHead className="w-10 text-center">
                     <Checkbox checked={selectedIds.size === current.length} onCheckedChange={toggleSelectAll} />
