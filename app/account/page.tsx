@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "../components/app-sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -168,7 +168,7 @@ export default function AccountPage() {
 
     return (
         <SidebarProvider>
-            <AppSidebar userId={userId} />
+            <AppSidebar />
             <SidebarInset>
 
                 <header className="flex h-16 shrink-0 items-center gap-2">
