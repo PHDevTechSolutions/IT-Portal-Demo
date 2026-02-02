@@ -25,15 +25,7 @@ import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { ButtonGroup } from "@/components/ui/button-group"
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-    DialogFooter
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 type AuditKey = "duplicates" | "missingType" | "missingStatus";
 
 interface Customer {

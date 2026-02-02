@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Sidebar,
   SidebarContent,
@@ -15,10 +15,20 @@ import { NavMain } from "../components/nav-main";
 import { NavProjects } from "../components/nav-projects";
 import { NavSecondary } from "../components/nav-secondary";
 import { NavUser } from "../components/nav-user";
-import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Frame, PieChart, Activity, Boxes, TicketCheck, CalendarCheck } from "lucide-react";
+import {
+  BookOpen,
+  Bot,
+  SquareTerminal,
+  Settings2,
+  LifeBuoy,
+  Send,
+  Activity,
+  Boxes,
+  TicketCheck,
+  CalendarCheck,
+} from "lucide-react";
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
-  const router = useRouter();
   const pathname = usePathname();
 
   const [userId, setUserId] = React.useState<string | null>(null);
@@ -28,17 +38,15 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     Lastname: "",
     Email: "",
     profilePicture: "",
-    ReferenceID: "",
-    Position: "",
   });
 
-  // Load userId from URL query param on mount
+  // Load userId from query param
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setUserId(params.get("id"));
   }, []);
 
-  // Fetch user details when userId changes
+  // Fetch user details
   React.useEffect(() => {
     if (!userId) return;
 
@@ -51,32 +59,23 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           Lastname: data.Lastname || "",
           Email: data.Email || "",
           profilePicture: data.profilePicture || "/avatars/default.jpg",
-          ReferenceID: data.ReferenceID || "",
-          Position: data.Position || "",
         });
       })
-      .catch((err) => {
-        console.error("Failed to fetch user details:", err);
-      });
+      .catch(console.error);
   }, [userId]);
 
-  // Helper: append userId to URL query string properly
   const appendUserId = React.useCallback(
     (url: string) => {
-      if (!userId) return url;
-      if (!url || url === "#") return url;
-      return url.includes("?") ? `${url}&id=${encodeURIComponent(userId)}` : `${url}?id=${encodeURIComponent(userId)}`;
+      if (!userId || url === "#") return url;
+      return url.includes("?")
+        ? `${url}&id=${encodeURIComponent(userId)}`
+        : `${url}?id=${encodeURIComponent(userId)}`;
     },
     [userId]
   );
 
-  // Role based access filter
-  const position = userDetails.Position?.trim();
-
-  const fullAccess = ["IT Manager", "IT Senior Supervisor", "Senior Fullstack Developer"];
-
-  // Full sidebar data
-  const fullSidebar = {
+  // 🔓 FULL ACCESS SIDEBAR (NO ROLE FILTERING)
+  const sidebarData = {
     navMain: [
       {
         title: "Applications",
@@ -154,56 +153,6 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     ],
   };
 
-  // Filter sidebar based on role
-  let filtered = { ...fullSidebar };
-
-  if (!fullAccess.includes(position)) {
-    if (position === "Asset Supervisor") {
-      filtered = {
-        navMain: [fullSidebar.navMain[3]], // Settings only
-        navSecondary: [],
-        projects: [
-          fullSidebar.projects.find((p) => p.name === "Taskflow Sales Management System")!,
-          fullSidebar.projects.find((p) => p.name === "IT Asset Management System")!,
-        ].filter(Boolean),
-      };
-    } else if (position === "IT Associate") {
-      filtered = {
-        navMain: [
-          fullSidebar.navMain[0], // Applications
-          {
-            ...fullSidebar.navMain[2], // User Accounts
-            items: [fullSidebar.navMain[2].items[0]], // Roles only
-          },
-          fullSidebar.navMain[3], // Settings
-        ],
-        navSecondary: [],
-        projects: [
-          fullSidebar.projects.find((p) => p.name === "Taskflow Sales Management System")!,
-          fullSidebar.projects.find((p) => p.name === "Acculog HR Attendance System")!,
-        ],
-      };
-    } else if (position === "IT - OJT") {
-      filtered = {
-        navMain: [fullSidebar.navMain[3]], // Settings
-        navSecondary: [],
-        projects: [fullSidebar.projects.find((p) => p.name === "Taskflow Sales Management System")!],
-      };
-    }
-  }
-
-  // Replace the onClick handlers with normal React Router links to avoid DOM props problem
-  // We'll create items with proper hrefs instead of onClick
-
-  // Helper to render nav items with hrefs
-  const navMainItems = filtered.navMain.map((item) => ({
-    ...item,
-    url: item.items?.[0]?.url || item.url,
-  }));
-
-  const navProjects = filtered.projects;
-  const navSecondaryItems = filtered.navSecondary;
-
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -211,12 +160,8 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a href={appendUserId("/dashboard")} className="flex items-center gap-2">
-                <div className="text-sidebar-primary-foreground flex size-8 items-center justify-center rounded-lg">
-                  <img src="/xchire-logo.png" className="w-8 h-8" alt="Logo" />
-                </div>
-                <div className="grid flex-1 text-left text-sm">
-                  <span className="truncate font-medium">IT Portal</span>
-                </div>
+                <img src="/xchire-logo.png" className="w-8 h-8" alt="Logo" />
+                <span className="font-medium">IT Portal</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -224,9 +169,9 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain items={navMainItems} />
-        <NavProjects projects={navProjects} />
-        <NavSecondary items={navSecondaryItems} className="mt-auto" />
+        <NavMain items={sidebarData.navMain} />
+        <NavProjects projects={sidebarData.projects} />
+        <NavSecondary items={sidebarData.navSecondary} className="mt-auto" />
       </SidebarContent>
 
       <SidebarFooter>
