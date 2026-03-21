@@ -92,13 +92,257 @@ interface Customer {
   next_available_date?: string;
 }
 
+// TSA list item now carries the user's Status so the filter can badge it
+interface TsaOption {
+  value: string;
+  label: string;
+  status?: string;
+}
+
+const INACTIVE_STATUSES = ["Terminated", "Resigned", "Inactive"];
+
 const AUDIT_PAGE = "Customer Database";
+
+// ─── Module-level safe JSON parser ────────────────────────────────────────────
+// Must live outside the component so Turbopack HMR never gives useEffect
+// callbacks a stale/undefined closure reference.
+async function safeJson(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error(
+      `[safeJson] Non-JSON response (HTTP ${res.status}) from ${res.url}\n`,
+      text.slice(0, 300)
+    );
+    return null;
+  }
+}
+
+// ─── EditCustomerDialog ───────────────────────────────────────────────────────
+// Defined at module level (not inside AccountPage) so React never treats it as a
+// new component type on every render — which would unmount/remount it and wipe
+// controlled-input state, causing the null value warning.
+
+interface EditCustomerDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customer: Customer | null;
+  onSave: (updated: Customer) => void;
+  actorRef: React.MutableRefObject<AuditActor>;
+}
+
+function EditCustomerDialog({
+  open,
+  onOpenChange,
+  customer,
+  onSave,
+  actorRef,
+}: EditCustomerDialogProps) {
+  const [form, setForm] = useState<Customer | null>(null);
+
+  // Sync form whenever the dialog opens with a new customer.
+  // Reset to null when customer is null so inputs never receive null values.
+  useEffect(() => {
+    if (customer) {
+      // Guarantee every string field is "" not null/undefined
+      setForm({
+        ...customer,
+        company_name: customer.company_name ?? "",
+        contact_person: customer.contact_person ?? "",
+        contact_number: customer.contact_number ?? "",
+        email_address: customer.email_address ?? "",
+        address: customer.address ?? "",
+        region: customer.region ?? "",
+        type_client: customer.type_client ?? "",
+        status: customer.status ?? "",
+        remarks: customer.remarks ?? "",
+        account_reference_number: customer.account_reference_number ?? "",
+        tsm: customer.tsm ?? "",
+        manager: customer.manager ?? "",
+        referenceid: customer.referenceid ?? "",
+      });
+    } else {
+      setForm(null);
+    }
+  }, [customer]);
+
+  if (!form) return null;
+
+  const handleChange = (key: keyof Customer, value: string) => {
+    setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
+
+  const handleSubmit = async () => {
+    if (!form || !customer) return;
+    try {
+      const res = await fetch(
+        "/api/Data/Applications/Taskflow/CustomerDatabase/Edit",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        }
+      );
+      const result = (await safeJson(res)) ?? {};
+      if (!res.ok || !result.success) {
+        toast.error(result.error || `Update failed (HTTP ${res.status})`);
+        return;
+      }
+
+      onSave(form);
+      toast.success("Customer updated successfully");
+      onOpenChange(false);
+
+      const TRACKED: (keyof Customer)[] = [
+        "company_name", "contact_person", "contact_number",
+        "email_address", "address", "region", "type_client", "status", "remarks",
+      ];
+      const changes: Record<string, { before: unknown; after: unknown }> = {};
+      for (const key of TRACKED) {
+        if (customer[key] !== form[key])
+          changes[key] = { before: customer[key] ?? null, after: form[key] ?? null };
+      }
+      if (Object.keys(changes).length > 0) {
+        await logCustomerAudit({
+          action: "update",
+          affectedCount: 1,
+          customerId: String(form.id),
+          customerName: form.company_name,
+          changes,
+          actor: actorRef.current,
+          context: { page: AUDIT_PAGE, source: "EditCustomerDialog", bulk: false },
+        });
+      }
+    } catch {
+      toast.error("Something went wrong");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Edit Customer</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <Input
+            placeholder="Company Name"
+            value={form.company_name ?? ""}
+            onChange={(e) => handleChange("company_name", e.target.value)}
+          />
+          <Input
+            placeholder="Contact Person"
+            value={form.contact_person ?? ""}
+            onChange={(e) => handleChange("contact_person", e.target.value)}
+          />
+          <Input
+            placeholder="Contact Number"
+            value={form.contact_number ?? ""}
+            onChange={(e) => handleChange("contact_number", e.target.value)}
+          />
+          <Input
+            placeholder="Email Address"
+            value={form.email_address ?? ""}
+            onChange={(e) => handleChange("email_address", e.target.value)}
+          />
+          <Input
+            placeholder="Type Client"
+            value={form.type_client ?? ""}
+            onChange={(e) => handleChange("type_client", e.target.value)}
+          />
+          <Input
+            placeholder="Status"
+            value={form.status ?? ""}
+            onChange={(e) => handleChange("status", e.target.value)}
+          />
+          <Input
+            placeholder="Region"
+            value={form.region ?? ""}
+            onChange={(e) => handleChange("region", e.target.value)}
+          />
+          <Input
+            placeholder="Remarks"
+            value={form.remarks ?? ""}
+            onChange={(e) => handleChange("remarks", e.target.value)}
+          />
+        </div>
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit}>Save Changes</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── StatusBadge ──────────────────────────────────────────────────────────────
+// Also at module level for the same stability reason.
+
+function StatusBadge({ status }: { status?: string | null }) {
+  const s = (status ?? "").trim().toLowerCase();
+
+  if (!s)
+    return <Badge variant="outline" className="text-muted-foreground">—</Badge>;
+
+  if (s === "active")
+    return (
+      <Badge variant="secondary" className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1">
+        <BadgeCheck className="size-3.5" /> Active
+      </Badge>
+    );
+  if (s === "new client")
+    return (
+      <Badge variant="secondary" className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1">
+        <UserCheck className="size-3.5" /> New Client
+      </Badge>
+    );
+  if (s === "non-buying")
+    return (
+      <Badge variant="secondary" className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1">
+        <AlertTriangle className="size-3.5" /> Non-Buying
+      </Badge>
+    );
+  if (s === "inactive")
+    return (
+      <Badge variant="secondary" className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1">
+        <XCircle className="size-3.5" /> Inactive
+      </Badge>
+    );
+  if (s === "on hold")
+    return (
+      <Badge variant="secondary" className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1">
+        <PauseCircle className="size-3.5" /> On Hold
+      </Badge>
+    );
+  if (s === "used")
+    return (
+      <Badge variant="secondary" className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1">
+        <Clock className="size-3.5" /> Used
+      </Badge>
+    );
+  if (s === "park")
+    return (
+      <Badge variant="secondary" className="bg-slate-500/90 hover:bg-slate-600 text-white flex items-center gap-1">
+        <PauseCircle className="size-3.5" /> Parked
+      </Badge>
+    );
+  if (s === "for deletion" || s === "remove")
+    return (
+      <Badge variant="secondary" className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1">
+        <UserX className="size-3.5" /> {status}
+      </Badge>
+    );
+
+  return <Badge variant="outline" className="text-muted-foreground">{status}</Badge>;
+}
+
 
 export default function AccountPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  // userId is injected by NavUser: router.push(`/...?userId=${user.id}`)
   const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -117,8 +361,6 @@ export default function AccountPage() {
     referenceId: null,
   });
 
-  // Ref keeps audit callbacks always reading the latest actor value without
-  // needing to re-create those callbacks every time currentActor changes.
   const currentActorRef = useRef<AuditActor>(currentActor);
   useEffect(() => {
     currentActorRef.current = currentActor;
@@ -133,9 +375,10 @@ export default function AccountPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
-  const [tsaList, setTsaList] = useState<{ value: string; label: string }[]>(
-    [],
-  );
+
+  // ── TSA list — ALL TSAs including Terminated/Resigned ────────────────────
+  const [tsaList, setTsaList] = useState<TsaOption[]>([]);
+
   const [filterTSA, setFilterTSA] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -151,32 +394,20 @@ export default function AccountPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
 
-  const [tsas, setTsas] = useState<{ label: string; value: string }[]>([]);
+  const [tsas, setTsas] = useState<TsaOption[]>([]);
   const [tsms, setTsms] = useState<{ label: string; value: string }[]>([]);
-  const [managers, setManagers] = useState<{ label: string; value: string }[]>(
-    [],
-  );
+  const [managers, setManagers] = useState<{ label: string; value: string }[]>([]);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
-  const [transferType, setTransferType] = useState<"TSM" | "Manager" | null>(
-    null,
-  );
-  const [transferSelection, setTransferSelection] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc");
 
-  // Snapshot of selected customers taken BEFORE the transfer dialog opens
   const preTransferSnapshotRef = useRef<Customer[]>([]);
 
   const toggleAuditSelection = (key: AuditKey) => {
     setAuditSelection((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // ── Fetch logged-in user details via /api/user ────────────────────────────
-  // userId is passed as a query param by NavUser when navigating to this page.
-  // The /api/user endpoint looks up the MongoDB users collection by _id and
-  // returns the full user document (minus password). We only need name + email
-  // for the audit actor.
-  // AFTER — reads from localStorage, no API call needed
+  // ── Load current user from localStorage ──────────────────────────────────
   useEffect(() => {
     try {
       const stored = localStorage.getItem("currentUser");
@@ -192,22 +423,49 @@ export default function AccountPage() {
     } catch {
       console.warn("[CustomerAudit] Could not read user from localStorage.");
     }
-  }, []); // no dependency needed — localStorage is synchronous and immediate
+  }, []);
 
+  // ── Fetch ALL TSAs (including Terminated / Resigned / Inactive) ───────────
+  // Falls back to FetchTSA if FetchAllTSA is not yet deployed.
   useEffect(() => {
     const fetchTSA = async () => {
       try {
-        const res = await fetch(
-          "/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate",
+        // Try the new endpoint first
+        let res = await fetch(
+          "/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate"
         );
-        const json = await res.json();
-        if (Array.isArray(json)) {
-          const formatted = json.map((user: any) => ({
-            value: user.ReferenceID,
-            label: `${user.Firstname} ${user.Lastname}`,
-          }));
-          setTsaList([{ value: "all", label: "All TSA" }, ...formatted]);
+
+        // Fall back to existing endpoint if the new one is not found yet
+        if (!res.ok) {
+          console.warn(
+            `[FetchAllTSA] ${res.status} — falling back to FetchTSA`
+          );
+          res = await fetch(
+            "/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate"
+          );
         }
+
+        if (!res.ok) {
+          console.error("[fetchTSA] Both endpoints failed:", res.status);
+          return;
+        }
+
+        const json = await safeJson(res);
+        if (!json) return;
+
+        const list: any[] = Array.isArray(json) ? json : (json.data ?? []);
+
+        const formatted: TsaOption[] = list.map((user: any) => ({
+          value: user.ReferenceID ?? "",
+          label: `${user.Firstname ?? ""} ${user.Lastname ?? ""}${INACTIVE_STATUSES.includes(user.Status) ? ` (${user.Status})` : ""
+            }`.trim(),
+          status: user.Status ?? "Active",
+        }));
+
+        setTsaList([
+          { value: "all", label: "All TSA", status: "Active" },
+          ...formatted,
+        ]);
       } catch (err) {
         console.error("Error fetching TSA list:", err);
       }
@@ -215,20 +473,25 @@ export default function AccountPage() {
     fetchTSA();
   }, []);
 
+  // ── Fetch customers ───────────────────────────────────────────────────────
   useEffect(() => {
     const fetchData = async () => {
       setIsFetching(true);
       const toastId = toast.loading("Fetching customer data...");
       try {
         const response = await fetch(
-          "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch",
+          "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch"
         );
-        const json = await response.json();
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await safeJson(response);
+        if (!json) throw new Error("Invalid JSON from server");
         setCustomers(json.data || []);
         toast.success("Customer data loaded successfully!", { id: toastId });
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching customers:", err);
-        toast.error("Failed to load customer data.", { id: toastId });
+        toast.error(`Failed to load customer data: ${err.message}`, {
+          id: toastId,
+        });
       } finally {
         setIsFetching(false);
       }
@@ -236,6 +499,7 @@ export default function AccountPage() {
     fetchData();
   }, []);
 
+  // ── Fetch dropdowns for TransferDialog ───────────────────────────────────
   useEffect(() => {
     if (!showTransferDialog) return;
     const fetchDropdowns = async () => {
@@ -245,26 +509,30 @@ export default function AccountPage() {
           fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager"),
           fetch("/api/UserManagement/FetchManager?Role=Manager"),
         ]);
-        const tsaData = await tsaRes.json();
-        const tsmData = await tsmRes.json();
-        const managerData = await managerRes.json();
+
+        const [tsaData, tsmData, managerData] = await Promise.all([
+          tsaRes.ok ? safeJson(tsaRes) : [],
+          tsmRes.ok ? safeJson(tsmRes) : [],
+          managerRes.ok ? safeJson(managerRes) : [],
+        ]);
+
         setTsas(
-          tsaData.map((m: any) => ({
+          (Array.isArray(tsaData) ? tsaData : []).map((m: any) => ({
             label: `${m.Firstname} ${m.Lastname}`,
             value: m.ReferenceID,
-          })),
+          }))
         );
         setTsms(
-          tsmData.map((t: any) => ({
+          (Array.isArray(tsmData) ? tsmData : []).map((t: any) => ({
             label: `${t.Firstname} ${t.Lastname}`,
             value: t.ReferenceID,
-          })),
+          }))
         );
         setManagers(
-          managerData.map((m: any) => ({
+          (Array.isArray(managerData) ? managerData : []).map((m: any) => ({
             label: `${m.Firstname} ${m.Lastname}`,
             value: m.ReferenceID,
-          })),
+          }))
         );
       } catch {
         toast.error("Failed to fetch manager/TSM lists.");
@@ -273,11 +541,13 @@ export default function AccountPage() {
     fetchDropdowns();
   }, [showTransferDialog]);
 
+  // ── Derived filter options ────────────────────────────────────────────────
   const typeOptions = useMemo(() => {
     const types = new Set(customers.map((c) => c.type_client).filter(Boolean));
     return ["all", ...Array.from(types)];
   }, [customers]);
 
+  // "park" status surfaces automatically here because it comes from live data
   const statusOptions = useMemo(() => {
     const statuses = new Set(customers.map((c) => c.status).filter(Boolean));
     return ["all", ...Array.from(statuses)];
@@ -294,6 +564,7 @@ export default function AccountPage() {
 
   useEffect(() => setPage(1), [search, filterType, filterStatus]);
 
+  // ── Filtered + sorted data ────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return customers
       .filter((c) =>
@@ -304,19 +575,21 @@ export default function AccountPage() {
           c.region,
           c.manager,
           c.tsm,
-        ].some((field) => field?.toLowerCase().includes(search.toLowerCase())),
+        ].some((field) =>
+          field?.toLowerCase().includes(search.toLowerCase())
+        )
       )
       .filter((c) =>
-        filterType === "all" ? true : c.type_client === filterType,
+        filterType === "all" ? true : c.type_client === filterType
       )
       .filter((c) =>
-        filterStatus === "all" ? true : c.status === filterStatus,
+        filterStatus === "all" ? true : c.status === filterStatus
       )
       .filter((c) =>
         filterTSA === "all"
           ? true
           : c.referenceid?.trim().toLowerCase() ===
-            filterTSA.trim().toLowerCase(),
+          filterTSA.trim().toLowerCase()
       )
       .filter((c) => {
         if (!startDate && !endDate) return true;
@@ -358,7 +631,7 @@ export default function AccountPage() {
   const totalPages = Math.max(1, Math.ceil(displayData.length / rowsPerPage));
   const current = displayData.slice(
     (page - 1) * rowsPerPage,
-    page * rowsPerPage,
+    page * rowsPerPage
   );
   const totalCount = filtered.length;
 
@@ -368,6 +641,7 @@ export default function AccountPage() {
     setDuplicateIds(new Set());
   };
 
+  // ── TSA map (ReferenceID → display label) ────────────────────────────────
   const tsaMap = useMemo(() => {
     const map: Record<string, string> = {};
     tsaList.forEach((t) => {
@@ -376,12 +650,12 @@ export default function AccountPage() {
     return map;
   }, [tsaList]);
 
+  // ── Bulk delete ───────────────────────────────────────────────────────────
   const handleBulkDelete = () => {
     if (selectedIds.size === 0) return toast.error("No customers selected.");
     setShowDeleteDialog(true);
   };
 
-  // ─── Bulk Delete ──────────────────────────────────────────────────────────
   const executeBulkDelete = async (): Promise<void> => {
     if (selectedIds.size === 0) {
       toast.error("No customers selected.");
@@ -400,43 +674,42 @@ export default function AccountPage() {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userIds: idsArray }),
-        },
-      );
-      const result = await res.json();
-
-      if (result.success) {
-        for (let i = 0; i < idsArray.length; i++) {
-          deletedCount++;
-          toast.dismiss(loadingToastId);
-          loadingToastId = toast.loading(
-            `Deleting ${deletedCount}/${idsArray.length}...`,
-          );
-          await new Promise((res) => setTimeout(res, 30));
         }
-        toast.success(`Deleted ${deletedCount} customers.`);
-        setCustomers((prev) => prev.filter((c) => !selectedIds.has(c.id)));
-        setSelectedIdsAction(new Set());
-
-        // ── Audit ──────────────────────────────────────────────────────
-        await Promise.all(
-          deletedCustomers.map((c) =>
-            logCustomerAudit({
-              action: "delete",
-              affectedCount: deletedCustomers.length,
-              customerId: String(c.id),
-              customerName: c.company_name,
-              actor: currentActorRef.current,
-              context: {
-                page: AUDIT_PAGE,
-                source: "BulkDelete",
-                bulk: deletedCustomers.length > 1,
-              },
-            }),
-          ),
-        );
-      } else {
-        toast.error(result.error || "Bulk delete failed.");
+      );
+      const result = (await safeJson(res)) ?? {};
+      if (!res.ok || !result.success) {
+        toast.error(result.error || `Delete failed (HTTP ${res.status})`);
+        return;
       }
+
+      for (let i = 0; i < idsArray.length; i++) {
+        deletedCount++;
+        toast.dismiss(loadingToastId);
+        loadingToastId = toast.loading(
+          `Deleting ${deletedCount}/${idsArray.length}...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }
+      toast.success(`Deleted ${deletedCount} customers.`);
+      setCustomers((prev) => prev.filter((c) => !selectedIds.has(c.id)));
+      setSelectedIdsAction(new Set());
+
+      await Promise.all(
+        deletedCustomers.map((c) =>
+          logCustomerAudit({
+            action: "delete",
+            affectedCount: deletedCustomers.length,
+            customerId: String(c.id),
+            customerName: c.company_name,
+            actor: currentActorRef.current,
+            context: {
+              page: AUDIT_PAGE,
+              source: "BulkDelete",
+              bulk: deletedCustomers.length > 1,
+            },
+          })
+        )
+      );
     } catch (err) {
       console.error(err);
       toast.error("Bulk delete failed.");
@@ -461,7 +734,7 @@ export default function AccountPage() {
     }
   };
 
-  // ─── Auto-Generate Reference Numbers ─────────────────────────────────────
+  // ── Auto-generate reference numbers ──────────────────────────────────────
   const handleAutoGenerate = async () => {
     if (selectedIds.size === 0) {
       toast.error("No customers selected.");
@@ -493,47 +766,47 @@ export default function AccountPage() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ updates }),
-        },
+        }
       );
-      const result = await res.json();
+      const result = (await safeJson(res)) ?? {};
 
-      if (result.success) {
-        setCustomers((prev) =>
-          prev.map((c) => {
-            const u = updates.find((u) => u.id === c.id);
-            return u
-              ? { ...c, account_reference_number: u.account_reference_number }
-              : c;
-          }),
-        );
-        toast.success("Reference numbers generated and updated successfully.");
-
-        // ── Audit ──────────────────────────────────────────────────────
-        await Promise.all(
-          selectedCustomers.map((c, i) =>
-            logCustomerAudit({
-              action: "autoid",
-              affectedCount: selectedCustomers.length,
-              customerId: String(c.id),
-              customerName: c.company_name,
-              changes: {
-                account_reference_number: {
-                  before: c.account_reference_number || null,
-                  after: updates[i].account_reference_number,
-                },
-              },
-              actor: currentActorRef.current,
-              context: {
-                page: AUDIT_PAGE,
-                source: "AutoGenerateID",
-                bulk: selectedCustomers.length > 1,
-              },
-            }),
-          ),
-        );
-      } else {
+      if (!res.ok || !result.success) {
         toast.error(result.error || "Failed to update reference numbers.");
+        return;
       }
+
+      setCustomers((prev) =>
+        prev.map((c) => {
+          const u = updates.find((u) => u.id === c.id);
+          return u
+            ? { ...c, account_reference_number: u.account_reference_number }
+            : c;
+        })
+      );
+      toast.success("Reference numbers generated and updated successfully.");
+
+      await Promise.all(
+        selectedCustomers.map((c, i) =>
+          logCustomerAudit({
+            action: "autoid",
+            affectedCount: selectedCustomers.length,
+            customerId: String(c.id),
+            customerName: c.company_name,
+            changes: {
+              account_reference_number: {
+                before: c.account_reference_number || null,
+                after: updates[i].account_reference_number,
+              },
+            },
+            actor: currentActorRef.current,
+            context: {
+              page: AUDIT_PAGE,
+              source: "AutoGenerateID",
+              bulk: selectedCustomers.length > 1,
+            },
+          })
+        )
+      );
     } catch (error) {
       console.error(error);
       toast.error("An error occurred during update.");
@@ -542,18 +815,14 @@ export default function AccountPage() {
     }
   };
 
-  // ─── Transfer: snapshot BEFORE dialog opens ───────────────────────────────
+  // ── Transfer dialog ───────────────────────────────────────────────────────
   const handleOpenTransferDialog = () => {
     preTransferSnapshotRef.current = customers.filter((c) =>
-      selectedIds.has(c.id),
+      selectedIds.has(c.id)
     );
     setShowTransferDialog(true);
   };
 
-  /**
-   * Called by TransferDialog with ONE bundled payload after all API calls succeed.
-   * Logs a single audit entry per customer covering TSA + TSM + Manager together.
-   */
   const handleTransferSuccess = async (payload: TransferSuccessPayload) => {
     const snapshot = preTransferSnapshotRef.current;
     if (!snapshot.length) return;
@@ -561,23 +830,23 @@ export default function AccountPage() {
     const transfer: TransferDetail = {
       tsa: payload.tsa
         ? {
-            toId: payload.tsa.toId,
-            toName: payload.tsa.toName,
-            fromId: snapshot[0].referenceid || null,
-            fromName:
-              tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
-              snapshot[0].referenceid ||
-              null,
-          }
+          toId: payload.tsa.toId,
+          toName: payload.tsa.toName,
+          fromId: snapshot[0].referenceid || null,
+          fromName:
+            tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
+            snapshot[0].referenceid ||
+            null,
+        }
         : null,
       tsm: payload.tsm
         ? { toName: payload.tsm.toName, fromName: snapshot[0].tsm || null }
         : null,
       manager: payload.manager
         ? {
-            toName: payload.manager.toName,
-            fromName: snapshot[0].manager || null,
-          }
+          toName: payload.manager.toName,
+          fromName: snapshot[0].manager || null,
+        }
         : null,
     };
 
@@ -595,18 +864,18 @@ export default function AccountPage() {
             source: "TransferDialog",
             bulk: snapshot.length > 1,
           },
-        }),
-      ),
+        })
+      )
     );
 
     preTransferSnapshotRef.current = [];
   };
 
-  // ─── Import audit callback ────────────────────────────────────────────────
+  // ── Import audit callback ─────────────────────────────────────────────────
   const handleImportSuccess = async (
     count: number,
     tsaId: string,
-    tsaName: string,
+    tsaName: string
   ) => {
     await logCustomerAudit({
       action: "create",
@@ -618,148 +887,6 @@ export default function AccountPage() {
       context: { page: AUDIT_PAGE, source: "ImportDialog", bulk: count > 1 },
     });
   };
-
-  // ─── Edit Customer Dialog ─────────────────────────────────────────────────
-  function EditCustomerDialog({
-    open,
-    onOpenChange,
-    customer,
-    onSave,
-  }: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    customer: Customer | null;
-    onSave: (updated: Customer) => void;
-  }) {
-    const [form, setForm] = useState<Customer | null>(customer);
-    useEffect(() => {
-      setForm(customer);
-    }, [customer]);
-    if (!form) return null;
-
-    const handleChange = (key: keyof Customer, value: string) => {
-      setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-    };
-
-    const handleSubmit = async () => {
-      if (!form || !customer) return;
-      try {
-        const res = await fetch(
-          "/api/Data/Applications/Taskflow/CustomerDatabase/Edit",
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(form),
-          },
-        );
-        const result = await res.json();
-        if (!result.success) {
-          toast.error(result.error || "Update failed");
-          return;
-        }
-
-        onSave(form);
-        toast.success("Customer updated successfully");
-        onOpenChange(false);
-
-        // ── Audit: diff only changed fields ────────────────────────────
-        const TRACKED: (keyof Customer)[] = [
-          "company_name",
-          "contact_person",
-          "contact_number",
-          "email_address",
-          "address",
-          "region",
-          "type_client",
-          "status",
-          "remarks",
-        ];
-        const changes: Record<string, { before: unknown; after: unknown }> = {};
-        for (const key of TRACKED) {
-          if (customer[key] !== form[key])
-            changes[key] = {
-              before: customer[key] ?? null,
-              after: form[key] ?? null,
-            };
-        }
-        if (Object.keys(changes).length > 0) {
-          await logCustomerAudit({
-            action: "update",
-            affectedCount: 1,
-            customerId: String(form.id),
-            customerName: form.company_name,
-            changes,
-            actor: currentActorRef.current,
-            context: {
-              page: AUDIT_PAGE,
-              source: "EditCustomerDialog",
-              bulk: false,
-            },
-          });
-        }
-      } catch {
-        toast.error("Something went wrong");
-      }
-    };
-
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Edit Customer</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <Input
-              placeholder="Company Name"
-              value={form.company_name}
-              onChange={(e) => handleChange("company_name", e.target.value)}
-            />
-            <Input
-              placeholder="Contact Person"
-              value={form.contact_person}
-              onChange={(e) => handleChange("contact_person", e.target.value)}
-            />
-            <Input
-              placeholder="Contact Number"
-              value={form.contact_number}
-              onChange={(e) => handleChange("contact_number", e.target.value)}
-            />
-            <Input
-              placeholder="Email Address"
-              value={form.email_address}
-              onChange={(e) => handleChange("email_address", e.target.value)}
-            />
-            <Input
-              placeholder="Type"
-              value={form.type_client}
-              onChange={(e) => handleChange("type_client", e.target.value)}
-            />
-            <Input
-              placeholder="Status"
-              value={form.status}
-              onChange={(e) => handleChange("status", e.target.value)}
-            />
-            <Input
-              placeholder="Region"
-              value={form.region}
-              onChange={(e) => handleChange("region", e.target.value)}
-            />
-            <Input
-              placeholder="Remarks"
-              value={form.remarks}
-              onChange={(e) => handleChange("remarks", e.target.value)}
-            />
-          </div>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmit}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -790,6 +917,7 @@ export default function AccountPage() {
             </Breadcrumb>
           </header>
 
+          {/* ── Toolbar ── */}
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 px-4 py-3">
             <div className="relative w-full sm:max-w-xs">
               <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
@@ -821,12 +949,16 @@ export default function AccountPage() {
               <ImportDialog onSuccessAction={handleImportSuccess} />
 
               <Download data={filtered} filename="CustomerDatabase" />
+
               {selectedIds.size > 0 && (
                 <>
                   <Button variant="outline" onClick={handleOpenTransferDialog}>
                     <ArrowRight className="w-4 h-4" /> Transfer
                   </Button>
-                  <Button onClick={handleAutoGenerate} disabled={isGenerating}>
+                  <Button
+                    onClick={handleAutoGenerate}
+                    disabled={isGenerating}
+                  >
                     {isGenerating ? "Generating..." : "Auto-Generate ID"} (
                     {selectedIds.size})
                   </Button>
@@ -853,15 +985,11 @@ export default function AccountPage() {
                 open={showTransferDialog}
                 onOpenChangeAction={(open) => {
                   setShowTransferDialog(open);
-                  if (!open) {
-                    setTransferSelection("");
-                    setTransferType(null);
-                  }
                 }}
                 selectedIds={new Set(Array.from(selectedIds).map(String))}
                 setSelectedIdsAction={(ids: Set<string>) => {
                   setSelectedIdsAction(
-                    new Set(Array.from(ids).map((id) => Number(id))),
+                    new Set(Array.from(ids).map((id) => Number(id)))
                   );
                 }}
                 setAccountsAction={(updateFn) =>
@@ -874,6 +1002,7 @@ export default function AccountPage() {
               />
             </div>
 
+            {/* ── Filter Dialog ── */}
             {showFilters && (
               <FilterDialog
                 open={showFilters}
@@ -896,6 +1025,7 @@ export default function AccountPage() {
             )}
           </div>
 
+          {/* ── Audit summary bar ── */}
           {isAuditView && (
             <div className="mx-4 mb-2 mt-1 flex flex-col gap-2 bg-muted/50 rounded-md px-4 py-2 border border-border text-[13px]">
               <div className="flex justify-between items-center flex-wrap gap-2">
@@ -929,14 +1059,14 @@ export default function AccountPage() {
                       className={`rounded-l-md ${auditFilter === "missingType" ? "bg-yellow-100 text-yellow-900" : ""}`}
                       onClick={() =>
                         setAuditFilter(
-                          auditFilter === "missingType" ? "" : "missingType",
+                          auditFilter === "missingType" ? "" : "missingType"
                         )
                       }
                     >
                       ⚠ Missing Type:{" "}
                       {
                         audited.filter(
-                          (c) => !c.type_client?.trim() && c.status?.trim(),
+                          (c) => !c.type_client?.trim() && c.status?.trim()
                         ).length
                       }
                     </Button>
@@ -956,14 +1086,14 @@ export default function AccountPage() {
                         setAuditFilter(
                           auditFilter === "missingStatus"
                             ? ""
-                            : "missingStatus",
+                            : "missingStatus"
                         )
                       }
                     >
                       ⚠ Missing Status:{" "}
                       {
                         audited.filter(
-                          (c) => !c.status?.trim() && c.type_client?.trim(),
+                          (c) => !c.status?.trim() && c.type_client?.trim()
                         ).length
                       }
                     </Button>
@@ -975,7 +1105,7 @@ export default function AccountPage() {
                       className={`rounded-r-md ${auditFilter === "duplicates" ? "bg-red-100 text-red-900" : ""}`}
                       onClick={() =>
                         setAuditFilter(
-                          auditFilter === "duplicates" ? "" : "duplicates",
+                          auditFilter === "duplicates" ? "" : "duplicates"
                         )
                       }
                     >
@@ -1005,10 +1135,12 @@ export default function AccountPage() {
             setCustomersAction={setCustomers}
           />
 
+          {/* ── Table ── */}
           <div className="p-4">
             <div className="flex justify-start mb-2">
               <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
             </div>
+
             <div className="overflow-auto min-h-[200px] flex items-center justify-center">
               {isFetching ? (
                 <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
@@ -1041,14 +1173,21 @@ export default function AccountPage() {
                       <TableHead>Next Available</TableHead>
                     </TableRow>
                   </TableHeader>
+
                   <TableBody className="text-[12px]">
                     {current.map((c) => {
                       const isMissingType = !c.type_client?.trim();
                       const isMissingStatus = !c.status?.trim();
                       const isDuplicate = duplicateIds.has(c.id);
                       const isSelected = selectedIds.has(c.id);
+                      const isParked =
+                        c.status?.trim().toLowerCase() === "park";
+
                       return (
-                        <TableRow key={c.id}>
+                        <TableRow
+                          key={c.id}
+                          className={isParked ? "opacity-60" : ""}
+                        >
                           <TableCell className="text-center">
                             <input
                               type="checkbox"
@@ -1056,6 +1195,7 @@ export default function AccountPage() {
                               onChange={() => toggleSelect(c.id)}
                             />
                           </TableCell>
+
                           <TableCell className="text-center">
                             <Button
                               size="sm"
@@ -1068,10 +1208,13 @@ export default function AccountPage() {
                               Edit
                             </Button>
                           </TableCell>
+
                           <TableCell className="uppercase whitespace-normal break-words max-w-[250px]">
                             <span
                               className={
-                                isDuplicate || isMissingType || isMissingStatus
+                                isDuplicate ||
+                                  isMissingType ||
+                                  isMissingStatus
                                   ? "line-through underline decoration-red-500 decoration-2"
                                   : ""
                               }
@@ -1081,12 +1224,15 @@ export default function AccountPage() {
                               {c.account_reference_number}
                             </span>
                           </TableCell>
+
                           <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
                             {c.contact_person}
                           </TableCell>
+
                           <TableCell className="whitespace-normal break-words max-w-[250px]">
                             {c.email_address}
                           </TableCell>
+
                           <TableCell>
                             <span
                               className={
@@ -1098,106 +1244,53 @@ export default function AccountPage() {
                               {c.type_client || "—"}
                             </span>
                           </TableCell>
+
+                          {/* ── Status cell with all badges including "park" ── */}
                           <TableCell className="text-center">
-                            {c.status ? (
-                              (() => {
-                                const s = c.status.trim().toLowerCase();
-                                if (s === "active")
-                                  return (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1"
-                                    >
-                                      <BadgeCheck className="size-3.5" />
-                                      Active
-                                    </Badge>
-                                  );
-                                if (s === "new client")
-                                  return (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1"
-                                    >
-                                      <UserCheck className="size-3.5" />
-                                      New Client
-                                    </Badge>
-                                  );
-                                if (s === "non-buying")
-                                  return (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1"
-                                    >
-                                      <AlertTriangle className="size-3.5" />
-                                      Non-Buying
-                                    </Badge>
-                                  );
-                                if (s === "inactive")
-                                  return (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1"
-                                    >
-                                      <XCircle className="size-3.5" />
-                                      Inactive
-                                    </Badge>
-                                  );
-                                if (s === "on hold")
-                                  return (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1"
-                                    >
-                                      <PauseCircle className="size-3.5" />
-                                      On Hold
-                                    </Badge>
-                                  );
-                                if (s === "used")
-                                  return (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1"
-                                    >
-                                      <Clock className="size-3.5" />
-                                      Used
-                                    </Badge>
-                                  );
-                                if (s === "for deletion" || s === "remove")
-                                  return (
-                                    <Badge
-                                      variant="secondary"
-                                      className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
-                                    >
-                                      <UserX className="size-3.5" />
-                                      {c.status}
-                                    </Badge>
-                                  );
-                                return (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-muted-foreground"
-                                  >
-                                    {c.status}
-                                  </Badge>
-                                );
-                              })()
-                            ) : (
-                              <Badge
-                                variant="outline"
-                                className="text-muted-foreground"
-                              >
-                                —
-                              </Badge>
-                            )}
+                            <StatusBadge status={c.status} />
                           </TableCell>
+
                           <TableCell>{c.region}</TableCell>
+
+                          {/* TSA column — shows full label (includes status suffix for inactive) */}
                           <TableCell className="capitalize">
-                            {tsaMap[c.referenceid?.trim().toLowerCase()] ||
-                              c.referenceid ||
-                              "-"}
+                            {(() => {
+                              const key = c.referenceid?.trim().toLowerCase();
+                              const tsaEntry = tsaList.find(
+                                (t) => t.value.toLowerCase() === key
+                              );
+                              const label =
+                                tsaMap[key ?? ""] ||
+                                c.referenceid ||
+                                "-";
+                              const isInactiveTsa =
+                                tsaEntry &&
+                                INACTIVE_STATUSES.includes(
+                                  tsaEntry.status ?? ""
+                                );
+                              return (
+                                <span className="flex items-center gap-1 flex-wrap">
+                                  {label}
+                                  {isInactiveTsa && (
+                                    <span
+                                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${tsaEntry?.status === "Terminated"
+                                          ? "bg-red-100 text-red-700"
+                                          : tsaEntry?.status === "Resigned"
+                                            ? "bg-orange-100 text-orange-700"
+                                            : "bg-gray-100 text-gray-600"
+                                        }`}
+                                    >
+                                      {tsaEntry?.status}
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
+
                           <TableCell>{c.tsm}</TableCell>
                           <TableCell>{c.manager}</TableCell>
+
                           <TableCell>
                             {new Date(c.date_created).toLocaleDateString()}
                           </TableCell>
@@ -1207,8 +1300,8 @@ export default function AccountPage() {
                           <TableCell>
                             {c.next_available_date
                               ? new Date(
-                                  c.next_available_date,
-                                ).toLocaleDateString()
+                                c.next_available_date
+                              ).toLocaleDateString()
                               : "-"}
                           </TableCell>
                         </TableRow>
@@ -1228,9 +1321,10 @@ export default function AccountPage() {
             open={showEditDialog}
             onOpenChange={setShowEditDialog}
             customer={editingCustomer}
+            actorRef={currentActorRef}
             onSave={(updated) =>
               setCustomers((prev) =>
-                prev.map((c) => (c.id === updated.id ? updated : c)),
+                prev.map((c) => (c.id === updated.id ? updated : c))
               )
             }
           />

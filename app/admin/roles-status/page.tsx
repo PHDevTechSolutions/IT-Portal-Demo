@@ -373,7 +373,40 @@ export default function AccountPage() {
             const result = await res.json()
             if (!res.ok || !result.success) throw new Error(result.message || "Update failed")
 
-            // Update local state
+            // ── Cascade: park or restore customers for Sales users ───────────────
+            const newStatus = (editData.Status || "").trim().toLowerCase()
+            const isSales = (editData.Department || "").trim().toLowerCase() === "sales"
+
+            // Park on: inactive, terminated, resigned
+            const isPark = ["inactive", "terminated", "resigned"].includes(newStatus)
+            const isRestore = newStatus === "active"
+
+            if (isSales && (isPark || isRestore) && editData.ReferenceID) {
+                const targetStatus = isPark ? "park" : "Active"
+                try {
+                    const parkRes = await fetch(
+                        "/api/Data/Applications/Taskflow/CustomerDatabase/ParkByReferenceId",
+                        {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                referenceId: editData.ReferenceID,
+                                targetStatus,
+                            }),
+                        }
+                    )
+                    const parkResult = await parkRes.json()
+                    if (parkResult.success) {
+                        toast.info(parkResult.message)
+                    } else {
+                        console.warn("[cascade] partial failure:", parkResult.error)
+                    }
+                } catch (cascadeErr) {
+                    console.error("[cascade] network error:", cascadeErr)
+                }
+            }
+            // ─────────────────────────────────────────────────────────────────────
+
             setAccounts(prev =>
                 prev.map(a => (a._id === editData._id ? { ...a, ...editData } : a))
             )
@@ -387,7 +420,7 @@ export default function AccountPage() {
 
     return (
         <SidebarProvider>
-            <AppSidebar/>
+            <AppSidebar />
             <SidebarInset>
                 {/* Header */}
                 <header className="flex h-16 items-center gap-2 px-4">
