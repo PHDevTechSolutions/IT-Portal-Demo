@@ -28,6 +28,12 @@ const Xchire_sql = neon(Xchire_databaseUrl);
  *   TSA set back to Active                        →  their customers become "Active"
  *
  * Body: { referenceId: string, targetStatus: "park" | "Active" }
+ *
+ * Guard rule:
+ *   - Parking   only touches rows currently status = 'Active'
+ *   - Restoring only touches rows currently status = 'park'
+ *
+ * Rows in any other status (Inactive, Non-Buying, etc.) are never touched.
  */
 export async function PUT(req: Request) {
     try {
@@ -52,14 +58,25 @@ export async function PUT(req: Request) {
             );
         }
 
+        /**
+         * Only update rows whose CURRENT status is the logical opposite:
+         *   parking   → only rows with status = 'Active'
+         *   restoring → only rows with status = 'park'
+         *
+         * This prevents accidentally overwriting Inactive / Non-Buying /
+         * Transferred etc. records that belong to the same TSA.
+         */
+        const requiredCurrentStatus = targetStatus === "park" ? "Active" : "park";
+
         const updated = await Xchire_sql`
-      UPDATE accounts
-      SET
-        status       = ${targetStatus},
-        date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
-      WHERE referenceid = ${referenceId.trim()}
-      RETURNING id, company_name, referenceid, status;
-    `;
+            UPDATE accounts
+            SET
+                status       = ${targetStatus},
+                date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
+            WHERE referenceid = ${referenceId.trim()}
+              AND status      = ${requiredCurrentStatus}
+            RETURNING id, company_name, referenceid, status;
+        `;
 
         const verb = targetStatus === "park" ? "parked" : "restored to Active";
 
