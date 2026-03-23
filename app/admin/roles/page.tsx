@@ -238,10 +238,6 @@ export default function AccountPage() {
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
-  const [transferType, setTransferType] = useState<"TSM" | "Manager" | null>(
-    null,
-  );
-  const [transferSelection, setTransferSelection] = useState<string>("");
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [viewingUser, setViewingUser] = useState<UserAccount | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -300,9 +296,16 @@ export default function AccountPage() {
     fetchAccounts();
   }, []);
 
+  // True when at least one selected user belongs to Sales — drives transfer buttons
+  const selectedAreSales = useMemo(
+    () =>
+      accounts.some((a) => selectedIds.has(a._id) && a.Department === "Sales"),
+    [accounts, selectedIds],
+  );
+
   // ─── Fetch Manager / TSM dropdowns for transfer dialog ──────────────────────
   useEffect(() => {
-    if (!showTransferDialog || filterDepartment !== "Sales") return;
+    if (!showTransferDialog || !selectedAreSales) return;
     const fetchDropdowns = async () => {
       try {
         const [mr, tr] = await Promise.all([
@@ -328,7 +331,7 @@ export default function AccountPage() {
       }
     };
     fetchDropdowns();
-  }, [showTransferDialog, filterDepartment]);
+  }, [showTransferDialog, selectedAreSales]);
 
   // ─── Fetch Manager / TSM dropdowns for inline form (Sales dept) ─────────────
   useEffect(() => {
@@ -576,6 +579,45 @@ export default function AccountPage() {
     }
   };
 
+  // ─── Cross-DB sync helper — delegates to the unified TransferTSA service ──────
+  /**
+   * Calls POST /api/UserManagement/TransferTSA which updates MongoDB, Neon,
+   * and Supabase in one request. Neon failure rolls back MongoDB automatically.
+   */
+  const syncTsmManager = async (
+    tsaReferenceId: string,
+    field: "tsm" | "manager",
+    newSupervisorReferenceId: string,
+  ): Promise<void> => {
+    if (!tsaReferenceId || !newSupervisorReferenceId) return;
+    try {
+      const res = await fetch("/api/UserManagement/TransferTSA", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tsaReferenceId,
+          field,
+          newSupervisorReferenceId,
+        }),
+      });
+      // Guard against HTML error pages (404/500) before calling .json()
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        console.error(
+          `[TransferTSA] HTTP ${res.status} — route not found or server error. ` +
+            "Ensure app/api/UserManagement/TransferTSA/route.ts is deployed.",
+        );
+        return;
+      }
+      const data = await res.json();
+      if (!data.success) {
+        console.warn("[TransferTSA] partial failure:", data);
+      }
+    } catch (err) {
+      console.error("[TransferTSA]", err);
+    }
+  };
+
   // ─── Save edit ────────────────────────────────────────────────────────────────
   const handleSaveEdit = async () => {
     if (!newUser._id) {
@@ -584,6 +626,10 @@ export default function AccountPage() {
     }
     const toastId = toast.loading("Updating account...");
     setIsFormLoading(true);
+
+    // Snapshot before update so we can detect TSM/Manager changes
+    const prevUser = accounts.find((a) => a._id === newUser._id);
+
     try {
       const res = await fetch("/api/UserManagement/UserUpdate", {
         method: "PUT",
@@ -594,7 +640,7 @@ export default function AccountPage() {
       if (!res.ok || !result.success)
         throw new Error(result.message || "Update failed");
 
-      // Cascade: park / restore customers for Sales users
+      // Cascade: park / restore Taskflow customers when a Sales user's status changes
       const savedStatus = (newUser.Status || "").trim().toLowerCase();
       const isSales =
         (newUser.Department || "").trim().toLowerCase() === "sales";
@@ -604,7 +650,6 @@ export default function AccountPage() {
       const isRestore = savedStatus === "active";
 
       if (isSales && (isPark || isRestore) && newUser.ReferenceID) {
-        const targetStatus = isPark ? "park" : "Active";
         try {
           const parkRes = await fetch(
             "/api/Data/Applications/Taskflow/CustomerDatabase/ParkByReferenceId",
@@ -613,14 +658,33 @@ export default function AccountPage() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 referenceId: newUser.ReferenceID,
-                targetStatus,
+                targetStatus: isPark ? "park" : "Active",
               }),
             },
           );
           const parkResult = await parkRes.json();
           if (parkResult.success) toast.info(parkResult.message);
         } catch (cascadeErr) {
-          console.error("[cascade]", cascadeErr);
+          console.error("[cascade park]", cascadeErr);
+        }
+      }
+
+      // Cross-DB sync via TransferTSA: only fires when TSM or Manager actually changed
+      if (isSales && newUser.ReferenceID) {
+        const syncOps: Promise<void>[] = [];
+
+        if (newUser.TSM && newUser.TSM !== prevUser?.TSM) {
+          syncOps.push(syncTsmManager(newUser.ReferenceID, "tsm", newUser.TSM));
+        }
+        if (newUser.Manager && newUser.Manager !== prevUser?.Manager) {
+          syncOps.push(
+            syncTsmManager(newUser.ReferenceID, "manager", newUser.Manager),
+          );
+        }
+
+        if (syncOps.length > 0) {
+          await Promise.all(syncOps);
+          toast.info("TSM/Manager synced across all databases.");
         }
       }
 
@@ -785,7 +849,7 @@ export default function AccountPage() {
                   User Management
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Manage company accounts and create new users —{" "}
+                  Manage CMS accounts and create new users —{" "}
                   {isFetching ? (
                     <span>Loading…</span>
                   ) : (
@@ -1367,35 +1431,17 @@ export default function AccountPage() {
                         <Download className="w-4 h-4" /> Download
                       </Button>
 
-                      {/* Sales transfer buttons */}
-                      {filterDepartment === "Sales" && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-10 text-sm"
-                            disabled={selectedIds.size === 0}
-                            onClick={() => {
-                              setTransferType("TSM");
-                              setShowTransferDialog(true);
-                            }}
-                          >
-                            <ArrowRight className="w-4 h-4" /> Transfer to TSM
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-10 text-sm"
-                            disabled={selectedIds.size === 0}
-                            onClick={() => {
-                              setTransferType("Manager");
-                              setShowTransferDialog(true);
-                            }}
-                          >
-                            <ArrowRight className="w-4 h-4" /> Transfer to
-                            Manager
-                          </Button>
-                        </>
+                      {/* Transfer button — visible when any selected user is Sales */}
+                      {selectedAreSales && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-10 text-sm"
+                          disabled={selectedIds.size === 0}
+                          onClick={() => setShowTransferDialog(true)}
+                        >
+                          <ArrowRight className="w-4 h-4" /> Transfer
+                        </Button>
                       )}
 
                       {/* Bulk delete */}
@@ -1609,10 +1655,9 @@ export default function AccountPage() {
                       <TransferDialog
                         open={showTransferDialog}
                         onOpenChangeAction={setShowTransferDialog}
-                        transferType={transferType}
-                        transferSelection={transferSelection}
-                        setTransferSelectionAction={setTransferSelection}
-                        selectedIds={selectedIds}
+                        selectedUsers={accounts.filter((a) =>
+                          selectedIds.has(a._id),
+                        )}
                         setSelectedIdsAction={setSelectedIds}
                         setAccountsAction={setAccounts}
                         tsms={tsms}
