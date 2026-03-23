@@ -785,7 +785,7 @@ export default function AccountPage() {
                   User Management
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Manage CMS accounts and create new users —{" "}
+                  Manage company accounts and create new users —{" "}
                   {isFetching ? (
                     <span>Loading…</span>
                   ) : (
