@@ -91,6 +91,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         isActive: pathname?.startsWith("/taskflow"),
         items: [
           { title: "Customer Database", url: appendUserId("/taskflow/customer-database") },
+          { title: "Customer Audits", url: appendUserId("/taskflow/customer-audits") },
           { title: "Audit Logs", url: appendUserId("/taskflow/audit-logs") },
           { title: "Approval of Accounts", url: appendUserId("/taskflow/customer-approval") },
           { title: "Activity Logs", url: appendUserId("/taskflow/activity-logs") },

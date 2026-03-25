@@ -10,13 +10,15 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 import { Pagination } from "@/components/app-pagination";
 import { Download } from "@/components/taskflow/customer-database/download";
-import { Audit } from "@/components/taskflow/customer-database/audit";
 import { Calendar } from "@/components/taskflow/customer-database/calendar";
 import { ImportDialog } from "@/components/taskflow/customer-database/import";
-import { AuditDialog } from "@/components/taskflow/customer-database/audit-dialog";
 import { DeleteDialog } from "@/components/taskflow/customer-database/delete";
 import { TransferDialog } from "@/components/taskflow/customer-database/transfer";
 import { FilterDialog } from "@/components/taskflow/customer-database/filter";
+import {
+  AuditDialog,
+  type AuditResult,
+} from "@/components/taskflow/customer-database/audit-dialog";
 import { toast } from "sonner";
 import { Loader2, Filter } from "lucide-react";
 import {
@@ -104,8 +106,6 @@ const INACTIVE_STATUSES = ["Terminated", "Resigned", "Inactive"];
 const AUDIT_PAGE = "Customer Database";
 
 // ─── Module-level safe JSON parser ────────────────────────────────────────────
-// Must live outside the component so Turbopack HMR never gives useEffect
-// callbacks a stale/undefined closure reference.
 async function safeJson(res: Response): Promise<any> {
   const text = await res.text();
   try {
@@ -120,9 +120,6 @@ async function safeJson(res: Response): Promise<any> {
 }
 
 // ─── EditCustomerDialog ───────────────────────────────────────────────────────
-// Defined at module level (not inside AccountPage) so React never treats it as a
-// new component type on every render — which would unmount/remount it and wipe
-// controlled-input state, causing the null value warning.
 
 interface EditCustomerDialogProps {
   open: boolean;
@@ -141,11 +138,8 @@ function EditCustomerDialog({
 }: EditCustomerDialogProps) {
   const [form, setForm] = useState<Customer | null>(null);
 
-  // Sync form whenever the dialog opens with a new customer.
-  // Reset to null when customer is null so inputs never receive null values.
   useEffect(() => {
     if (customer) {
-      // Guarantee every string field is "" not null/undefined
       setForm({
         ...customer,
         company_name: customer.company_name ?? "",
@@ -279,7 +273,6 @@ function EditCustomerDialog({
 }
 
 // ─── StatusBadge ──────────────────────────────────────────────────────────────
-// Also at module level for the same stability reason.
 
 function StatusBadge({ status }: { status?: string | null }) {
   const s = (status ?? "").trim().toLowerCase();
@@ -352,7 +345,7 @@ export default function AccountPage() {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(20);
 
-  // ── Current actor (who is making changes) ────────────────────────────────
+  // ── Current actor ─────────────────────────────────────────────────────────
   const [currentActor, setCurrentActor] = useState<AuditActor>({
     uid: null,
     name: null,
@@ -366,17 +359,20 @@ export default function AccountPage() {
     currentActorRef.current = currentActor;
   }, [currentActor]);
 
+  // ── Audit state ───────────────────────────────────────────────────────────
+  const [showAuditDialog, setShowAuditDialog] = useState(false);
   const [audited, setAudited] = useState<Customer[]>([]);
   const [isAuditView, setIsAuditView] = useState(false);
   const [duplicateIds, setDuplicateIds] = useState<Set<number>>(new Set());
   const [auditFilter, setAuditFilter] = useState<
     "" | "all" | "missingType" | "missingStatus" | "duplicates"
   >("");
+
   const [showFilters, setShowFilters] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
 
-  // ── TSA list — ALL TSAs including Terminated/Resigned ────────────────────
+  // ── TSA list ──────────────────────────────────────────────────────────────
   const [tsaList, setTsaList] = useState<TsaOption[]>([]);
 
   const [filterTSA, setFilterTSA] = useState("all");
@@ -385,11 +381,6 @@ export default function AccountPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedIds, setSelectedIdsAction] = useState<Set<number>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
-
-  const [showAuditDialog, setShowAuditDialog] = useState(false);
-  const [auditSelection, setAuditSelection] = useState<
-    Record<AuditKey, boolean>
-  >({ duplicates: false, missingType: false, missingStatus: false });
 
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -402,10 +393,6 @@ export default function AccountPage() {
   const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc");
 
   const preTransferSnapshotRef = useRef<Customer[]>([]);
-
-  const toggleAuditSelection = (key: AuditKey) => {
-    setAuditSelection((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
 
   // ── Load current user from localStorage ──────────────────────────────────
   useEffect(() => {
@@ -425,43 +412,32 @@ export default function AccountPage() {
     }
   }, []);
 
-  // ── Fetch ALL TSAs (including Terminated / Resigned / Inactive) ───────────
-  // Falls back to FetchTSA if FetchAllTSA is not yet deployed.
+  // ── Fetch ALL TSAs ────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchTSA = async () => {
       try {
-        // Try the new endpoint first
         let res = await fetch(
           "/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate"
         );
-
-        // Fall back to existing endpoint if the new one is not found yet
         if (!res.ok) {
-          console.warn(
-            `[FetchAllTSA] ${res.status} — falling back to FetchTSA`
-          );
+          console.warn(`[FetchAllTSA] ${res.status} — falling back to FetchTSA`);
           res = await fetch(
             "/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate"
           );
         }
-
         if (!res.ok) {
           console.error("[fetchTSA] Both endpoints failed:", res.status);
           return;
         }
-
         const json = await safeJson(res);
         if (!json) return;
-
         const list: any[] = Array.isArray(json) ? json : (json.data ?? []);
-
         const formatted: TsaOption[] = list.map((user: any) => ({
           value: user.ReferenceID ?? "",
           label: `${user.Firstname ?? ""} ${user.Lastname ?? ""}${INACTIVE_STATUSES.includes(user.Status) ? ` (${user.Status})` : ""
             }`.trim(),
           status: user.Status ?? "Active",
         }));
-
         setTsaList([
           { value: "all", label: "All TSA", status: "Active" },
           ...formatted,
@@ -509,13 +485,11 @@ export default function AccountPage() {
           fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager"),
           fetch("/api/UserManagement/FetchManager?Role=Manager"),
         ]);
-
         const [tsaData, tsmData, managerData] = await Promise.all([
           tsaRes.ok ? safeJson(tsaRes) : [],
           tsmRes.ok ? safeJson(tsmRes) : [],
           managerRes.ok ? safeJson(managerRes) : [],
         ]);
-
         setTsas(
           (Array.isArray(tsaData) ? tsaData : []).map((m: any) => ({
             label: `${m.Firstname} ${m.Lastname}`,
@@ -547,7 +521,6 @@ export default function AccountPage() {
     return ["all", ...Array.from(types)];
   }, [customers]);
 
-  // "park" status surfaces automatically here because it comes from live data
   const statusOptions = useMemo(() => {
     const statuses = new Set(customers.map((c) => c.status).filter(Boolean));
     return ["all", ...Array.from(statuses)];
@@ -575,9 +548,7 @@ export default function AccountPage() {
           c.region,
           c.manager,
           c.tsm,
-        ].some((field) =>
-          field?.toLowerCase().includes(search.toLowerCase())
-        )
+        ].some((field) => field?.toLowerCase().includes(search.toLowerCase()))
       )
       .filter((c) =>
         filterType === "all" ? true : c.type_client === filterType
@@ -639,6 +610,7 @@ export default function AccountPage() {
     setIsAuditView(false);
     setAudited([]);
     setDuplicateIds(new Set());
+    setAuditFilter("");
   };
 
   // ── TSA map (ReferenceID → display label) ────────────────────────────────
@@ -649,6 +621,14 @@ export default function AccountPage() {
     });
     return map;
   }, [tsaList]);
+
+  // ── Audit confirm callback ────────────────────────────────────────────────
+  const handleConfirmAudit = (result: AuditResult) => {
+    setAudited(result.allAffectedCustomers);
+    setDuplicateIds(result.duplicateIds);
+    setIsAuditView(true);
+    setAuditFilter("all");
+  };
 
   // ── Bulk delete ───────────────────────────────────────────────────────────
   const handleBulkDelete = () => {
@@ -661,7 +641,6 @@ export default function AccountPage() {
       toast.error("No customers selected.");
       return;
     }
-
     const idsArray = Array.from(selectedIds);
     const deletedCustomers = customers.filter((c) => selectedIds.has(c.id));
     let deletedCount = 0;
@@ -681,7 +660,6 @@ export default function AccountPage() {
         toast.error(result.error || `Delete failed (HTTP ${res.status})`);
         return;
       }
-
       for (let i = 0; i < idsArray.length; i++) {
         deletedCount++;
         toast.dismiss(loadingToastId);
@@ -769,12 +747,10 @@ export default function AccountPage() {
         }
       );
       const result = (await safeJson(res)) ?? {};
-
       if (!res.ok || !result.success) {
         toast.error(result.error || "Failed to update reference numbers.");
         return;
       }
-
       setCustomers((prev) =>
         prev.map((c) => {
           const u = updates.find((u) => u.id === c.id);
@@ -969,12 +945,12 @@ export default function AccountPage() {
               )}
 
               {!isAuditView ? (
-                <Audit
-                  customers={customers}
-                  setAuditedAction={setAudited}
-                  setDuplicateIdsAction={setDuplicateIds}
-                  setIsAuditViewAction={setIsAuditView}
-                />
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAuditDialog(true)}
+                >
+                  Audit
+                </Button>
               ) : (
                 <Button variant="outline" onClick={handleReturn}>
                   Return to List
@@ -1029,17 +1005,7 @@ export default function AccountPage() {
           {isAuditView && (
             <div className="mx-4 mb-2 mt-1 flex flex-col gap-2 bg-muted/50 rounded-md px-4 py-2 border border-border text-[13px]">
               <div className="flex justify-between items-center flex-wrap gap-2">
-                <div
-                  className="font-medium cursor-pointer select-none underline text-red-600"
-                  onClick={() => {
-                    setAuditSelection({
-                      duplicates: true,
-                      missingType: true,
-                      missingStatus: true,
-                    });
-                    setShowAuditDialog(true);
-                  }}
-                >
+                <div className="font-medium select-none text-red-600">
                   🧾 Audit Summary:{" "}
                   <span className="font-semibold text-red-600">
                     {audited.length}
@@ -1056,7 +1022,10 @@ export default function AccountPage() {
                       variant={
                         auditFilter === "missingType" ? "secondary" : "outline"
                       }
-                      className={`rounded-l-md ${auditFilter === "missingType" ? "bg-yellow-100 text-yellow-900" : ""}`}
+                      className={`rounded-l-md ${auditFilter === "missingType"
+                          ? "bg-yellow-100 text-yellow-900"
+                          : ""
+                        }`}
                       onClick={() =>
                         setAuditFilter(
                           auditFilter === "missingType" ? "" : "missingType"
@@ -1102,7 +1071,10 @@ export default function AccountPage() {
                       variant={
                         auditFilter === "duplicates" ? "secondary" : "outline"
                       }
-                      className={`rounded-r-md ${auditFilter === "duplicates" ? "bg-red-100 text-red-900" : ""}`}
+                      className={`rounded-r-md ${auditFilter === "duplicates"
+                          ? "bg-red-100 text-red-900"
+                          : ""
+                        }`}
                       onClick={() =>
                         setAuditFilter(
                           auditFilter === "duplicates" ? "" : "duplicates"
@@ -1117,6 +1089,7 @@ export default function AccountPage() {
             </div>
           )}
 
+          {/* ── Dialogs ── */}
           <DeleteDialog
             open={showDeleteDialog}
             onOpenChange={setShowDeleteDialog}
@@ -1125,14 +1098,10 @@ export default function AccountPage() {
           />
 
           <AuditDialog
-            showAuditDialog={showAuditDialog}
-            setShowAuditDialogAction={setShowAuditDialog}
-            audited={audited}
-            duplicateIds={duplicateIds}
-            auditSelection={auditSelection}
-            toggleAuditSelectionAction={toggleAuditSelection}
-            setAuditFilterAction={setAuditFilter}
-            setCustomersAction={setCustomers}
+            open={showAuditDialog}
+            onOpenChange={setShowAuditDialog}
+            customers={customers}
+            onConfirmAudit={handleConfirmAudit}
           />
 
           {/* ── Table ── */}
@@ -1245,14 +1214,12 @@ export default function AccountPage() {
                             </span>
                           </TableCell>
 
-                          {/* ── Status cell with all badges including "park" ── */}
                           <TableCell className="text-center">
                             <StatusBadge status={c.status} />
                           </TableCell>
 
                           <TableCell>{c.region}</TableCell>
 
-                          {/* TSA column — shows full label (includes status suffix for inactive) */}
                           <TableCell className="capitalize">
                             {(() => {
                               const key = c.referenceid?.trim().toLowerCase();
@@ -1260,9 +1227,7 @@ export default function AccountPage() {
                                 (t) => t.value.toLowerCase() === key
                               );
                               const label =
-                                tsaMap[key ?? ""] ||
-                                c.referenceid ||
-                                "-";
+                                tsaMap[key ?? ""] || c.referenceid || "-";
                               const isInactiveTsa =
                                 tsaEntry &&
                                 INACTIVE_STATUSES.includes(
