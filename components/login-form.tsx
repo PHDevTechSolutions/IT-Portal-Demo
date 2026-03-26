@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * LoginForm
+ *
+ * Authenticates the user via /api/login (sets HTTP-only cookie).
+ * After login, redirects to /dashboard without any userId in the URL.
+ * No userId is stored in localStorage — identity comes from the session cookie.
+ */
+
 import React, { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
@@ -9,38 +17,38 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 import { ShieldCheck, Mail, LogIn, Loader2 } from "lucide-react";
 
-export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
+export function LoginForm({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   const [Email, setEmail] = useState("");
   const [Password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [showLocationDialog, setShowLocationDialog] = useState(false);
-  const [pendingLoginData, setPendingLoginData] = useState<any | null>(null);
   const [loadingRedirect, setLoadingRedirect] = useState(false);
 
   const router = useRouter();
   const { setUserId } = useUser();
 
-  /* ---------------- Device ID ---------------- */
-  const getDeviceId = () => {
-    let deviceId = localStorage.getItem("deviceId");
-    if (!deviceId) {
-      deviceId = crypto.randomUUID();
-      localStorage.setItem("deviceId", deviceId);
-    }
-    return deviceId;
-  };
-
-  /* ---------------- Location ---------------- */
+  // ── Location helper ──────────────────────────────────────────────────────────
   const getLocation = async () => {
     if (!navigator.geolocation) return null;
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject)
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject),
       );
       return {
         latitude: position.coords.latitude,
@@ -51,7 +59,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     }
   };
 
-  /* ---------------- Login ---------------- */
+  // ── Login ────────────────────────────────────────────────────────────────────
   const handleLoginSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
@@ -63,7 +71,17 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
       setLoading(true);
       try {
-        const deviceId = getDeviceId();
+        // Provide a stable device ID so the existing login endpoint continues
+        // to work without breaking changes.  We no longer store userId, but
+        // the endpoint still expects a deviceId field.
+        const deviceId =
+          localStorage.getItem("deviceId") ??
+          (() => {
+            const id = crypto.randomUUID();
+            localStorage.setItem("deviceId", id);
+            return id;
+          })();
+
         const response = await fetch("/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -78,7 +96,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           return;
         }
 
-        setPendingLoginData({ Email, deviceId, result });
+        // Keep userId in context for compatibility with components that still
+        // reference it during this transition — but do NOT put it in the URL.
+        if (result.userId) {
+          setUserId(result.userId);
+        }
+
         setShowLocationDialog(true);
       } catch {
         toast.error("Login error occurred.");
@@ -86,34 +109,24 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         setLoading(false);
       }
     },
-    [Email, Password]
+    [Email, Password, setUserId],
   );
 
-  /* ---------------- After Location ---------------- */
-  const handlePostLogin = async (location: any) => {
-    if (!pendingLoginData) return;
-
+  // ── Post-login redirect (after location prompt) ──────────────────────────────
+  const handlePostLogin = async (_location: unknown) => {
+    setShowLocationDialog(false);
     setLoadingRedirect(true);
-    const { result } = pendingLoginData;
 
-    setUserId(result.userId);
-    localStorage.setItem("userId", result.userId); // <-- THIS LINE ADDED
-
-    // Direct redirect to app dashboard
-    router.push(`/dashboard?id=${result.userId}`);
-
-    setPendingLoginData(null);
-    setLoadingRedirect(false);
+    // Redirect to dashboard — no userId in the URL
+    router.push("/dashboard");
   };
 
+  // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ================= MAIN LAYOUT ================= */}
       <div {...props}>
-
         <div className="relative z-10 flex w-full max-w-6xl items-center justify-between gap-12 px-6">
-          <Card className="relative w-full max-w-md rounded-3xl border border-white/10 bg-background/70 backdrop-blur-xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.45)] overflow-hidden ">
-            {/* Subtle AI glow */}
+          <Card className="relative w-full max-w-md rounded-3xl border border-white/10 bg-background/70 backdrop-blur-xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.45)] overflow-hidden">
             <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary/10 via-transparent to-cyan-400/10 pointer-events-none" />
             <CardContent className="relative p-6 md:p-8">
               <form onSubmit={handleLoginSubmit}>
@@ -123,11 +136,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                       <ShieldCheck className="h-6 w-6" />
                     </div>
-
                     <h1 className="text-2xl font-bold tracking-tight">
                       Secure Login
                     </h1>
-
                     <p className="text-muted-foreground text-sm">
                       Login to your IT-Portal account
                     </p>
@@ -186,7 +197,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             </CardContent>
           </Card>
 
-          {/* ===== RIGHT: IFRAME ===== */}
+          {/* Right: Lottie animation */}
           <div className="hidden lg:flex flex-1 items-center justify-center">
             <iframe
               src="https://lottie.host/embed/14d0ac58-5074-4de2-963e-d30344b286b4/Vof8jxBJol.lottie"
@@ -196,21 +207,19 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         </div>
       </div>
 
+      {/* Location permission dialog */}
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
         <DialogContent>
           <DialogHeader className="relative text-center">
-            {/* Icon */}
             <DialogTitle className="text-xl font-semibold">
               Allow Location Access?
             </DialogTitle>
-
-            {/* Lottie */}
             <div className="flex justify-center my-4">
-              <iframe src="https://lottie.host/embed/c0102a6d-479e-40fe-a4db-bc3c5e335d5e/MD9RcmnlT1.lottie"></iframe>
+              <iframe src="https://lottie.host/embed/c0102a6d-479e-40fe-a4db-bc3c5e335d5e/MD9RcmnlT1.lottie" />
             </div>
-
             <DialogDescription className="text-sm text-muted-foreground">
-              Your location helps us secure your login and track activity safely.
+              Your location helps us secure your login and track activity
+              safely.
             </DialogDescription>
           </DialogHeader>
 
@@ -222,11 +231,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             >
               Deny
             </Button>
-
             <Button
               className="flex-1 rounded-xl gap-2"
               onClick={async () => {
-                setShowLocationDialog(false);
                 const location = await getLocation();
                 await handlePostLogin(location);
               }}

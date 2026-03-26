@@ -1,98 +1,80 @@
 /**
  * POST /api/auto-login
  *
- * Called by ProtectedPageWrapper when the device-ID check fails but an
- * HTTP-only session cookie may still be present.  Instead of trusting an
- * arbitrary ID from the URL (which would be a security hole), we validate
- * the existing cookie, confirm the user is still active, issue a fresh
- * device-ID, and return it so the client can store it in localStorage.
+ * Called by ProtectedPageWrapper when the primary cookie check fails but a
+ * session cookie may still exist.  Validates the cookie against MongoDB,
+ * refreshes it, and returns the userId so the client can update context.
  *
- * No external id param is required or trusted — the cookie is the source
- * of truth.
+ * No external id param is accepted — the cookie is the only credential.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/MongoDB";
 import { ObjectId } from "mongodb";
 import { cookies } from "next/headers";
+import { SESSION_COOKIE_OPTIONS } from "@/lib/auth/session";
 
 export async function POST(_req: NextRequest) {
   try {
-    // ── 1. Read the HTTP-only session cookie ──────────────────────────────
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get("session");
 
     if (!sessionCookie?.value) {
       return NextResponse.json(
         { success: false, error: "No active session." },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     const sessionUserId = sessionCookie.value.trim();
 
-    // ── 2. Validate the session maps to a real, active user ───────────────
     let objectId: ObjectId;
     try {
       objectId = new ObjectId(sessionUserId);
     } catch {
       return NextResponse.json(
         { success: false, error: "Malformed session." },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     const db = await connectToDatabase();
-    const users = db.collection("users");
-    const user = await users.findOne({ _id: objectId });
+    const user = await db.collection("users").findOne({ _id: objectId });
 
     if (!user) {
       return NextResponse.json(
         { success: false, error: "User not found." },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
-    // Honour the same status gates as the login endpoint
-    if (["Resigned", "Terminated", "Locked"].includes(user.Status)) {
+    if (["Resigned", "Terminated", "Locked"].includes(user.Status ?? "")) {
       return NextResponse.json(
         { success: false, error: `Account is ${user.Status}.` },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
-    // ── 3. Issue a fresh device-ID ────────────────────────────────────────
-    const newDeviceId: string =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    await users.updateOne(
-      { _id: objectId },
-      { $set: { DeviceId: newDeviceId } }
-    );
-
-    // ── 4. Refresh the session cookie (extend TTL) ────────────────────────
+    // Refresh the cookie TTL
     const response = NextResponse.json({
       success: true,
       userId: sessionUserId,
-      deviceId: newDeviceId,
     });
 
-    response.cookies.set("session", sessionUserId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV !== "development",
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 1 day
-      path: "/",
+    response.cookies.set(SESSION_COOKIE_OPTIONS.name, sessionUserId, {
+      httpOnly: SESSION_COOKIE_OPTIONS.httpOnly,
+      secure: SESSION_COOKIE_OPTIONS.secure,
+      sameSite: SESSION_COOKIE_OPTIONS.sameSite,
+      path: SESSION_COOKIE_OPTIONS.path,
+      maxAge: SESSION_COOKIE_OPTIONS.maxAge,
     });
 
     return response;
   } catch (err: any) {
-    console.error("[auto-login] Unexpected error:", err);
+    console.error("[auto-login]", err);
     return NextResponse.json(
       { success: false, error: "Internal server error." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

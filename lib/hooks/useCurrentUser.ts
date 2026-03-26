@@ -1,12 +1,11 @@
 /**
  * lib/hooks/useCurrentUser.ts
  *
- * Reusable hook that resolves the currently logged-in user by reading
- * `localStorage.getItem("userId")` (set during login) and fetching
- * the full user record from /api/user.
+ * Reusable hook that resolves the currently logged-in user by calling
+ * /api/me — which reads the HTTP-only session cookie server-side.
  *
- * Replaces the broken pattern of reading a "currentUser" key that was
- * never actually written anywhere in the codebase.
+ * No localStorage reads.  No URL param parsing.  Identity comes entirely
+ * from the session.
  */
 
 "use client";
@@ -33,20 +32,17 @@ export function useCurrentUser(): CurrentUser {
   const [user, setUser] = useState<CurrentUser>(EMPTY);
 
   useEffect(() => {
-    const storedId =
-      typeof window !== "undefined" ? localStorage.getItem("userId") : null;
-    if (!storedId) return;
-
-    fetch(`/api/user?id=${encodeURIComponent(storedId)}`)
+    fetch("/api/me", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
         setUser({
-          uid: data._id ?? storedId,
-          name: `${data.Firstname ?? ""} ${data.Lastname ?? ""}`.trim() || null,
-          email: data.Email ?? null,
-          role: data.Role ?? null,
-          referenceId: data.ReferenceID ?? null,
+          uid: data.userId ?? null,
+          name:
+            `${data.firstname ?? ""} ${data.lastname ?? ""}`.trim() || null,
+          email: data.email ?? null,
+          role: data.role ?? null,
+          referenceId: data.referenceId ?? null,
         });
       })
       .catch(() => {

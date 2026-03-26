@@ -1,13 +1,20 @@
-"use client"
+"use client";
 
-import React, { useState } from "react"
-import { useRouter } from "next/navigation"
-import { BadgeCheck, Bell, ChevronsUpDown, LogOut } from "lucide-react"
+/**
+ * NavUser
+ *
+ * Sidebar user menu.  Logout calls /api/logout which clears the HTTP-only
+ * cookie.  Account navigation goes to /account without a userId param.
+ */
+
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { BadgeCheck, Bell, ChevronsUpDown, LogOut } from "lucide-react";
 import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -16,70 +23,73 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Progress } from "@/components/ui/progress"
-import { toast } from "sonner"
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
+import { toast } from "sonner";
 
 interface NavUserProps {
   user: {
-    id?: string
-    name: string
-    email: string
-    avatar: string
-  }
+    id?: string;
+    name: string;
+    email: string;
+    avatar: string;
+  };
 }
 
 export function NavUser({ user }: NavUserProps) {
-  const router = useRouter()
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [showOverlay, setShowOverlay] = useState(false)
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [showOverlay, setShowOverlay] = useState(false);
 
-  // Logout function with progress
+  // ── Logout ───────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
-    setIsLoggingOut(true)
-    setProgress(0)
-    toast.info("Logging you out...")
+    setIsLoggingOut(true);
+    setProgress(0);
+    toast.info("Logging you out...");
 
-    let value = 0
+    let value = 0;
     const interval = setInterval(() => {
-      value += 10
-      setProgress(value)
-      if (value >= 100) clearInterval(interval)
-    }, 150)
+      value += 10;
+      setProgress(value);
+      if (value >= 100) clearInterval(interval);
+    }, 150);
 
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    sessionStorage.clear()
-    localStorage.clear()
-    toast.success("Successfully logged out!")
-    router.replace("/Login")
-  }
+    // Clear server-side session cookie
+    await fetch("/api/logout", { method: "POST" }).catch(() => {});
 
-  // Account click with overlay, toast, and redirect
-  const handleAccountClick = async () => {
-    if (!user.id) {
-      toast.error("User ID not found")
-      return
+    // Clear any remaining client-side state
+    try {
+      localStorage.removeItem("deviceId");
+    } catch {
+      // ignore
     }
 
-    setShowOverlay(true)
-    setProgress(0)
-    toast.info("Opening Account...")
+    toast.success("Successfully logged out!");
+    router.replace("/Login");
+  };
 
-    let value = 0
+  // ── Account page ─────────────────────────────────────────────────────────────
+  const handleAccountClick = async () => {
+    setShowOverlay(true);
+    setProgress(0);
+    toast.info("Opening Account...");
+
+    let value = 0;
     const interval = setInterval(() => {
-      value += 20
-      setProgress(value)
-      if (value >= 100) clearInterval(interval)
-    }, 150)
+      value += 20;
+      setProgress(value);
+      if (value >= 100) clearInterval(interval);
+    }, 150);
 
-    // Short delay to allow user to see overlay & progress
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    await new Promise((resolve) => setTimeout(resolve, 800));
 
-    router.push(`/account?userId=${user.id}`)
-  }
+    // Clean URL — no userId param needed
+    router.push("/account");
+  };
 
   return (
     <>
@@ -97,13 +107,15 @@ export function NavUser({ user }: NavUserProps) {
       {showOverlay && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="text-center space-y-4">
-            <h2 className="text-white text-xl font-semibold">Opening Account...</h2>
+            <h2 className="text-white text-xl font-semibold">
+              Opening Account...
+            </h2>
             <Progress value={progress} className="w-[70%] mx-auto" />
           </div>
         </div>
       )}
 
-      {/* Sidebar Menu / Dropdown */}
+      {/* Sidebar menu */}
       <SidebarMenu>
         <SidebarMenuItem>
           <DropdownMenu>
@@ -142,7 +154,6 @@ export function NavUser({ user }: NavUserProps) {
                   <BadgeCheck className="mr-2 h-4 w-4" />
                   Account
                 </DropdownMenuItem>
-
                 <DropdownMenuItem>
                   <Bell className="mr-2 h-4 w-4" />
                   Notifications
@@ -163,5 +174,5 @@ export function NavUser({ user }: NavUserProps) {
         </SidebarMenuItem>
       </SidebarMenu>
     </>
-  )
+  );
 }

@@ -10,7 +10,8 @@ export type CustomerAuditAction =
   | "create"
   | "update"
   | "delete"
-  | "autoid";
+  | "autoid"
+  | "audit";
 
 export interface AuditActor {
   uid?: string | null;
@@ -35,26 +36,45 @@ export interface TransferDetail {
 export interface CustomerAuditPayload {
   action: CustomerAuditAction;
   affectedCount?: number;
-  customerId?: string | null;
+  customerId?: string | number | null;
   customerName?: string | null;
+  referenceId?: string | null;
+  performedBy?: string | null;
+  performedByRole?: string | null;
+  auditStatus?: "pending" | "resolved" | "cancelled" | null;
+  auditRemarks?: string | null;
+  before?: unknown;
+  after?: unknown;
+  metadata?: Record<string, unknown> | null;
   transfer?: TransferDetail | null;
   changes?: Record<string, { before: unknown; after: unknown }> | null;
   actor: AuditActor;
   context?: { page?: string; source?: string; bulk?: boolean } | null;
 }
 
-const COLLECTION = "taskflow_customer_audit_logs";
+export const CUSTOMER_AUDITS_COLLECTION = "customerAudits";
 
 export async function logCustomerAudit(
   payload: CustomerAuditPayload,
 ): Promise<void> {
   try {
-    await addDoc(collection(db, COLLECTION), {
+    await addDoc(collection(db, CUSTOMER_AUDITS_COLLECTION), {
       ...payload,
+      customerId:
+        payload.customerId !== undefined && payload.customerId !== null
+          ? String(payload.customerId)
+          : null,
       transfer: payload.transfer ?? null,
       changes: payload.changes ?? null,
-      customerId: payload.customerId ?? null,
       customerName: payload.customerName ?? null,
+      referenceId: payload.referenceId ?? payload.actor.referenceId ?? null,
+      performedBy: payload.performedBy ?? payload.actor.uid ?? null,
+      performedByRole: payload.performedByRole ?? payload.actor.role ?? null,
+      auditStatus: payload.auditStatus ?? "pending",
+      auditRemarks: payload.auditRemarks ?? null,
+      before: payload.before ?? null,
+      after: payload.after ?? null,
+      metadata: payload.metadata ?? null,
       affectedCount: payload.affectedCount ?? 1,
       timestamp: serverTimestamp(),
     });

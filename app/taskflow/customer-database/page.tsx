@@ -113,7 +113,7 @@ async function safeJson(res: Response): Promise<any> {
   } catch {
     console.error(
       `[safeJson] Non-JSON response (HTTP ${res.status}) from ${res.url}\n`,
-      text.slice(0, 300)
+      text.slice(0, 300),
     );
     return null;
   }
@@ -176,7 +176,7 @@ function EditCustomerDialog({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(form),
-        }
+        },
       );
       const result = (await safeJson(res)) ?? {};
       if (!res.ok || !result.success) {
@@ -189,13 +189,23 @@ function EditCustomerDialog({
       onOpenChange(false);
 
       const TRACKED: (keyof Customer)[] = [
-        "company_name", "contact_person", "contact_number",
-        "email_address", "address", "region", "type_client", "status", "remarks",
+        "company_name",
+        "contact_person",
+        "contact_number",
+        "email_address",
+        "address",
+        "region",
+        "type_client",
+        "status",
+        "remarks",
       ];
       const changes: Record<string, { before: unknown; after: unknown }> = {};
       for (const key of TRACKED) {
         if (customer[key] !== form[key])
-          changes[key] = { before: customer[key] ?? null, after: form[key] ?? null };
+          changes[key] = {
+            before: customer[key] ?? null,
+            after: form[key] ?? null,
+          };
       }
       if (Object.keys(changes).length > 0) {
         await logCustomerAudit({
@@ -205,7 +215,11 @@ function EditCustomerDialog({
           customerName: form.company_name,
           changes,
           actor: actorRef.current,
-          context: { page: AUDIT_PAGE, source: "EditCustomerDialog", bulk: false },
+          context: {
+            page: AUDIT_PAGE,
+            source: "EditCustomerDialog",
+            bulk: false,
+          },
         });
       }
     } catch {
@@ -278,60 +292,91 @@ function StatusBadge({ status }: { status?: string | null }) {
   const s = (status ?? "").trim().toLowerCase();
 
   if (!s)
-    return <Badge variant="outline" className="text-muted-foreground">—</Badge>;
+    return (
+      <Badge variant="outline" className="text-muted-foreground">
+        —
+      </Badge>
+    );
 
   if (s === "active")
     return (
-      <Badge variant="secondary" className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1"
+      >
         <BadgeCheck className="size-3.5" /> Active
       </Badge>
     );
   if (s === "new client")
     return (
-      <Badge variant="secondary" className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1"
+      >
         <UserCheck className="size-3.5" /> New Client
       </Badge>
     );
   if (s === "non-buying")
     return (
-      <Badge variant="secondary" className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1"
+      >
         <AlertTriangle className="size-3.5" /> Non-Buying
       </Badge>
     );
   if (s === "inactive")
     return (
-      <Badge variant="secondary" className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1"
+      >
         <XCircle className="size-3.5" /> Inactive
       </Badge>
     );
   if (s === "on hold")
     return (
-      <Badge variant="secondary" className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1"
+      >
         <PauseCircle className="size-3.5" /> On Hold
       </Badge>
     );
   if (s === "used")
     return (
-      <Badge variant="secondary" className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1"
+      >
         <Clock className="size-3.5" /> Used
       </Badge>
     );
   if (s === "park")
     return (
-      <Badge variant="secondary" className="bg-slate-500/90 hover:bg-slate-600 text-white flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-slate-500/90 hover:bg-slate-600 text-white flex items-center gap-1"
+      >
         <PauseCircle className="size-3.5" /> Parked
       </Badge>
     );
   if (s === "for deletion" || s === "remove")
     return (
-      <Badge variant="secondary" className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
+      >
         <UserX className="size-3.5" /> {status}
       </Badge>
     );
 
-  return <Badge variant="outline" className="text-muted-foreground">{status}</Badge>;
+  return (
+    <Badge variant="outline" className="text-muted-foreground">
+      {status}
+    </Badge>
+  );
 }
-
 
 export default function AccountPage() {
   const router = useRouter();
@@ -358,6 +403,23 @@ export default function AccountPage() {
   useEffect(() => {
     currentActorRef.current = currentActor;
   }, [currentActor]);
+
+  const effectiveUserId = userId ?? currentActor.uid ?? null;
+  const effectiveReferenceId = currentActor.referenceId ?? null;
+
+  const buildTraceHref = (
+    pathname: string,
+    overrides?: { userId?: string | null },
+  ) => {
+    const params = new URLSearchParams();
+    const nextUserId =
+      overrides && "userId" in overrides ? overrides.userId : effectiveUserId;
+
+    if (nextUserId) params.set("userId", nextUserId);
+
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  };
 
   // ── Audit state ───────────────────────────────────────────────────────────
   const [showAuditDialog, setShowAuditDialog] = useState(false);
@@ -387,7 +449,9 @@ export default function AccountPage() {
 
   const [tsas, setTsas] = useState<TsaOption[]>([]);
   const [tsms, setTsms] = useState<{ label: string; value: string }[]>([]);
-  const [managers, setManagers] = useState<{ label: string; value: string }[]>([]);
+  const [managers, setManagers] = useState<{ label: string; value: string }[]>(
+    [],
+  );
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc");
@@ -417,12 +481,14 @@ export default function AccountPage() {
     const fetchTSA = async () => {
       try {
         let res = await fetch(
-          "/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate"
+          "/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate",
         );
         if (!res.ok) {
-          console.warn(`[FetchAllTSA] ${res.status} — falling back to FetchTSA`);
+          console.warn(
+            `[FetchAllTSA] ${res.status} — falling back to FetchTSA`,
+          );
           res = await fetch(
-            "/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate"
+            "/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate",
           );
         }
         if (!res.ok) {
@@ -434,8 +500,9 @@ export default function AccountPage() {
         const list: any[] = Array.isArray(json) ? json : (json.data ?? []);
         const formatted: TsaOption[] = list.map((user: any) => ({
           value: user.ReferenceID ?? "",
-          label: `${user.Firstname ?? ""} ${user.Lastname ?? ""}${INACTIVE_STATUSES.includes(user.Status) ? ` (${user.Status})` : ""
-            }`.trim(),
+          label: `${user.Firstname ?? ""} ${user.Lastname ?? ""}${
+            INACTIVE_STATUSES.includes(user.Status) ? ` (${user.Status})` : ""
+          }`.trim(),
           status: user.Status ?? "Active",
         }));
         setTsaList([
@@ -456,7 +523,7 @@ export default function AccountPage() {
       const toastId = toast.loading("Fetching customer data...");
       try {
         const response = await fetch(
-          "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch"
+          "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch",
         );
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const json = await safeJson(response);
@@ -494,19 +561,19 @@ export default function AccountPage() {
           (Array.isArray(tsaData) ? tsaData : []).map((m: any) => ({
             label: `${m.Firstname} ${m.Lastname}`,
             value: m.ReferenceID,
-          }))
+          })),
         );
         setTsms(
           (Array.isArray(tsmData) ? tsmData : []).map((t: any) => ({
             label: `${t.Firstname} ${t.Lastname}`,
             value: t.ReferenceID,
-          }))
+          })),
         );
         setManagers(
           (Array.isArray(managerData) ? managerData : []).map((m: any) => ({
             label: `${m.Firstname} ${m.Lastname}`,
             value: m.ReferenceID,
-          }))
+          })),
         );
       } catch {
         toast.error("Failed to fetch manager/TSM lists.");
@@ -548,19 +615,19 @@ export default function AccountPage() {
           c.region,
           c.manager,
           c.tsm,
-        ].some((field) => field?.toLowerCase().includes(search.toLowerCase()))
+        ].some((field) => field?.toLowerCase().includes(search.toLowerCase())),
       )
       .filter((c) =>
-        filterType === "all" ? true : c.type_client === filterType
+        filterType === "all" ? true : c.type_client === filterType,
       )
       .filter((c) =>
-        filterStatus === "all" ? true : c.status === filterStatus
+        filterStatus === "all" ? true : c.status === filterStatus,
       )
       .filter((c) =>
         filterTSA === "all"
           ? true
           : c.referenceid?.trim().toLowerCase() ===
-          filterTSA.trim().toLowerCase()
+            filterTSA.trim().toLowerCase(),
       )
       .filter((c) => {
         if (!startDate && !endDate) return true;
@@ -602,7 +669,7 @@ export default function AccountPage() {
   const totalPages = Math.max(1, Math.ceil(displayData.length / rowsPerPage));
   const current = displayData.slice(
     (page - 1) * rowsPerPage,
-    page * rowsPerPage
+    page * rowsPerPage,
   );
   const totalCount = filtered.length;
 
@@ -653,7 +720,7 @@ export default function AccountPage() {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userIds: idsArray }),
-        }
+        },
       );
       const result = (await safeJson(res)) ?? {};
       if (!res.ok || !result.success) {
@@ -664,7 +731,7 @@ export default function AccountPage() {
         deletedCount++;
         toast.dismiss(loadingToastId);
         loadingToastId = toast.loading(
-          `Deleting ${deletedCount}/${idsArray.length}...`
+          `Deleting ${deletedCount}/${idsArray.length}...`,
         );
         await new Promise((resolve) => setTimeout(resolve, 30));
       }
@@ -685,8 +752,8 @@ export default function AccountPage() {
               source: "BulkDelete",
               bulk: deletedCustomers.length > 1,
             },
-          })
-        )
+          }),
+        ),
       );
     } catch (err) {
       console.error(err);
@@ -744,7 +811,7 @@ export default function AccountPage() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ updates }),
-        }
+        },
       );
       const result = (await safeJson(res)) ?? {};
       if (!res.ok || !result.success) {
@@ -757,7 +824,7 @@ export default function AccountPage() {
           return u
             ? { ...c, account_reference_number: u.account_reference_number }
             : c;
-        })
+        }),
       );
       toast.success("Reference numbers generated and updated successfully.");
 
@@ -780,8 +847,8 @@ export default function AccountPage() {
               source: "AutoGenerateID",
               bulk: selectedCustomers.length > 1,
             },
-          })
-        )
+          }),
+        ),
       );
     } catch (error) {
       console.error(error);
@@ -794,7 +861,7 @@ export default function AccountPage() {
   // ── Transfer dialog ───────────────────────────────────────────────────────
   const handleOpenTransferDialog = () => {
     preTransferSnapshotRef.current = customers.filter((c) =>
-      selectedIds.has(c.id)
+      selectedIds.has(c.id),
     );
     setShowTransferDialog(true);
   };
@@ -806,23 +873,23 @@ export default function AccountPage() {
     const transfer: TransferDetail = {
       tsa: payload.tsa
         ? {
-          toId: payload.tsa.toId,
-          toName: payload.tsa.toName,
-          fromId: snapshot[0].referenceid || null,
-          fromName:
-            tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
-            snapshot[0].referenceid ||
-            null,
-        }
+            toId: payload.tsa.toId,
+            toName: payload.tsa.toName,
+            fromId: snapshot[0].referenceid || null,
+            fromName:
+              tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
+              snapshot[0].referenceid ||
+              null,
+          }
         : null,
       tsm: payload.tsm
         ? { toName: payload.tsm.toName, fromName: snapshot[0].tsm || null }
         : null,
       manager: payload.manager
         ? {
-          toName: payload.manager.toName,
-          fromName: snapshot[0].manager || null,
-        }
+            toName: payload.manager.toName,
+            fromName: snapshot[0].manager || null,
+          }
         : null,
     };
 
@@ -840,8 +907,8 @@ export default function AccountPage() {
             source: "TransferDialog",
             bulk: snapshot.length > 1,
           },
-        })
-      )
+        }),
+      ),
     );
 
     preTransferSnapshotRef.current = [];
@@ -851,7 +918,7 @@ export default function AccountPage() {
   const handleImportSuccess = async (
     count: number,
     tsaId: string,
-    tsaName: string
+    tsaName: string,
   ) => {
     await logCustomerAudit({
       action: "create",
@@ -875,7 +942,7 @@ export default function AccountPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push(buildTraceHref("/dashboard"))}
             >
               Home
             </Button>
@@ -883,7 +950,17 @@ export default function AccountPage() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
+                  <BreadcrumbLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      router.push(
+                        buildTraceHref("/taskflow/customer-database"),
+                      );
+                    }}
+                  >
+                    Taskflow
+                  </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
@@ -931,10 +1008,7 @@ export default function AccountPage() {
                   <Button variant="outline" onClick={handleOpenTransferDialog}>
                     <ArrowRight className="w-4 h-4" /> Transfer
                   </Button>
-                  <Button
-                    onClick={handleAutoGenerate}
-                    disabled={isGenerating}
-                  >
+                  <Button onClick={handleAutoGenerate} disabled={isGenerating}>
                     {isGenerating ? "Generating..." : "Auto-Generate ID"} (
                     {selectedIds.size})
                   </Button>
@@ -965,7 +1039,7 @@ export default function AccountPage() {
                 selectedIds={new Set(Array.from(selectedIds).map(String))}
                 setSelectedIdsAction={(ids: Set<string>) => {
                   setSelectedIdsAction(
-                    new Set(Array.from(ids).map((id) => Number(id)))
+                    new Set(Array.from(ids).map((id) => Number(id))),
                   );
                 }}
                 setAccountsAction={(updateFn) =>
@@ -1022,20 +1096,21 @@ export default function AccountPage() {
                       variant={
                         auditFilter === "missingType" ? "secondary" : "outline"
                       }
-                      className={`rounded-l-md ${auditFilter === "missingType"
+                      className={`rounded-l-md ${
+                        auditFilter === "missingType"
                           ? "bg-yellow-100 text-yellow-900"
                           : ""
-                        }`}
+                      }`}
                       onClick={() =>
                         setAuditFilter(
-                          auditFilter === "missingType" ? "" : "missingType"
+                          auditFilter === "missingType" ? "" : "missingType",
                         )
                       }
                     >
                       ⚠ Missing Type:{" "}
                       {
                         audited.filter(
-                          (c) => !c.type_client?.trim() && c.status?.trim()
+                          (c) => !c.type_client?.trim() && c.status?.trim(),
                         ).length
                       }
                     </Button>
@@ -1055,14 +1130,14 @@ export default function AccountPage() {
                         setAuditFilter(
                           auditFilter === "missingStatus"
                             ? ""
-                            : "missingStatus"
+                            : "missingStatus",
                         )
                       }
                     >
                       ⚠ Missing Status:{" "}
                       {
                         audited.filter(
-                          (c) => !c.status?.trim() && c.type_client?.trim()
+                          (c) => !c.status?.trim() && c.type_client?.trim(),
                         ).length
                       }
                     </Button>
@@ -1071,13 +1146,14 @@ export default function AccountPage() {
                       variant={
                         auditFilter === "duplicates" ? "secondary" : "outline"
                       }
-                      className={`rounded-r-md ${auditFilter === "duplicates"
+                      className={`rounded-r-md ${
+                        auditFilter === "duplicates"
                           ? "bg-red-100 text-red-900"
                           : ""
-                        }`}
+                      }`}
                       onClick={() =>
                         setAuditFilter(
-                          auditFilter === "duplicates" ? "" : "duplicates"
+                          auditFilter === "duplicates" ? "" : "duplicates",
                         )
                       }
                     >
@@ -1101,6 +1177,9 @@ export default function AccountPage() {
             open={showAuditDialog}
             onOpenChange={setShowAuditDialog}
             customers={customers}
+            userId={effectiveUserId}
+            referenceId={effectiveReferenceId}
+            performedByRole={currentActor.role}
             onConfirmAudit={handleConfirmAudit}
           />
 
@@ -1181,9 +1260,7 @@ export default function AccountPage() {
                           <TableCell className="uppercase whitespace-normal break-words max-w-[250px]">
                             <span
                               className={
-                                isDuplicate ||
-                                  isMissingType ||
-                                  isMissingStatus
+                                isDuplicate || isMissingType || isMissingStatus
                                   ? "line-through underline decoration-red-500 decoration-2"
                                   : ""
                               }
@@ -1224,26 +1301,27 @@ export default function AccountPage() {
                             {(() => {
                               const key = c.referenceid?.trim().toLowerCase();
                               const tsaEntry = tsaList.find(
-                                (t) => t.value.toLowerCase() === key
+                                (t) => t.value.toLowerCase() === key,
                               );
                               const label =
                                 tsaMap[key ?? ""] || c.referenceid || "-";
                               const isInactiveTsa =
                                 tsaEntry &&
                                 INACTIVE_STATUSES.includes(
-                                  tsaEntry.status ?? ""
+                                  tsaEntry.status ?? "",
                                 );
                               return (
                                 <span className="flex items-center gap-1 flex-wrap">
                                   {label}
                                   {isInactiveTsa && (
                                     <span
-                                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${tsaEntry?.status === "Terminated"
+                                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${
+                                        tsaEntry?.status === "Terminated"
                                           ? "bg-red-100 text-red-700"
                                           : tsaEntry?.status === "Resigned"
                                             ? "bg-orange-100 text-orange-700"
                                             : "bg-gray-100 text-gray-600"
-                                        }`}
+                                      }`}
                                     >
                                       {tsaEntry?.status}
                                     </span>
@@ -1265,8 +1343,8 @@ export default function AccountPage() {
                           <TableCell>
                             {c.next_available_date
                               ? new Date(
-                                c.next_available_date
-                              ).toLocaleDateString()
+                                  c.next_available_date,
+                                ).toLocaleDateString()
                               : "-"}
                           </TableCell>
                         </TableRow>
@@ -1289,7 +1367,7 @@ export default function AccountPage() {
             actorRef={currentActorRef}
             onSave={(updated) =>
               setCustomers((prev) =>
-                prev.map((c) => (c.id === updated.id ? updated : c))
+                prev.map((c) => (c.id === updated.id ? updated : c)),
               )
             }
           />
