@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   SidebarProvider,
   SidebarInset,
@@ -53,8 +53,12 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  orderBy,
   type Timestamp,
 } from "firebase/firestore";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = "all" | "same-tsa" | "cross-tsa" | "missing-type" | "missing-status";
 
@@ -87,6 +91,8 @@ interface CustomerAuditHistoryEntry {
   metadata?: Record<string, unknown> | null;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function toDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -103,15 +109,12 @@ function normalizeCustomerSnapshot(
   fallbackCustomerName?: string | null,
 ): Customer | null {
   if (!snapshot || typeof snapshot !== "object") return null;
-
   const value = snapshot as Partial<Customer> & { id?: number | string };
   const numericId =
     typeof value.id === "number"
       ? value.id
       : Number(value.id ?? fallbackCustomerId ?? NaN);
-
   if (!Number.isFinite(numericId)) return null;
-
   return {
     id: numericId,
     account_reference_number: value.account_reference_number ?? "",
@@ -138,8 +141,7 @@ function buildPersistedAuditResult(
 ): PersistedAuditResult | null {
   if (entries.length === 0) return null;
 
-  const activeEntries = entries.filter((entry) => entry.auditStatus === "pending");
-
+  const activeEntries = entries.filter((e) => e.auditStatus === "pending");
   const duplicateGroups = new Map<string, DuplicateGroup>();
   const duplicateIds = new Set<number>();
   const missingType = new Map<number, Customer>();
@@ -149,7 +151,6 @@ function buildPersistedAuditResult(
   activeEntries.forEach((entry) => {
     const customer = entry.before;
     const issues = entry.after?.flaggedIssues ?? [];
-
     if (!customer) return;
 
     allAffectedCustomers.set(customer.id, customer);
@@ -158,29 +159,19 @@ function buildPersistedAuditResult(
       const existing = duplicateGroups.get(entry.after.duplicateGroupId) ?? {
         id: entry.after.duplicateGroupId,
         type: entry.after.duplicateGroupType,
-        matchReason:
-          entry.after.duplicateMatchReason ??
-          (entry.after.duplicateGroupType === "cross-tsa"
-            ? "Cross-TSA duplicate"
-            : "Same-TSA duplicate"),
+        matchReason: entry.after.duplicateMatchReason ?? "Duplicate",
         customers: [],
       };
-
-      if (!existing.customers.some((item) => item.id === customer.id)) {
+      if (!existing.customers.some((c) => c.id === customer.id)) {
         existing.customers.push(customer);
       }
-
       duplicateGroups.set(existing.id, existing);
       duplicateIds.add(customer.id);
     }
 
-    if (issues.includes("missing-type")) {
-      missingType.set(customer.id, customer);
-    }
-
-    if (issues.includes("missing-status")) {
+    if (issues.includes("missing-type")) missingType.set(customer.id, customer);
+    if (issues.includes("missing-status"))
       missingStatus.set(customer.id, customer);
-    }
   });
 
   return {
@@ -194,15 +185,15 @@ function buildPersistedAuditResult(
 }
 
 function getIssueBadges(entry: CustomerAuditHistoryEntry): string[] {
-  const issues = entry.after?.flaggedIssues ?? [];
-
-  return issues.map((issue) => {
+  return (entry.after?.flaggedIssues ?? []).map((issue) => {
     if (issue === "same-tsa-duplicate") return "Same-TSA Duplicate";
     if (issue === "cross-tsa-duplicate") return "Cross-TSA Duplicate";
     if (issue === "missing-type") return "Missing Type";
     return "Missing Status";
   });
 }
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatCard({
   label,
@@ -281,7 +272,6 @@ function MissingIssueCard({
           {isFixing ? "Fixing..." : "Fix All"}
         </Button>
       </div>
-
       <div className="divide-y divide-amber-200 dark:divide-amber-800/40">
         {visible.map((c, i) => (
           <div
@@ -293,7 +283,7 @@ function MissingIssueCard({
                 {c.company_name}
               </p>
               <p className="text-muted-foreground truncate">
-                {c.contact_person || "-"} - {c.email_address || "-"}
+                {c.contact_person || "-"} — {c.email_address || "-"}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -314,7 +304,6 @@ function MissingIssueCard({
           </div>
         ))}
       </div>
-
       {customers.length > 5 && (
         <button
           type="button"
@@ -355,7 +344,7 @@ function EmptyState({
         <h2 className="text-base font-semibold">{title}</h2>
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
-      <Button onClick={onGoBack} variant="outline" className="gap-2">
+      <Button onClick={onGoBack} variant="outline">
         Back to Customer Database
       </Button>
     </div>
@@ -394,7 +383,7 @@ function AuditHistoryCard({
   useEffect(() => {
     setDraftStatus(entry.auditStatus);
     setDraftRemarks(entry.auditRemarks ?? "");
-  }, [entry.auditRemarks, entry.auditStatus]);
+  }, [entry.auditStatus, entry.auditRemarks]);
 
   const customer = entry.before;
   const issueBadges = getIssueBadges(entry);
@@ -424,7 +413,7 @@ function AuditHistoryCard({
             {customer?.company_name || entry.customerName || "Unknown Customer"}
           </p>
           <p className="text-[12px] text-muted-foreground">
-            Customer ID: {entry.customerId || customer?.id || "-"} - TSA:{" "}
+            Customer ID: {entry.customerId || customer?.id || "-"} — TSA:{" "}
             {entry.referenceId || customer?.referenceid || "-"}
           </p>
         </div>
@@ -437,28 +426,35 @@ function AuditHistoryCard({
           </Badge>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {issueBadges.map((badge) => (
-          <Badge
-            key={`${entry.id}-${badge}`}
-            variant="secondary"
-            className="text-[11px]"
-          >
-            {badge}
-          </Badge>
-        ))}
-      </div>
+
+      {issueBadges.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {issueBadges.map((badge) => (
+            <Badge
+              key={`${entry.id}-${badge}`}
+              variant="secondary"
+              className="text-[11px]"
+            >
+              {badge}
+            </Badge>
+          ))}
+        </div>
+      )}
+
       <div className="grid gap-1 text-[12px] text-muted-foreground sm:grid-cols-2">
         <p>Performed by: {entry.performedBy || "-"}</p>
         <p>Role: {entry.performedByRole || "-"}</p>
         <p>Triggered from: {String(entry.metadata?.triggeredFrom ?? "-")}</p>
         <p>When: {timestampLabel}</p>
       </div>
+
       {entry.after?.duplicateMatchReason && (
         <p className="text-[12px] text-muted-foreground">
           Match reason: {entry.after.duplicateMatchReason}
         </p>
       )}
+
+      {/* Status + Remarks editor */}
       <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
         <div className="grid gap-3 sm:grid-cols-[160px_1fr] sm:items-start">
           <label className="text-[12px] font-medium">Audit status</label>
@@ -483,7 +479,7 @@ function AuditHistoryCard({
             onChange={(e) => setDraftRemarks(e.target.value)}
             rows={3}
             placeholder="Add remarks for this audit item..."
-            className="rounded-md border bg-background px-3 py-2 text-sm"
+            className="rounded-md border bg-background px-3 py-2 text-sm resize-none"
           />
         </div>
         <div className="flex justify-end">
@@ -494,8 +490,11 @@ function AuditHistoryCard({
               try {
                 setIsSaving(true);
                 await onUpdated(entry.id, draftStatus, draftRemarks);
-              } catch (error) {
-                console.error("[CustomerAuditsPage] Failed to update audit:", error);
+              } catch (err) {
+                console.error(
+                  "[CustomerAuditsPage] Failed to update audit:",
+                  err,
+                );
                 toast.error("Failed to update audit status.");
               } finally {
                 setIsSaving(false);
@@ -507,531 +506,6 @@ function AuditHistoryCard({
         </div>
       </div>
     </div>
-  );
-}
-
-export default function CustomerAuditsPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const userId = searchParams?.get("userId") ?? null;
-
-  const [data, setData] = useState<PersistedAuditResult | null>(null);
-  const [auditHistory, setAuditHistory] = useState<CustomerAuditHistoryEntry[]>(
-    [],
-  );
-  const [tab, setTab] = useState<Tab>("all");
-  const [isFixingType, setIsFixingType] = useState(false);
-  const [isFixingStatus, setIsFixingStatus] = useState(false);
-  const [resolvedGroupIds, setResolvedGroupIds] = useState<Set<string>>(
-    new Set(),
-  );
-  const [currentUserReferenceId, setCurrentUserReferenceId] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("currentUser");
-      if (!stored) return;
-      const parsed = JSON.parse(stored);
-      setCurrentUserId(parsed.uid ?? null);
-      setCurrentUserReferenceId(parsed.referenceId ?? null);
-    } catch {
-      console.warn("[CustomerAuditsPage] Could not read currentUser from localStorage.");
-    }
-  }, []);
-
-  const effectiveUserId = userId ?? currentUserId ?? null;
-  const effectiveReferenceId = currentUserReferenceId ?? null;
-
-  const buildTraceHref = (
-    pathname: string,
-    overrides?: { userId?: string | null },
-  ) => {
-    const params = new URLSearchParams();
-    const nextUserId = overrides?.userId ?? effectiveUserId;
-
-    if (nextUserId) params.set("userId", nextUserId);
-
-    const queryString = params.toString();
-    return queryString ? `${pathname}?${queryString}` : pathname;
-  };
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadAuditHistory = async () => {
-      if (!effectiveReferenceId) {
-        if (!mounted) return;
-        setError("Missing current user referenceId for audit lookup.");
-        setData(null);
-        setAuditHistory([]);
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const constraints = [
-          where("action", "==", "audit"),
-          where("referenceId", "==", effectiveReferenceId),
-        ];
-
-        if (effectiveUserId) {
-          constraints.push(where("performedBy", "==", effectiveUserId));
-        }
-
-        const snapshot = await getDocs(
-          query(collection(db, CUSTOMER_AUDITS_COLLECTION), ...constraints),
-        );
-
-        if (!mounted) return;
-
-        const entries = snapshot.docs
-          .map((doc) => {
-            const raw = doc.data() as Record<string, unknown>;
-
-            return {
-              id: doc.id,
-              action: typeof raw.action === "string" ? raw.action : null,
-              customerId:
-                typeof raw.customerId === "string" ||
-                typeof raw.customerId === "number"
-                  ? String(raw.customerId)
-                  : null,
-              customerName:
-                typeof raw.customerName === "string" ? raw.customerName : null,
-              referenceId:
-                typeof raw.referenceId === "string" ? raw.referenceId : null,
-              performedBy:
-                typeof raw.performedBy === "string" ? raw.performedBy : null,
-              performedByRole:
-                typeof raw.performedByRole === "string"
-                  ? raw.performedByRole
-                  : null,
-              auditStatus:
-                raw.auditStatus === "resolved" || raw.auditStatus === "cancelled"
-                  ? raw.auditStatus
-                  : "pending",
-              auditRemarks:
-                typeof raw.auditRemarks === "string" ? raw.auditRemarks : null,
-              timestamp: toDate(raw.timestamp),
-              before: normalizeCustomerSnapshot(
-                raw.before,
-                typeof raw.customerId === "string" ||
-                  typeof raw.customerId === "number"
-                  ? String(raw.customerId)
-                  : null,
-                typeof raw.referenceId === "string" ? raw.referenceId : null,
-                typeof raw.customerName === "string" ? raw.customerName : null,
-              ),
-              after:
-                raw.after && typeof raw.after === "object"
-                  ? (raw.after as AuditHistoryAfter)
-                  : null,
-              metadata:
-                raw.metadata && typeof raw.metadata === "object"
-                  ? (raw.metadata as Record<string, unknown>)
-                  : null,
-            } satisfies CustomerAuditHistoryEntry;
-          })
-          .sort((a, b) => {
-            const left = a.timestamp?.getTime() ?? 0;
-            const right = b.timestamp?.getTime() ?? 0;
-            return right - left;
-          });
-
-        setAuditHistory(entries);
-        setData(buildPersistedAuditResult(entries));
-      } catch (err) {
-        console.error("[CustomerAuditsPage] Failed to fetch audits:", err);
-        if (!mounted) return;
-        setError("Unable to load audit logs right now.");
-        setData(null);
-        setAuditHistory([]);
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadAuditHistory();
-
-    return () => {
-      mounted = false;
-    };
-  }, [effectiveReferenceId, effectiveUserId]);
-
-  const handleUpdateAuditEntry = async (
-    entryId: string,
-    status: CustomerAuditHistoryEntry["auditStatus"],
-    remarks: string,
-  ) => {
-    await updateDoc(doc(db, CUSTOMER_AUDITS_COLLECTION, entryId), {
-      auditStatus: status,
-      auditRemarks: remarks.trim() || null,
-      updatedAt: serverTimestamp(),
-    });
-
-    const normalizedRemarks = remarks.trim();
-    toast.success("Audit status updated.");
-
-    let nextEntries: CustomerAuditHistoryEntry[] = [];
-    setAuditHistory((prev) => {
-      nextEntries = prev.map((entry) =>
-        entry.id === entryId
-          ? {
-              ...entry,
-              auditStatus: status,
-              auditRemarks: normalizedRemarks || null,
-            }
-          : entry,
-      );
-      return nextEntries;
-    });
-    setData(buildPersistedAuditResult(nextEntries));
-  };
-
-  const auditedAt = useMemo(() => data?.auditedAt, [data]);
-
-  if (isLoading) {
-    return (
-      <ProtectedPageWrapper>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <Header
-              router={router}
-              auditedAt={auditedAt}
-              onClear={() => {}}
-              buildTraceHref={buildTraceHref}
-            />
-            <LoadingState />
-          </SidebarInset>
-        </SidebarProvider>
-      </ProtectedPageWrapper>
-    );
-  }
-
-  if (error) {
-    return (
-      <ProtectedPageWrapper>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <Header
-              router={router}
-              auditedAt={auditedAt}
-              onClear={() => {}}
-              buildTraceHref={buildTraceHref}
-            />
-            <EmptyState
-              title="Audit logs unavailable"
-              description={error}
-              onGoBack={() =>
-                router.push(buildTraceHref("/taskflow/customer-database"))
-              }
-            />
-          </SidebarInset>
-        </SidebarProvider>
-      </ProtectedPageWrapper>
-    );
-  }
-
-  if (!data) {
-    return (
-      <ProtectedPageWrapper>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <Header
-              router={router}
-              auditedAt={auditedAt}
-              onClear={() => {}}
-              buildTraceHref={buildTraceHref}
-            />
-            <EmptyState
-              title="No audit data found"
-              description="Run an audit from the Customer Database to flag duplicate and incomplete records for review."
-              onGoBack={() =>
-                router.push(buildTraceHref("/taskflow/customer-database"))
-              }
-            />
-          </SidebarInset>
-        </SidebarProvider>
-      </ProtectedPageWrapper>
-    );
-  }
-
-  const { duplicateGroups, missingType, missingStatus } = data;
-
-  const sameTsaGroups = duplicateGroups.filter((g) => g.type === "same-tsa");
-  const crossTsaGroups = duplicateGroups.filter((g) => g.type === "cross-tsa");
-  const visibleGroups = duplicateGroups.filter(
-    (g) => !resolvedGroupIds.has(g.id),
-  );
-
-  const groupsForTab: DuplicateGroup[] = (() => {
-    if (tab === "same-tsa")
-      return visibleGroups.filter((g) => g.type === "same-tsa");
-    if (tab === "cross-tsa")
-      return visibleGroups.filter((g) => g.type === "cross-tsa");
-    return visibleGroups;
-  })();
-
-  const showMissingType = tab === "all" || tab === "missing-type";
-  const showMissingStatus = tab === "all" || tab === "missing-status";
-  const showDuplicates =
-    tab === "all" || tab === "same-tsa" || tab === "cross-tsa";
-
-  const handleFixAllType = async () => {
-    const ids = missingType.map((c) => c.id);
-    if (!ids.length) return;
-    setIsFixingType(true);
-    try {
-      const res = await fetch(
-        "/api/Data/Applications/Taskflow/CustomerDatabase/BulkEditTypeClient",
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userIds: ids, type_client: "TSA Client" }),
-        },
-      );
-      const json = await res.json();
-      if (json.success) {
-        toast.success(`Updated type for ${ids.length} customer(s).`);
-        setData((prev) => (prev ? { ...prev, missingType: [] } : prev));
-      } else {
-        toast.error(json.error || "Failed to update type.");
-      }
-    } catch {
-      toast.error("Something went wrong.");
-    } finally {
-      setIsFixingType(false);
-    }
-  };
-
-  const handleFixAllStatus = async () => {
-    const ids = missingStatus.map((c) => c.id);
-    if (!ids.length) return;
-    setIsFixingStatus(true);
-    try {
-      const res = await fetch(
-        "/api/Data/Applications/Taskflow/CustomerDatabase/BulkEditStatus",
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userIds: ids, status: "Active" }),
-        },
-      );
-      const json = await res.json();
-      if (json.success) {
-        toast.success(`Updated status for ${ids.length} customer(s).`);
-        setData((prev) => (prev ? { ...prev, missingStatus: [] } : prev));
-      } else {
-        toast.error(json.error || "Failed to update status.");
-      }
-    } catch {
-      toast.error("Something went wrong.");
-    } finally {
-      setIsFixingStatus(false);
-    }
-  };
-
-  const handleDismissGroup = (groupId: string) => {
-    setResolvedGroupIds((prev) => new Set([...prev, groupId]));
-    toast.success("Group dismissed.");
-  };
-
-  const handleClear = () => {
-    localStorage.removeItem(AUDIT_STORAGE_KEY);
-    setAuditHistory([]);
-    setData(null);
-    toast.info("Audit data cleared.");
-  };
-
-  const remainingIssues =
-    visibleGroups.reduce((s, g) => s + g.customers.length, 0) +
-    (data.missingType?.length ?? 0) +
-    (data.missingStatus?.length ?? 0);
-
-  return (
-    <ProtectedPageWrapper>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <Header
-            router={router}
-            auditedAt={auditedAt}
-            onClear={handleClear}
-            buildTraceHref={buildTraceHref}
-          />
-
-          <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <StatCard
-              label="All Issues"
-              count={remainingIssues}
-              icon={<ShieldAlert className="size-6 text-zinc-500" />}
-              active={tab === "all"}
-              onClick={() => setTab("all")}
-              colorClass="bg-muted/60 border-border"
-            />
-            <StatCard
-              label="Same-TSA Dups"
-              count={
-                sameTsaGroups.filter((g) => !resolvedGroupIds.has(g.id)).length
-              }
-              icon={<Users className="size-6 text-red-500" />}
-              active={tab === "same-tsa"}
-              onClick={() => setTab("same-tsa")}
-              colorClass="bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
-            />
-            <StatCard
-              label="Cross-TSA Dups"
-              count={
-                crossTsaGroups.filter((g) => !resolvedGroupIds.has(g.id)).length
-              }
-              icon={<GitMerge className="size-6 text-orange-500" />}
-              active={tab === "cross-tsa"}
-              onClick={() => setTab("cross-tsa")}
-              colorClass="bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800"
-            />
-            <StatCard
-              label="Missing Type"
-              count={data.missingType?.length ?? 0}
-              icon={<AlertTriangle className="size-6 text-amber-500" />}
-              active={tab === "missing-type"}
-              onClick={() => setTab("missing-type")}
-              colorClass="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800"
-            />
-            <StatCard
-              label="Missing Status"
-              count={data.missingStatus?.length ?? 0}
-              icon={<XCircle className="size-6 text-amber-400" />}
-              active={tab === "missing-status"}
-              onClick={() => setTab("missing-status")}
-              colorClass="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800"
-            />
-          </div>
-
-          {remainingIssues === 0 && (
-            <div className="mx-4 mb-4 rounded-xl border border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40 px-6 py-5 flex items-center gap-4">
-              <CheckCircle2 className="size-8 text-emerald-500 shrink-0" />
-              <div>
-                <p className="font-semibold text-emerald-800 dark:text-emerald-300">
-                  All issues resolved!
-                </p>
-                <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                  The customer database is clean. You can clear this audit or
-                  run a new one.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <ScrollArea className="flex-1 px-4 pb-8">
-            <div className="space-y-4 max-w-4xl">
-              {auditHistory.length > 0 && (
-                <section className="space-y-3">
-                  <div className="flex items-center gap-2 pt-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      Audit History ({auditHistory.length})
-                    </p>
-                    <Separator className="flex-1" />
-                  </div>
-                    <div className="space-y-2">
-                      {auditHistory.map((entry) => (
-                        <AuditHistoryCard
-                          key={entry.id}
-                          entry={entry}
-                          onUpdated={handleUpdateAuditEntry}
-                        />
-                      ))}
-                    </div>
-                  </section>
-              )}
-
-              {showDuplicates && groupsForTab.length > 0 && (
-                <section className="space-y-3">
-                  <div className="flex items-center gap-2 pt-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      Duplicate Groups ({groupsForTab.length})
-                    </p>
-                    <Separator className="flex-1" />
-                  </div>
-                  {groupsForTab.map((g) => (
-                    <DuplicateGroupWithActions
-                      key={g.id}
-                      group={g}
-                      onDismiss={() => handleDismissGroup(g.id)}
-                    />
-                  ))}
-                </section>
-              )}
-
-              {showMissingType && (data.missingType?.length ?? 0) > 0 && (
-                <section className="space-y-3">
-                  {(auditHistory.length > 0 ||
-                    (showDuplicates && groupsForTab.length > 0)) && (
-                    <Separator />
-                  )}
-                  <div className="flex items-center gap-2 pt-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      Missing Type ({data.missingType.length})
-                    </p>
-                    <Separator className="flex-1" />
-                  </div>
-                  <MissingIssueCard
-                    title="Customers Missing type_client"
-                    customers={data.missingType}
-                    onFixAll={handleFixAllType}
-                    isFixing={isFixingType}
-                  />
-                </section>
-              )}
-
-              {showMissingStatus && (data.missingStatus?.length ?? 0) > 0 && (
-                <section className="space-y-3">
-                  {showMissingType && (data.missingType?.length ?? 0) > 0 && (
-                    <Separator />
-                  )}
-                  <div className="flex items-center gap-2 pt-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      Missing Status ({data.missingStatus.length})
-                    </p>
-                    <Separator className="flex-1" />
-                  </div>
-                  <MissingIssueCard
-                    title="Customers Missing status"
-                    customers={data.missingStatus}
-                    onFixAll={handleFixAllStatus}
-                    isFixing={isFixingStatus}
-                  />
-                </section>
-              )}
-
-              {!showDuplicates ||
-              (groupsForTab.length === 0 &&
-                !showMissingType &&
-                !showMissingStatus)
-                ? tab !== ("all" as Tab) &&
-                  groupsForTab.length === 0 &&
-                  (data.missingType?.length ?? 0) === 0 &&
-                  (data.missingStatus?.length ?? 0) === 0 && (
-                    <div className="py-16 text-center text-sm text-muted-foreground">
-                      No issues in this category.
-                    </div>
-                  )
-                : null}
-            </div>
-          </ScrollArea>
-        </SidebarInset>
-      </SidebarProvider>
-    </ProtectedPageWrapper>
   );
 }
 
@@ -1059,16 +533,16 @@ function DuplicateGroupWithActions({
   );
 }
 
-function Header({
+// ─── Page Header ──────────────────────────────────────────────────────────────
+
+function PageHeader({
   router,
   auditedAt,
   onClear,
-  buildTraceHref,
 }: {
   router: ReturnType<typeof useRouter>;
   auditedAt?: string;
   onClear: () => void;
-  buildTraceHref: (pathname: string, overrides?: { userId?: string | null }) => string;
 }) {
   const formatted = auditedAt
     ? new Date(auditedAt).toLocaleString("en-PH", {
@@ -1083,7 +557,7 @@ function Header({
       <Button
         variant="outline"
         size="sm"
-        onClick={() => router.push(buildTraceHref("/dashboard"))}
+        onClick={() => router.push("/dashboard")}
       >
         Home
       </Button>
@@ -1095,7 +569,7 @@ function Header({
               href="#"
               onClick={(e) => {
                 e.preventDefault();
-                router.push(buildTraceHref("/taskflow/customer-database"));
+                router.push("/taskflow/customer-database");
               }}
             >
               Taskflow
@@ -1107,7 +581,7 @@ function Header({
               href="#"
               onClick={(e) => {
                 e.preventDefault();
-                router.push(buildTraceHref("/taskflow/customer-database"));
+                router.push("/taskflow/customer-database");
               }}
             >
               Customer Database
@@ -1119,12 +593,10 @@ function Header({
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-
       <div className="ml-auto flex items-center gap-3">
         {formatted && (
           <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted-foreground border rounded-full px-3 py-1">
-            <RefreshCw className="size-3" />
-            Last audit: {formatted}
+            <RefreshCw className="size-3" /> Last audit: {formatted}
           </span>
         )}
         <Button
@@ -1137,5 +609,477 @@ function Header({
         </Button>
       </div>
     </header>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function CustomerAuditsPage() {
+  const router = useRouter();
+
+  // ── Session-based identity (no localStorage, no URL params) ──────────────
+  const currentUser = useCurrentUser();
+
+  const [data, setData] = useState<PersistedAuditResult | null>(null);
+  const [auditHistory, setAuditHistory] = useState<CustomerAuditHistoryEntry[]>(
+    [],
+  );
+  const [tab, setTab] = useState<Tab>("all");
+  const [isFixingType, setIsFixingType] = useState(false);
+  const [isFixingStatus, setIsFixingStatus] = useState(false);
+  const [resolvedGroupIds, setResolvedGroupIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Fetch audits from Firestore when session is ready ─────────────────────
+  const loadAuditHistory = useCallback(async () => {
+    if (currentUser.isLoading) return; // wait for session
+
+    if (!currentUser.referenceId) {
+      setError("Session not available. Please log in again.");
+      setData(null);
+      setAuditHistory([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Query by the logged-in user's uid (performedBy) — the person who ran the audit
+      // If no uid, fall back to referenceId filter on the customer's TSA field
+      const constraints = [
+        where("action", "==", "audit"),
+        orderBy("timestamp", "desc"),
+      ];
+
+      if (currentUser.uid) {
+        constraints.splice(1, 0, where("performedBy", "==", currentUser.uid));
+      } else {
+        constraints.splice(
+          1,
+          0,
+          where("referenceId", "==", currentUser.referenceId),
+        );
+      }
+
+      const snapshot = await getDocs(
+        query(collection(db, CUSTOMER_AUDITS_COLLECTION), ...constraints),
+      );
+
+      const entries = snapshot.docs.map((docSnap) => {
+        const raw = docSnap.data() as Record<string, unknown>;
+        return {
+          id: docSnap.id,
+          action: typeof raw.action === "string" ? raw.action : null,
+          customerId: raw.customerId != null ? String(raw.customerId) : null,
+          customerName:
+            typeof raw.customerName === "string" ? raw.customerName : null,
+          referenceId:
+            typeof raw.referenceId === "string" ? raw.referenceId : null,
+          performedBy:
+            typeof raw.performedBy === "string" ? raw.performedBy : null,
+          performedByRole:
+            typeof raw.performedByRole === "string"
+              ? raw.performedByRole
+              : null,
+          auditStatus:
+            raw.auditStatus === "resolved" || raw.auditStatus === "cancelled"
+              ? (raw.auditStatus as "resolved" | "cancelled")
+              : "pending",
+          auditRemarks:
+            typeof raw.auditRemarks === "string" ? raw.auditRemarks : null,
+          timestamp: toDate(raw.timestamp),
+          before: normalizeCustomerSnapshot(
+            raw.before,
+            raw.customerId != null ? String(raw.customerId) : null,
+            typeof raw.referenceId === "string" ? raw.referenceId : null,
+            typeof raw.customerName === "string" ? raw.customerName : null,
+          ),
+          after:
+            raw.after && typeof raw.after === "object"
+              ? (raw.after as AuditHistoryAfter)
+              : null,
+          metadata:
+            raw.metadata && typeof raw.metadata === "object"
+              ? (raw.metadata as Record<string, unknown>)
+              : null,
+        } satisfies CustomerAuditHistoryEntry;
+      });
+
+      setAuditHistory(entries);
+      setData(buildPersistedAuditResult(entries));
+    } catch (err) {
+      console.error("[CustomerAuditsPage] Failed to fetch audits:", err);
+      setError("Unable to load audit logs. Please try again.");
+      setData(null);
+      setAuditHistory([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser.isLoading, currentUser.uid, currentUser.referenceId]);
+
+  useEffect(() => {
+    loadAuditHistory();
+  }, [loadAuditHistory]);
+
+  // ── Update a single audit entry in Firestore ──────────────────────────────
+  const handleUpdateAuditEntry = useCallback(
+    async (
+      entryId: string,
+      status: CustomerAuditHistoryEntry["auditStatus"],
+      remarks: string,
+    ) => {
+      await updateDoc(doc(db, CUSTOMER_AUDITS_COLLECTION, entryId), {
+        auditStatus: status,
+        auditRemarks: remarks.trim() || null,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid ?? null,
+      });
+
+      toast.success("Audit status updated.");
+
+      setAuditHistory((prev) => {
+        const next = prev.map((entry) =>
+          entry.id === entryId
+            ? {
+                ...entry,
+                auditStatus: status,
+                auditRemarks: remarks.trim() || null,
+              }
+            : entry,
+        );
+        setData(buildPersistedAuditResult(next));
+        return next;
+      });
+    },
+    [currentUser.uid],
+  );
+
+  const handleClear = useCallback(() => {
+    localStorage.removeItem(AUDIT_STORAGE_KEY);
+    setAuditHistory([]);
+    setData(null);
+    toast.info("Audit data cleared.");
+  }, []);
+
+  // ── Fix helpers ───────────────────────────────────────────────────────────
+  const handleFixAllType = useCallback(async () => {
+    const ids = (data?.missingType ?? []).map((c) => c.id);
+    if (!ids.length) return;
+    setIsFixingType(true);
+    try {
+      const res = await fetch(
+        "/api/Data/Applications/Taskflow/CustomerDatabase/BulkEditTypeClient",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userIds: ids, type_client: "TSA Client" }),
+        },
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Updated type for ${ids.length} customer(s).`);
+        setData((prev) => (prev ? { ...prev, missingType: [] } : prev));
+      } else {
+        toast.error(json.error || "Failed to update type.");
+      }
+    } catch {
+      toast.error("Something went wrong.");
+    } finally {
+      setIsFixingType(false);
+    }
+  }, [data?.missingType]);
+
+  const handleFixAllStatus = useCallback(async () => {
+    const ids = (data?.missingStatus ?? []).map((c) => c.id);
+    if (!ids.length) return;
+    setIsFixingStatus(true);
+    try {
+      const res = await fetch(
+        "/api/Data/Applications/Taskflow/CustomerDatabase/BulkEditStatus",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userIds: ids, status: "Active" }),
+        },
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Updated status for ${ids.length} customer(s).`);
+        setData((prev) => (prev ? { ...prev, missingStatus: [] } : prev));
+      } else {
+        toast.error(json.error || "Failed to update status.");
+      }
+    } catch {
+      toast.error("Something went wrong.");
+    } finally {
+      setIsFixingStatus(false);
+    }
+  }, [data?.missingStatus]);
+
+  const handleDismissGroup = useCallback((groupId: string) => {
+    setResolvedGroupIds((prev) => new Set([...prev, groupId]));
+    toast.success("Group dismissed.");
+  }, []);
+
+  // ── Derived display state ─────────────────────────────────────────────────
+  const auditedAt = useMemo(() => data?.auditedAt, [data]);
+
+  const visibleGroups = useMemo(
+    () =>
+      (data?.duplicateGroups ?? []).filter((g) => !resolvedGroupIds.has(g.id)),
+    [data?.duplicateGroups, resolvedGroupIds],
+  );
+
+  const sameTsaGroups = useMemo(
+    () => visibleGroups.filter((g) => g.type === "same-tsa"),
+    [visibleGroups],
+  );
+  const crossTsaGroups = useMemo(
+    () => visibleGroups.filter((g) => g.type === "cross-tsa"),
+    [visibleGroups],
+  );
+
+  const groupsForTab = useMemo(() => {
+    if (tab === "same-tsa")
+      return visibleGroups.filter((g) => g.type === "same-tsa");
+    if (tab === "cross-tsa")
+      return visibleGroups.filter((g) => g.type === "cross-tsa");
+    return visibleGroups;
+  }, [tab, visibleGroups]);
+
+  const showMissingType = tab === "all" || tab === "missing-type";
+  const showMissingStatus = tab === "all" || tab === "missing-status";
+  const showDuplicates =
+    tab === "all" || tab === "same-tsa" || tab === "cross-tsa";
+
+  const remainingIssues = useMemo(
+    () =>
+      visibleGroups.reduce((s, g) => s + g.customers.length, 0) +
+      (data?.missingType?.length ?? 0) +
+      (data?.missingStatus?.length ?? 0),
+    [visibleGroups, data?.missingType, data?.missingStatus],
+  );
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <ProtectedPageWrapper>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <PageHeader
+              router={router}
+              auditedAt={auditedAt}
+              onClear={handleClear}
+            />
+            <LoadingState />
+          </SidebarInset>
+        </SidebarProvider>
+      </ProtectedPageWrapper>
+    );
+  }
+
+  if (error) {
+    return (
+      <ProtectedPageWrapper>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <PageHeader
+              router={router}
+              auditedAt={auditedAt}
+              onClear={handleClear}
+            />
+            <EmptyState
+              title="Audit logs unavailable"
+              description={error}
+              onGoBack={() => router.push("/taskflow/customer-database")}
+            />
+          </SidebarInset>
+        </SidebarProvider>
+      </ProtectedPageWrapper>
+    );
+  }
+
+  if (!data && auditHistory.length === 0) {
+    return (
+      <ProtectedPageWrapper>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <PageHeader
+              router={router}
+              auditedAt={auditedAt}
+              onClear={handleClear}
+            />
+            <EmptyState
+              title="No audit data found"
+              description="Run an audit from the Customer Database to flag duplicate and incomplete records for review."
+              onGoBack={() => router.push("/taskflow/customer-database")}
+            />
+          </SidebarInset>
+        </SidebarProvider>
+      </ProtectedPageWrapper>
+    );
+  }
+
+  return (
+    <ProtectedPageWrapper>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <PageHeader
+            router={router}
+            auditedAt={auditedAt}
+            onClear={handleClear}
+          />
+
+          {/* Stat cards */}
+          <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <StatCard
+              label="All Issues"
+              count={remainingIssues}
+              icon={<ShieldAlert className="size-6 text-zinc-500" />}
+              active={tab === "all"}
+              onClick={() => setTab("all")}
+              colorClass="bg-muted/60 border-border"
+            />
+            <StatCard
+              label="Same-TSA Dups"
+              count={sameTsaGroups.length}
+              icon={<Users className="size-6 text-red-500" />}
+              active={tab === "same-tsa"}
+              onClick={() => setTab("same-tsa")}
+              colorClass="bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
+            />
+            <StatCard
+              label="Cross-TSA Dups"
+              count={crossTsaGroups.length}
+              icon={<GitMerge className="size-6 text-orange-500" />}
+              active={tab === "cross-tsa"}
+              onClick={() => setTab("cross-tsa")}
+              colorClass="bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800"
+            />
+            <StatCard
+              label="Missing Type"
+              count={data?.missingType?.length ?? 0}
+              icon={<AlertTriangle className="size-6 text-amber-500" />}
+              active={tab === "missing-type"}
+              onClick={() => setTab("missing-type")}
+              colorClass="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800"
+            />
+            <StatCard
+              label="Missing Status"
+              count={data?.missingStatus?.length ?? 0}
+              icon={<XCircle className="size-6 text-amber-400" />}
+              active={tab === "missing-status"}
+              onClick={() => setTab("missing-status")}
+              colorClass="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800"
+            />
+          </div>
+
+          {remainingIssues === 0 && (
+            <div className="mx-4 mb-4 rounded-xl border border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40 px-6 py-5 flex items-center gap-4">
+              <CheckCircle2 className="size-8 text-emerald-500 shrink-0" />
+              <div>
+                <p className="font-semibold text-emerald-800 dark:text-emerald-300">
+                  All issues resolved!
+                </p>
+                <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                  The customer database is clean. You can clear this audit or
+                  run a new one.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <ScrollArea className="flex-1 px-4 pb-8">
+            <div className="space-y-4 max-w-4xl">
+              {/* Audit history (Firestore-backed) */}
+              {auditHistory.length > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center gap-2 pt-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Audit History ({auditHistory.length})
+                    </p>
+                    <Separator className="flex-1" />
+                  </div>
+                  <div className="space-y-2">
+                    {auditHistory.map((entry) => (
+                      <AuditHistoryCard
+                        key={entry.id}
+                        entry={entry}
+                        onUpdated={handleUpdateAuditEntry}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Duplicate groups */}
+              {showDuplicates && groupsForTab.length > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center gap-2 pt-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Duplicate Groups ({groupsForTab.length})
+                    </p>
+                    <Separator className="flex-1" />
+                  </div>
+                  {groupsForTab.map((g) => (
+                    <DuplicateGroupWithActions
+                      key={g.id}
+                      group={g}
+                      onDismiss={() => handleDismissGroup(g.id)}
+                    />
+                  ))}
+                </section>
+              )}
+
+              {/* Missing type */}
+              {showMissingType && (data?.missingType?.length ?? 0) > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center gap-2 pt-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Missing Type ({data!.missingType.length})
+                    </p>
+                    <Separator className="flex-1" />
+                  </div>
+                  <MissingIssueCard
+                    title="Customers Missing type_client"
+                    customers={data!.missingType}
+                    onFixAll={handleFixAllType}
+                    isFixing={isFixingType}
+                  />
+                </section>
+              )}
+
+              {/* Missing status */}
+              {showMissingStatus && (data?.missingStatus?.length ?? 0) > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center gap-2 pt-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Missing Status ({data!.missingStatus.length})
+                    </p>
+                    <Separator className="flex-1" />
+                  </div>
+                  <MissingIssueCard
+                    title="Customers Missing status"
+                    customers={data!.missingStatus}
+                    onFixAll={handleFixAllStatus}
+                    isFixing={isFixingStatus}
+                  />
+                </section>
+              )}
+            </div>
+          </ScrollArea>
+        </SidebarInset>
+      </SidebarProvider>
+    </ProtectedPageWrapper>
   );
 }

@@ -1,15 +1,8 @@
 "use client";
 
-/**
- * AppSidebar
- *
- * Fetches the current user from /api/me (session-based) instead of
- * reading userId from URL query params.  All navigation links are clean
- * paths — no userId appended anywhere.
- */
-
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Sidebar,
   SidebarContent,
@@ -47,7 +40,6 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     profilePicture: "",
   });
 
-  // Fetch current user from the session-based /api/me endpoint
   React.useEffect(() => {
     fetch("/api/me", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
@@ -63,8 +55,6 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       })
       .catch(console.error);
   }, []);
-
-  // ── Sidebar navigation (clean URLs — no userId appended) ──────────────────
 
   const sidebarData = {
     navMain: [
@@ -152,10 +142,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="/dashboard" className="flex items-center gap-2">
+              <Link href="/dashboard" className="flex items-center gap-2">
                 <img src="/xchire-logo.png" className="w-8 h-8" alt="Logo" />
                 <span className="font-medium">IT Portal</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

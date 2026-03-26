@@ -1,7 +1,13 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
+import { useRouter } from "next/navigation";
 import {
   SidebarProvider,
   SidebarInset,
@@ -62,6 +68,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
+// ─── Session hook ─────────────────────────────────────────────────────────────
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+
 // ─── Audit logger ─────────────────────────────────────────────────────────────
 import {
   logCustomerAudit,
@@ -71,8 +80,6 @@ import {
 import type { TransferSuccessPayload } from "@/components/taskflow/customer-database/transfer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type AuditKey = "duplicates" | "missingType" | "missingStatus";
 
 interface Customer {
   id: number;
@@ -94,7 +101,6 @@ interface Customer {
   next_available_date?: string;
 }
 
-// TSA list item now carries the user's Status so the filter can badge it
 interface TsaOption {
   value: string;
   label: string;
@@ -102,10 +108,10 @@ interface TsaOption {
 }
 
 const INACTIVE_STATUSES = ["Terminated", "Resigned", "Inactive"];
-
 const AUDIT_PAGE = "Customer Database";
 
-// ─── Module-level safe JSON parser ────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 async function safeJson(res: Response): Promise<any> {
   const text = await res.text();
   try {
@@ -117,6 +123,95 @@ async function safeJson(res: Response): Promise<any> {
     );
     return null;
   }
+}
+
+// ─── StatusBadge ──────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status?: string | null }) {
+  const s = (status ?? "").trim().toLowerCase();
+  if (!s)
+    return (
+      <Badge variant="outline" className="text-muted-foreground">
+        —
+      </Badge>
+    );
+  if (s === "active")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1"
+      >
+        <BadgeCheck className="size-3.5" /> Active
+      </Badge>
+    );
+  if (s === "new client")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1"
+      >
+        <UserCheck className="size-3.5" /> New Client
+      </Badge>
+    );
+  if (s === "non-buying")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1"
+      >
+        <AlertTriangle className="size-3.5" /> Non-Buying
+      </Badge>
+    );
+  if (s === "inactive")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1"
+      >
+        <XCircle className="size-3.5" /> Inactive
+      </Badge>
+    );
+  if (s === "on hold")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1"
+      >
+        <PauseCircle className="size-3.5" /> On Hold
+      </Badge>
+    );
+  if (s === "used")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1"
+      >
+        <Clock className="size-3.5" /> Used
+      </Badge>
+    );
+  if (s === "park")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-slate-500/90 hover:bg-slate-600 text-white flex items-center gap-1"
+      >
+        <PauseCircle className="size-3.5" /> Parked
+      </Badge>
+    );
+  if (s === "for deletion" || s === "remove")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
+      >
+        <UserX className="size-3.5" /> {status}
+      </Badge>
+    );
+  return (
+    <Badge variant="outline" className="text-muted-foreground">
+      {status}
+    </Badge>
+  );
 }
 
 // ─── EditCustomerDialog ───────────────────────────────────────────────────────
@@ -163,9 +258,8 @@ function EditCustomerDialog({
 
   if (!form) return null;
 
-  const handleChange = (key: keyof Customer, value: string) => {
+  const handleChange = (key: keyof Customer, value: string) =>
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-  };
 
   const handleSubmit = async () => {
     if (!form || !customer) return;
@@ -183,7 +277,6 @@ function EditCustomerDialog({
         toast.error(result.error || `Update failed (HTTP ${res.status})`);
         return;
       }
-
       onSave(form);
       toast.success("Customer updated successfully");
       onOpenChange(false);
@@ -286,162 +379,51 @@ function EditCustomerDialog({
   );
 }
 
-// ─── StatusBadge ──────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status?: string | null }) {
-  const s = (status ?? "").trim().toLowerCase();
-
-  if (!s)
-    return (
-      <Badge variant="outline" className="text-muted-foreground">
-        —
-      </Badge>
-    );
-
-  if (s === "active")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1"
-      >
-        <BadgeCheck className="size-3.5" /> Active
-      </Badge>
-    );
-  if (s === "new client")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1"
-      >
-        <UserCheck className="size-3.5" /> New Client
-      </Badge>
-    );
-  if (s === "non-buying")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1"
-      >
-        <AlertTriangle className="size-3.5" /> Non-Buying
-      </Badge>
-    );
-  if (s === "inactive")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1"
-      >
-        <XCircle className="size-3.5" /> Inactive
-      </Badge>
-    );
-  if (s === "on hold")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1"
-      >
-        <PauseCircle className="size-3.5" /> On Hold
-      </Badge>
-    );
-  if (s === "used")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1"
-      >
-        <Clock className="size-3.5" /> Used
-      </Badge>
-    );
-  if (s === "park")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-slate-500/90 hover:bg-slate-600 text-white flex items-center gap-1"
-      >
-        <PauseCircle className="size-3.5" /> Parked
-      </Badge>
-    );
-  if (s === "for deletion" || s === "remove")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
-      >
-        <UserX className="size-3.5" /> {status}
-      </Badge>
-    );
-
-  return (
-    <Badge variant="outline" className="text-muted-foreground">
-      {status}
-    </Badge>
-  );
-}
-
-export default function AccountPage() {
+export default function CustomerDatabasePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(20);
+  // ── Session-based identity (no localStorage, no URL params) ──────────────
+  const currentUser = useCurrentUser();
 
-  // ── Current actor ─────────────────────────────────────────────────────────
-  const [currentActor, setCurrentActor] = useState<AuditActor>({
+  const currentActorRef = useRef<AuditActor>({
     uid: null,
     name: null,
     email: null,
     role: null,
     referenceId: null,
   });
-
-  const currentActorRef = useRef<AuditActor>(currentActor);
   useEffect(() => {
-    currentActorRef.current = currentActor;
-  }, [currentActor]);
+    currentActorRef.current = {
+      uid: currentUser.uid,
+      name: currentUser.name,
+      email: currentUser.email,
+      role: currentUser.role,
+      referenceId: currentUser.referenceId,
+    };
+  }, [currentUser]);
 
-  const effectiveUserId = userId ?? currentActor.uid ?? null;
-  const effectiveReferenceId = currentActor.referenceId ?? null;
-
-  const buildTraceHref = (
-    pathname: string,
-    overrides?: { userId?: string | null },
-  ) => {
-    const params = new URLSearchParams();
-    const nextUserId =
-      overrides && "userId" in overrides ? overrides.userId : effectiveUserId;
-
-    if (nextUserId) params.set("userId", nextUserId);
-
-    const query = params.toString();
-    return query ? `${pathname}?${query}` : pathname;
-  };
-
-  // ── Audit state ───────────────────────────────────────────────────────────
-  const [showAuditDialog, setShowAuditDialog] = useState(false);
-  const [audited, setAudited] = useState<Customer[]>([]);
-  const [isAuditView, setIsAuditView] = useState(false);
-  const [duplicateIds, setDuplicateIds] = useState<Set<number>>(new Set());
-  const [auditFilter, setAuditFilter] = useState<
-    "" | "all" | "missingType" | "missingStatus" | "duplicates"
-  >("");
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const [showFilters, setShowFilters] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
 
-  // ── TSA list ──────────────────────────────────────────────────────────────
   const [tsaList, setTsaList] = useState<TsaOption[]>([]);
-
   const [filterTSA, setFilterTSA] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [selectedIds, setSelectedIdsAction] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
 
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -454,55 +436,36 @@ export default function AccountPage() {
   );
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc");
+
+  const [showAuditDialog, setShowAuditDialog] = useState(false);
+  const [audited, setAudited] = useState<Customer[]>([]);
+  const [isAuditView, setIsAuditView] = useState(false);
+  const [duplicateIds, setDuplicateIds] = useState<Set<number>>(new Set());
+  const [auditFilter, setAuditFilter] = useState<
+    "" | "all" | "missingType" | "missingStatus" | "duplicates"
+  >("");
 
   const preTransferSnapshotRef = useRef<Customer[]>([]);
 
-  // ── Load current user from localStorage ──────────────────────────────────
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("currentUser");
-      if (!stored) return;
-      const parsed = JSON.parse(stored);
-      setCurrentActor({
-        uid: parsed.uid ?? null,
-        name: parsed.name ?? null,
-        email: parsed.email ?? null,
-        role: parsed.role ?? null,
-        referenceId: parsed.referenceId ?? null,
-      });
-    } catch {
-      console.warn("[CustomerAudit] Could not read user from localStorage.");
-    }
-  }, []);
-
-  // ── Fetch ALL TSAs ────────────────────────────────────────────────────────
+  // ── Fetch TSA list ────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchTSA = async () => {
       try {
         let res = await fetch(
           "/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate",
         );
-        if (!res.ok) {
-          console.warn(
-            `[FetchAllTSA] ${res.status} — falling back to FetchTSA`,
-          );
+        if (!res.ok)
           res = await fetch(
             "/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate",
           );
-        }
-        if (!res.ok) {
-          console.error("[fetchTSA] Both endpoints failed:", res.status);
-          return;
-        }
+        if (!res.ok) return;
         const json = await safeJson(res);
         if (!json) return;
         const list: any[] = Array.isArray(json) ? json : (json.data ?? []);
         const formatted: TsaOption[] = list.map((user: any) => ({
           value: user.ReferenceID ?? "",
-          label: `${user.Firstname ?? ""} ${user.Lastname ?? ""}${
-            INACTIVE_STATUSES.includes(user.Status) ? ` (${user.Status})` : ""
-          }`.trim(),
+          label:
+            `${user.Firstname ?? ""} ${user.Lastname ?? ""}${INACTIVE_STATUSES.includes(user.Status) ? ` (${user.Status})` : ""}`.trim(),
           status: user.Status ?? "Active",
         }));
         setTsaList([
@@ -582,16 +545,18 @@ export default function AccountPage() {
     fetchDropdowns();
   }, [showTransferDialog]);
 
-  // ── Derived filter options ────────────────────────────────────────────────
-  const typeOptions = useMemo(() => {
-    const types = new Set(customers.map((c) => c.type_client).filter(Boolean));
-    return ["all", ...Array.from(types)];
-  }, [customers]);
-
-  const statusOptions = useMemo(() => {
-    const statuses = new Set(customers.map((c) => c.status).filter(Boolean));
-    return ["all", ...Array.from(statuses)];
-  }, [customers]);
+  // ── Filter options ────────────────────────────────────────────────────────
+  const typeOptions = useMemo(
+    () => [
+      "all",
+      ...new Set(customers.map((c) => c.type_client).filter(Boolean)),
+    ],
+    [customers],
+  );
+  const statusOptions = useMemo(
+    () => ["all", ...new Set(customers.map((c) => c.status).filter(Boolean))],
+    [customers],
+  );
 
   useEffect(() => {
     setIsFiltering(true);
@@ -604,6 +569,15 @@ export default function AccountPage() {
 
   useEffect(() => setPage(1), [search, filterType, filterStatus]);
 
+  // ── TSA map ───────────────────────────────────────────────────────────────
+  const tsaMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    tsaList.forEach((t) => {
+      map[t.value.toLowerCase()] = t.label;
+    });
+    return map;
+  }, [tsaList]);
+
   // ── Filtered + sorted data ────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return customers
@@ -615,7 +589,7 @@ export default function AccountPage() {
           c.region,
           c.manager,
           c.tsm,
-        ].some((field) => field?.toLowerCase().includes(search.toLowerCase())),
+        ].some((f) => f?.toLowerCase().includes(search.toLowerCase())),
       )
       .filter((c) =>
         filterType === "all" ? true : c.type_client === filterType,
@@ -639,9 +613,9 @@ export default function AccountPage() {
         return true;
       })
       .sort((a, b) => {
-        const dateA = new Date(a.date_created).getTime();
-        const dateB = new Date(b.date_created).getTime();
-        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+        const dA = new Date(a.date_created).getTime();
+        const dB = new Date(b.date_created).getTime();
+        return sortOrder === "asc" ? dA - dB : dB - dA;
       });
   }, [
     customers,
@@ -673,37 +647,23 @@ export default function AccountPage() {
   );
   const totalCount = filtered.length;
 
-  const handleReturn = () => {
+  const handleReturn = useCallback(() => {
     setIsAuditView(false);
     setAudited([]);
     setDuplicateIds(new Set());
     setAuditFilter("");
-  };
+  }, []);
 
-  // ── TSA map (ReferenceID → display label) ────────────────────────────────
-  const tsaMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    tsaList.forEach((t) => {
-      map[t.value.toLowerCase()] = t.label;
-    });
-    return map;
-  }, [tsaList]);
-
-  // ── Audit confirm callback ────────────────────────────────────────────────
-  const handleConfirmAudit = (result: AuditResult) => {
+  // ── Audit confirm ─────────────────────────────────────────────────────────
+  const handleConfirmAudit = useCallback((result: AuditResult) => {
     setAudited(result.allAffectedCustomers);
     setDuplicateIds(result.duplicateIds);
     setIsAuditView(true);
     setAuditFilter("all");
-  };
+  }, []);
 
   // ── Bulk delete ───────────────────────────────────────────────────────────
-  const handleBulkDelete = () => {
-    if (selectedIds.size === 0) return toast.error("No customers selected.");
-    setShowDeleteDialog(true);
-  };
-
-  const executeBulkDelete = async (): Promise<void> => {
+  const executeBulkDelete = useCallback(async (): Promise<void> => {
     if (selectedIds.size === 0) {
       toast.error("No customers selected.");
       return;
@@ -727,6 +687,7 @@ export default function AccountPage() {
         toast.error(result.error || `Delete failed (HTTP ${res.status})`);
         return;
       }
+
       for (let i = 0; i < idsArray.length; i++) {
         deletedCount++;
         toast.dismiss(loadingToastId);
@@ -737,7 +698,7 @@ export default function AccountPage() {
       }
       toast.success(`Deleted ${deletedCount} customers.`);
       setCustomers((prev) => prev.filter((c) => !selectedIds.has(c.id)));
-      setSelectedIdsAction(new Set());
+      setSelectedIds(new Set());
 
       await Promise.all(
         deletedCustomers.map((c) =>
@@ -759,28 +720,33 @@ export default function AccountPage() {
       console.error(err);
       toast.error("Bulk delete failed.");
     }
-  };
+  }, [selectedIds, customers]);
 
-  const toggleSelect = (id: number) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedIdsAction(newSet);
-    setSelectAll(newSet.size === current.length);
-  };
+  const toggleSelect = useCallback(
+    (id: number) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectAll(next.size === current.length);
+        return next;
+      });
+    },
+    [current.length],
+  );
 
-  const handleSelectAll = () => {
+  const handleSelectAll = useCallback(() => {
     if (selectAll) {
-      setSelectedIdsAction(new Set());
+      setSelectedIds(new Set());
       setSelectAll(false);
     } else {
-      setSelectedIdsAction(new Set(current.map((c) => c.id)));
+      setSelectedIds(new Set(current.map((c) => c.id)));
       setSelectAll(true);
     }
-  };
+  }, [selectAll, current]);
 
   // ── Auto-generate reference numbers ──────────────────────────────────────
-  const handleAutoGenerate = async () => {
+  const handleAutoGenerate = useCallback(async () => {
     if (selectedIds.size === 0) {
       toast.error("No customers selected.");
       return;
@@ -793,17 +759,10 @@ export default function AccountPage() {
         if (parts.length === 1) return parts[0][0].toUpperCase();
         return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
       };
-      const updates = selectedCustomers.map((customer, index) => {
-        const initials = getInitials(customer.company_name);
-        const regionCode = (customer.region || "NCR")
-          .toUpperCase()
-          .replace(/\s+/g, "");
-        const seqNum = (index + 1).toString().padStart(10, "0");
-        return {
-          id: customer.id,
-          account_reference_number: `${initials}-${regionCode}-${seqNum}`,
-        };
-      });
+      const updates = selectedCustomers.map((customer, index) => ({
+        id: customer.id,
+        account_reference_number: `${getInitials(customer.company_name)}-${(customer.region || "NCR").toUpperCase().replace(/\s+/g, "")}-${(index + 1).toString().padStart(10, "0")}`,
+      }));
 
       const res = await fetch(
         "/api/Data/Applications/Taskflow/CustomerDatabase/UpdateReferenceNumber",
@@ -818,6 +777,7 @@ export default function AccountPage() {
         toast.error(result.error || "Failed to update reference numbers.");
         return;
       }
+
       setCustomers((prev) =>
         prev.map((c) => {
           const u = updates.find((u) => u.id === c.id);
@@ -856,80 +816,74 @@ export default function AccountPage() {
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [selectedIds, customers]);
 
-  // ── Transfer dialog ───────────────────────────────────────────────────────
-  const handleOpenTransferDialog = () => {
-    preTransferSnapshotRef.current = customers.filter((c) =>
-      selectedIds.has(c.id),
-    );
-    setShowTransferDialog(true);
-  };
+  // ── Transfer success callback ─────────────────────────────────────────────
+  const handleTransferSuccess = useCallback(
+    async (payload: TransferSuccessPayload) => {
+      const snapshot = preTransferSnapshotRef.current;
+      if (!snapshot.length) return;
 
-  const handleTransferSuccess = async (payload: TransferSuccessPayload) => {
-    const snapshot = preTransferSnapshotRef.current;
-    if (!snapshot.length) return;
+      const transfer: TransferDetail = {
+        tsa: payload.tsa
+          ? {
+              toId: payload.tsa.toId,
+              toName: payload.tsa.toName,
+              fromId: snapshot[0].referenceid || null,
+              fromName:
+                tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
+                snapshot[0].referenceid ||
+                null,
+            }
+          : null,
+        tsm: payload.tsm
+          ? { toName: payload.tsm.toName, fromName: snapshot[0].tsm || null }
+          : null,
+        manager: payload.manager
+          ? {
+              toName: payload.manager.toName,
+              fromName: snapshot[0].manager || null,
+            }
+          : null,
+      };
 
-    const transfer: TransferDetail = {
-      tsa: payload.tsa
-        ? {
-            toId: payload.tsa.toId,
-            toName: payload.tsa.toName,
-            fromId: snapshot[0].referenceid || null,
-            fromName:
-              tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
-              snapshot[0].referenceid ||
-              null,
-          }
-        : null,
-      tsm: payload.tsm
-        ? { toName: payload.tsm.toName, fromName: snapshot[0].tsm || null }
-        : null,
-      manager: payload.manager
-        ? {
-            toName: payload.manager.toName,
-            fromName: snapshot[0].manager || null,
-          }
-        : null,
-    };
+      await Promise.all(
+        snapshot.map((c) =>
+          logCustomerAudit({
+            action: "transfer",
+            affectedCount: snapshot.length,
+            customerId: String(c.id),
+            customerName: c.company_name,
+            transfer,
+            actor: currentActorRef.current,
+            context: {
+              page: AUDIT_PAGE,
+              source: "TransferDialog",
+              bulk: snapshot.length > 1,
+            },
+          }),
+        ),
+      );
+      preTransferSnapshotRef.current = [];
+    },
+    [tsaMap],
+  );
 
-    await Promise.all(
-      snapshot.map((c) =>
-        logCustomerAudit({
-          action: "transfer",
-          affectedCount: snapshot.length,
-          customerId: String(c.id),
-          customerName: c.company_name,
-          transfer,
-          actor: currentActorRef.current,
-          context: {
-            page: AUDIT_PAGE,
-            source: "TransferDialog",
-            bulk: snapshot.length > 1,
-          },
-        }),
-      ),
-    );
-
-    preTransferSnapshotRef.current = [];
-  };
-
-  // ── Import audit callback ─────────────────────────────────────────────────
-  const handleImportSuccess = async (
-    count: number,
-    tsaId: string,
-    tsaName: string,
-  ) => {
-    await logCustomerAudit({
-      action: "create",
-      affectedCount: count,
-      customerName: `${count} customers imported`,
-      transfer: null,
-      changes: { assigned_tsa: { before: null, after: tsaName } },
-      actor: currentActorRef.current,
-      context: { page: AUDIT_PAGE, source: "ImportDialog", bulk: count > 1 },
-    });
-  };
+  // ── Import callback ───────────────────────────────────────────────────────
+  const handleImportSuccess = useCallback(
+    async (count: number, tsaId: string, tsaName: string) => {
+      await logCustomerAudit({
+        action: "create",
+        affectedCount: count,
+        customerName: `${count} customers imported`,
+        transfer: null,
+        changes: { assigned_tsa: { before: null, after: tsaName } },
+        actor: currentActorRef.current,
+        context: { page: AUDIT_PAGE, source: "ImportDialog", bulk: count > 1 },
+      });
+    },
+    [],
+  );
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -937,12 +891,13 @@ export default function AccountPage() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
+          {/* Header */}
           <header className="flex h-16 shrink-0 items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push(buildTraceHref("/dashboard"))}
+              onClick={() => router.push("/dashboard")}
             >
               Home
             </Button>
@@ -954,9 +909,7 @@ export default function AccountPage() {
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
-                      router.push(
-                        buildTraceHref("/taskflow/customer-database"),
-                      );
+                      router.push("/taskflow/customer-database");
                     }}
                   >
                     Taskflow
@@ -970,7 +923,7 @@ export default function AccountPage() {
             </Breadcrumb>
           </header>
 
-          {/* ── Toolbar ── */}
+          {/* Toolbar */}
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 px-4 py-3">
             <div className="relative w-full sm:max-w-xs">
               <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
@@ -998,21 +951,30 @@ export default function AccountPage() {
                 setStartDateAction={setStartDate}
                 setEndDateAction={setEndDate}
               />
-
               <ImportDialog onSuccessAction={handleImportSuccess} />
-
               <Download data={filtered} filename="CustomerDatabase" />
 
               {selectedIds.size > 0 && (
                 <>
-                  <Button variant="outline" onClick={handleOpenTransferDialog}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      preTransferSnapshotRef.current = customers.filter((c) =>
+                        selectedIds.has(c.id),
+                      );
+                      setShowTransferDialog(true);
+                    }}
+                  >
                     <ArrowRight className="w-4 h-4" /> Transfer
                   </Button>
                   <Button onClick={handleAutoGenerate} disabled={isGenerating}>
                     {isGenerating ? "Generating..." : "Auto-Generate ID"} (
                     {selectedIds.size})
                   </Button>
-                  <Button onClick={handleBulkDelete} variant="destructive">
+                  <Button
+                    onClick={() => setShowDeleteDialog(true)}
+                    variant="destructive"
+                  >
                     Delete Selected ({selectedIds.size})
                   </Button>
                 </>
@@ -1033,18 +995,12 @@ export default function AccountPage() {
 
               <TransferDialog
                 open={showTransferDialog}
-                onOpenChangeAction={(open) => {
-                  setShowTransferDialog(open);
-                }}
+                onOpenChangeAction={setShowTransferDialog}
                 selectedIds={new Set(Array.from(selectedIds).map(String))}
-                setSelectedIdsAction={(ids: Set<string>) => {
-                  setSelectedIdsAction(
-                    new Set(Array.from(ids).map((id) => Number(id))),
-                  );
-                }}
-                setAccountsAction={(updateFn) =>
-                  setCustomers((prev) => updateFn(prev))
+                setSelectedIdsAction={(ids: Set<string>) =>
+                  setSelectedIds(new Set(Array.from(ids).map(Number)))
                 }
+                setAccountsAction={(fn) => setCustomers((prev) => fn(prev))}
                 tsas={tsas}
                 tsms={tsms}
                 managers={managers}
@@ -1052,7 +1008,6 @@ export default function AccountPage() {
               />
             </div>
 
-            {/* ── Filter Dialog ── */}
             {showFilters && (
               <FilterDialog
                 open={showFilters}
@@ -1075,7 +1030,7 @@ export default function AccountPage() {
             )}
           </div>
 
-          {/* ── Audit summary bar ── */}
+          {/* Audit summary bar */}
           {isAuditView && (
             <div className="mx-4 mb-2 mt-1 flex flex-col gap-2 bg-muted/50 rounded-md px-4 py-2 border border-border text-[13px]">
               <div className="flex justify-between items-center flex-wrap gap-2">
@@ -1096,11 +1051,7 @@ export default function AccountPage() {
                       variant={
                         auditFilter === "missingType" ? "secondary" : "outline"
                       }
-                      className={`rounded-l-md ${
-                        auditFilter === "missingType"
-                          ? "bg-yellow-100 text-yellow-900"
-                          : ""
-                      }`}
+                      className={`rounded-l-md ${auditFilter === "missingType" ? "bg-yellow-100 text-yellow-900" : ""}`}
                       onClick={() =>
                         setAuditFilter(
                           auditFilter === "missingType" ? "" : "missingType",
@@ -1146,11 +1097,7 @@ export default function AccountPage() {
                       variant={
                         auditFilter === "duplicates" ? "secondary" : "outline"
                       }
-                      className={`rounded-r-md ${
-                        auditFilter === "duplicates"
-                          ? "bg-red-100 text-red-900"
-                          : ""
-                      }`}
+                      className={`rounded-r-md ${auditFilter === "duplicates" ? "bg-red-100 text-red-900" : ""}`}
                       onClick={() =>
                         setAuditFilter(
                           auditFilter === "duplicates" ? "" : "duplicates",
@@ -1165,25 +1112,24 @@ export default function AccountPage() {
             </div>
           )}
 
-          {/* ── Dialogs ── */}
+          {/* Dialogs */}
           <DeleteDialog
             open={showDeleteDialog}
             onOpenChange={setShowDeleteDialog}
             selectedCount={selectedIds.size}
             onConfirm={executeBulkDelete}
           />
-
           <AuditDialog
             open={showAuditDialog}
             onOpenChange={setShowAuditDialog}
             customers={customers}
-            userId={effectiveUserId}
-            referenceId={effectiveReferenceId}
-            performedByRole={currentActor.role}
+            userId={currentUser.uid}
+            referenceId={currentUser.referenceId}
+            performedByRole={currentUser.role}
             onConfirmAudit={handleConfirmAudit}
           />
 
-          {/* ── Table ── */}
+          {/* Table */}
           <div className="p-4">
             <div className="flex justify-start mb-2">
               <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
@@ -1221,7 +1167,6 @@ export default function AccountPage() {
                       <TableHead>Next Available</TableHead>
                     </TableRow>
                   </TableHeader>
-
                   <TableBody className="text-[12px]">
                     {current.map((c) => {
                       const isMissingType = !c.type_client?.trim();
@@ -1230,6 +1175,15 @@ export default function AccountPage() {
                       const isSelected = selectedIds.has(c.id);
                       const isParked =
                         c.status?.trim().toLowerCase() === "park";
+                      const tsaKey = c.referenceid?.trim().toLowerCase();
+                      const tsaEntry = tsaList.find(
+                        (t) => t.value.toLowerCase() === tsaKey,
+                      );
+                      const tsaLabel =
+                        tsaMap[tsaKey ?? ""] || c.referenceid || "-";
+                      const isInactiveTsa =
+                        tsaEntry &&
+                        INACTIVE_STATUSES.includes(tsaEntry.status ?? "");
 
                       return (
                         <TableRow
@@ -1243,7 +1197,6 @@ export default function AccountPage() {
                               onChange={() => toggleSelect(c.id)}
                             />
                           </TableCell>
-
                           <TableCell className="text-center">
                             <Button
                               size="sm"
@@ -1256,7 +1209,6 @@ export default function AccountPage() {
                               Edit
                             </Button>
                           </TableCell>
-
                           <TableCell className="uppercase whitespace-normal break-words max-w-[250px]">
                             <span
                               className={
@@ -1270,15 +1222,12 @@ export default function AccountPage() {
                               {c.account_reference_number}
                             </span>
                           </TableCell>
-
                           <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
                             {c.contact_person}
                           </TableCell>
-
                           <TableCell className="whitespace-normal break-words max-w-[250px]">
                             {c.email_address}
                           </TableCell>
-
                           <TableCell>
                             <span
                               className={
@@ -1290,50 +1239,24 @@ export default function AccountPage() {
                               {c.type_client || "—"}
                             </span>
                           </TableCell>
-
                           <TableCell className="text-center">
                             <StatusBadge status={c.status} />
                           </TableCell>
-
                           <TableCell>{c.region}</TableCell>
-
                           <TableCell className="capitalize">
-                            {(() => {
-                              const key = c.referenceid?.trim().toLowerCase();
-                              const tsaEntry = tsaList.find(
-                                (t) => t.value.toLowerCase() === key,
-                              );
-                              const label =
-                                tsaMap[key ?? ""] || c.referenceid || "-";
-                              const isInactiveTsa =
-                                tsaEntry &&
-                                INACTIVE_STATUSES.includes(
-                                  tsaEntry.status ?? "",
-                                );
-                              return (
-                                <span className="flex items-center gap-1 flex-wrap">
-                                  {label}
-                                  {isInactiveTsa && (
-                                    <span
-                                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${
-                                        tsaEntry?.status === "Terminated"
-                                          ? "bg-red-100 text-red-700"
-                                          : tsaEntry?.status === "Resigned"
-                                            ? "bg-orange-100 text-orange-700"
-                                            : "bg-gray-100 text-gray-600"
-                                      }`}
-                                    >
-                                      {tsaEntry?.status}
-                                    </span>
-                                  )}
+                            <span className="flex items-center gap-1 flex-wrap">
+                              {tsaLabel}
+                              {isInactiveTsa && (
+                                <span
+                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${tsaEntry?.status === "Terminated" ? "bg-red-100 text-red-700" : tsaEntry?.status === "Resigned" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"}`}
+                                >
+                                  {tsaEntry?.status}
                                 </span>
-                              );
-                            })()}
+                              )}
+                            </span>
                           </TableCell>
-
                           <TableCell>{c.tsm}</TableCell>
                           <TableCell>{c.manager}</TableCell>
-
                           <TableCell>
                             {new Date(c.date_created).toLocaleDateString()}
                           </TableCell>

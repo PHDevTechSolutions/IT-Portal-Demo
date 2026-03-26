@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logCustomerAudit } from "@/lib/audit/customer-audit";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,7 +136,6 @@ function buildGroups(pairs: [number, number][], allIds: number[]): number[][] {
 
 function runAuditLogic(customers: Customer[]): AuditResult {
   const n = customers.length;
-
   const sameTsaPairs: [number, number][] = [];
   const sameTsaInvolvedIds = new Set<number>();
   const byTSA = new Map<string, Customer[]>();
@@ -249,7 +249,7 @@ function runAuditLogic(customers: Customer[]): AuditResult {
   };
 }
 
-// ─── Phases ───────────────────────────────────────────────────────────────────
+// ─── Terminal ─────────────────────────────────────────────────────────────────
 
 type Phase = "terminal" | "results" | "confirm";
 
@@ -258,8 +258,6 @@ interface LogLine {
   text: string;
   type: "info" | "success" | "warn" | "error" | "cmd";
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function TerminalLine({ line }: { line: LogLine }) {
   const color =
@@ -282,7 +280,6 @@ function TerminalLine({ line }: { line: LogLine }) {
           : line.type === "error"
             ? "✗ "
             : "  ";
-
   return (
     <div className={cn("font-mono text-[12px] leading-relaxed", color)}>
       <span className="text-zinc-600 mr-2 select-none">{ts()}</span>
@@ -291,6 +288,8 @@ function TerminalLine({ line }: { line: LogLine }) {
     </div>
   );
 }
+
+// ─── Exported sub-components ──────────────────────────────────────────────────
 
 export function DuplicateGroupCard({ group }: { group: DuplicateGroup }) {
   const isCross = group.type === "cross-tsa";
@@ -400,10 +399,10 @@ interface AuditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customers: Customer[];
+  /** Legacy props — kept for compatibility, session is preferred */
   userId?: string | null;
   referenceId?: string | null;
   performedByRole?: string | null;
-  /** Optional: called in addition to persist + navigation */
   onConfirmAudit?: (result: AuditResult) => void;
 }
 
@@ -413,12 +412,18 @@ export function AuditDialog({
   open,
   onOpenChange,
   customers,
-  userId,
-  referenceId,
-  performedByRole,
+  userId: propUserId,
+  referenceId: propReferenceId,
+  performedByRole: propRole,
   onConfirmAudit,
 }: AuditDialogProps) {
   const router = useRouter();
+
+  // ── Session-based identity (preferred over props) ─────────────────────────
+  const sessionUser = useCurrentUser();
+  const userId = sessionUser.uid ?? propUserId ?? null;
+  const referenceId = sessionUser.referenceId ?? propReferenceId ?? null;
+  const performedByRole = sessionUser.role ?? propRole ?? null;
 
   const [phase, setPhase] = useState<Phase>("terminal");
   const [logs, setLogs] = useState<LogLine[]>([]);
@@ -762,42 +767,30 @@ export function AuditDialog({
       (g) => g.type === "cross-tsa",
     ).length;
 
-    const buildTraceHref = (pathname: string) => {
-      const params = new URLSearchParams();
-      if (userId) params.set("userId", userId);
-      const query = params.toString();
-      return query ? `${pathname}?${query}` : pathname;
-    };
-
     const handleConfirm = async () => {
       const duplicateGroupByCustomerId = new Map<number, DuplicateGroup>();
       auditResult.duplicateGroups.forEach((group) => {
-        group.customers.forEach((customer) => {
-          duplicateGroupByCustomerId.set(customer.id, group);
-        });
+        group.customers.forEach((customer) =>
+          duplicateGroupByCustomerId.set(customer.id, group),
+        );
       });
 
       persistAuditResult(auditResult);
+
       await Promise.all(
         auditResult.allAffectedCustomers.map(async (customer) => {
           const duplicateGroup = duplicateGroupByCustomerId.get(customer.id);
           const issueTypes: string[] = [];
-
-          if (duplicateGroup) {
+          if (duplicateGroup)
             issueTypes.push(
               duplicateGroup.type === "cross-tsa"
                 ? "cross-tsa-duplicate"
                 : "same-tsa-duplicate",
             );
-          }
-          if (auditResult.missingType.some((item) => item.id === customer.id)) {
+          if (auditResult.missingType.some((item) => item.id === customer.id))
             issueTypes.push("missing-type");
-          }
-          if (
-            auditResult.missingStatus.some((item) => item.id === customer.id)
-          ) {
+          if (auditResult.missingStatus.some((item) => item.id === customer.id))
             issueTypes.push("missing-status");
-          }
 
           await logCustomerAudit({
             action: "audit",
@@ -821,6 +814,8 @@ export function AuditDialog({
             },
             actor: {
               uid: userId ?? null,
+              name: sessionUser.name ?? null,
+              email: sessionUser.email ?? null,
               role: performedByRole ?? null,
               referenceId: referenceId ?? null,
             },
@@ -832,9 +827,10 @@ export function AuditDialog({
           });
         }),
       );
+
       onConfirmAudit?.(auditResult);
       onOpenChange(false);
-      router.push(buildTraceHref("/taskflow/customer-audits"));
+      router.push("/taskflow/customer-audits");
     };
 
     return (
@@ -929,7 +925,6 @@ export function AuditDialog({
     results: "Audit Results",
     confirm: "Confirm Audit",
   };
-
   const phaseOrder: Phase[] = ["terminal", "results", "confirm"];
 
   return (
