@@ -126,10 +126,10 @@ interface Customer {
   next_available_date?: string;
 }
 
-interface TsaOption {
-  value: string;
-  label: string;
-  status?: string;
+interface UserRecord {
+  referenceId: string;
+  name: string;
+  status: string;
 }
 
 interface ComboOption {
@@ -649,11 +649,16 @@ export default function AccountPage() {
   // ── Customer table state ────────────────────────────────────────────────────
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
+  const [filterTSA, setFilterTSA] = useState("all");
+  const [filterTSM, setFilterTSM] = useState("all");
+  const [filterManager, setFilterManager] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   // ── Audit state ─────────────────────────────────────────────────────────────
   const [audited, setAudited] = useState<Customer[]>([]);
@@ -663,28 +668,16 @@ export default function AccountPage() {
     "" | "all" | "missingType" | "missingStatus" | "duplicates"
   >("");
   const [showAuditDialog, setShowAuditDialog] = useState(false);
-  const [auditSelection, setAuditSelection] = useState<
-    Record<AuditKey, boolean>
-  >({
-    duplicates: false,
-    missingType: false,
-    missingStatus: false,
-  });
 
   // ── Fetch / loading state ───────────────────────────────────────────────────
   const [isFetching, setIsFetching] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
 
-  // ── TSA / filter state ──────────────────────────────────────────────────────
-  const [tsaList, setTsaList] = useState<TsaOption[]>([]);
-  const [filterTSA, setFilterTSA] = useState("all");
-  const [filterTSM, setFilterTSM] = useState("all");
-  const [filterTSMList, setFilterTSMList] = useState<ComboOption[]>([]);
-  const [filterDynamicTsaOptions, setFilterDynamicTsaOptions] = useState<
-    ComboOption[]
-  >([]);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  // ── ReferenceID → user record map — fetched once after customers load ────────
+  // Single MongoDB query covers all roles; used for table display + filter labels.
+  const [refIdUserMap, setRefIdUserMap] = useState<Map<string, UserRecord>>(
+    new Map(),
+  );
 
   // ── Selection state ─────────────────────────────────────────────────────────
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -742,7 +735,6 @@ export default function AccountPage() {
   const [isParsing, setIsParsing] = useState(false);
   const parseLogEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Parse log helper ────────────────────────────────────────────────────────
   const addParseLog = useCallback(
     (type: "info" | "warn" | "ok" | "err", msg: string) =>
       setParseLog((prev) => [...prev, { type, msg }]),
@@ -771,86 +763,51 @@ export default function AccountPage() {
     }
   }, []);
 
-  // ── Fetch ALL TSAs (for table column display + filter panel) ────────────────
+  // ── Resolve display names for all referenceIDs in the loaded customer set ────
+  // Fires whenever the customer list changes. Collects every unique referenceid,
+  // tsm, and manager value, then fetches matching user records from MongoDB via
+  // the generic /api/UserManagement/Fetch endpoint. The resulting map is used
+  // for table column display and as fallback labels in filter comboboxes.
   useEffect(() => {
-    const fetchTSA = async () => {
+    if (customers.length === 0) return;
+
+    const uniqueIds = new Set<string>();
+    for (const c of customers) {
+      if (c.referenceid?.trim())
+        uniqueIds.add(c.referenceid.trim().toLowerCase());
+      if (c.tsm?.trim()) uniqueIds.add(c.tsm.trim().toLowerCase());
+      if (c.manager?.trim()) uniqueIds.add(c.manager.trim().toLowerCase());
+    }
+    if (uniqueIds.size === 0) return;
+
+    const fetchUserNames = async () => {
       try {
-        const res = await fetch(
-          "/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate",
-        );
+        const res = await fetch("/api/UserManagement/Fetch");
         if (!res.ok) return;
-        const json = await safeJson(res);
-        if (!json) return;
-        const list: any[] = Array.isArray(json) ? json : (json.data ?? []);
-        const formatted: TsaOption[] = list.map((user: any) => ({
-          value: user.ReferenceID ?? "",
-          label: `${user.Firstname ?? ""} ${user.Lastname ?? ""}`.trim(),
-          status: user.Status ?? "Active",
-        }));
-        setTsaList([
-          { value: "all", label: "All TSA", status: "Active" },
-          ...formatted,
-        ]);
+        const data = await safeJson(res);
+        const users: any[] = Array.isArray(data) ? data : (data?.data ?? []);
+
+        const map = new Map<string, UserRecord>();
+        for (const u of users) {
+          const refId = (u.ReferenceID ?? "").trim();
+          if (!refId) continue;
+          const key = refId.toLowerCase();
+          if (uniqueIds.has(key)) {
+            map.set(key, {
+              referenceId: refId,
+              name: `${u.Firstname ?? ""} ${u.Lastname ?? ""}`.trim() || refId,
+              status: u.Status ?? "Active",
+            });
+          }
+        }
+        setRefIdUserMap(map);
       } catch (err) {
-        console.error("Error fetching TSA list:", err);
+        console.error("[CustomerDatabase] Failed to resolve user names:", err);
       }
     };
-    fetchTSA();
-  }, []);
 
-  // ── Fetch TSMs for filter panel ─────────────────────────────────────────────
-  useEffect(() => {
-    fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager")
-      .then((res) => res.json())
-      .then((data) => {
-        const opts: ComboOption[] = (Array.isArray(data) ? data : [])
-          .map((u: any) => ({
-            value: u.ReferenceID,
-            label: `${u.Firstname} ${u.Lastname}`,
-          }))
-          .sort((a: ComboOption, b: ComboOption) =>
-            a.label.localeCompare(b.label),
-          );
-        setFilterTSMList([{ value: "all", label: "All TSM" }, ...opts]);
-      })
-      .catch((err) => console.error("Error fetching TSMs for filter:", err));
-  }, []);
-
-  // ── Dynamic TSA options for filter panel — scoped to selected TSM ───────────
-  useEffect(() => {
-    if (filterTSM === "all") {
-      const sorted = tsaList
-        .filter((t) => t.value !== "all")
-        .sort((a, b) => a.label.localeCompare(b.label));
-      setFilterDynamicTsaOptions([
-        { value: "all", label: "All TSA", status: "Active" },
-        ...sorted,
-      ]);
-      setFilterTSA("all");
-      return;
-    }
-    fetch(
-      `/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate&managerReferenceID=${filterTSM}`,
-    )
-      .then((res) => res.json())
-      .then((data) => {
-        const opts: ComboOption[] = (Array.isArray(data) ? data : [])
-          .map((u: any) => ({
-            value: u.ReferenceID,
-            label: `${u.Firstname} ${u.Lastname}`,
-            status: u.Status ?? "Active",
-          }))
-          .sort((a: ComboOption, b: ComboOption) =>
-            a.label.localeCompare(b.label),
-          );
-        setFilterDynamicTsaOptions([
-          { value: "all", label: "All TSA" },
-          ...opts,
-        ]);
-        setFilterTSA("all");
-      })
-      .catch((err) => console.error("Error fetching TSAs for filter:", err));
-  }, [filterTSM, tsaList]);
+    fetchUserNames();
+  }, [customers]);
 
   // ── Fetch customers ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -967,9 +924,7 @@ export default function AccountPage() {
     setImportSelectedTSA("");
   }, [importSelectedManager]);
 
-  // ── Import form: fetch TSAs scoped to selected TSM via FetchTSA ─────────────
-  // Uses FetchTSA with managerReferenceID (= the TSM's ReferenceID) so only
-  // that TSM's TSAs are returned.
+  // ── Import form: fetch TSAs scoped to selected TSM ──────────────────────────
   useEffect(() => {
     if (!importSelectedTSM) {
       setImportTsaOptions([]);
@@ -1010,27 +965,87 @@ export default function AccountPage() {
     return () => clearTimeout(timer);
   }, [search, filterType, filterStatus]);
 
-  useEffect(() => setPage(1), [search, filterType, filterStatus]);
+  useEffect(
+    () => setPage(1),
+    [search, filterType, filterStatus, filterTSA, filterTSM, filterManager],
+  );
 
-  // ── Derived: filter options ─────────────────────────────────────────────────
+  // ── Derived: filter options from customer data (alphabetically sorted) ──────
   const typeOptions = useMemo(() => {
-    const types = new Set(customers.map((c) => c.type_client).filter(Boolean));
-    return ["all", ...Array.from(types)];
+    const types = [
+      ...new Set(customers.map((c) => c.type_client).filter(Boolean)),
+    ].sort();
+    return ["all", ...types];
   }, [customers]);
 
   const statusOptions = useMemo(() => {
-    const statuses = new Set(customers.map((c) => c.status).filter(Boolean));
-    return ["all", ...Array.from(statuses)];
+    const statuses = [
+      ...new Set(customers.map((c) => c.status).filter(Boolean)),
+    ].sort();
+    return ["all", ...statuses];
   }, [customers]);
 
-  // ── TSA map ─────────────────────────────────────────────────────────────────
-  const tsaMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    tsaList.forEach((t) => {
-      map[t.value.toLowerCase()] = t.label;
-    });
-    return map;
-  }, [tsaList]);
+  // ── Filter combobox options — derived from customer data, names from refIdUserMap ──
+  // The map is a fallback: if a user record wasn't found, the raw refId is shown.
+  const filterTsaOptions = useMemo<ComboOption[]>(() => {
+    const seen = new Map<string, ComboOption>();
+    for (const c of customers) {
+      const key = (c.referenceid ?? "").trim();
+      if (!key || seen.has(key.toLowerCase())) continue;
+      const user = refIdUserMap.get(key.toLowerCase());
+      seen.set(key.toLowerCase(), {
+        value: key,
+        label: user?.name || key,
+        status: user?.status,
+      });
+    }
+    return [
+      { value: "all", label: "All TSA" },
+      ...Array.from(seen.values()).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      ),
+    ];
+  }, [customers, refIdUserMap]);
+
+  const filterTsmOptions = useMemo<ComboOption[]>(() => {
+    const seen = new Map<string, ComboOption>();
+    for (const c of customers) {
+      const key = (c.tsm ?? "").trim();
+      if (!key || seen.has(key.toLowerCase())) continue;
+      const user = refIdUserMap.get(key.toLowerCase());
+      seen.set(key.toLowerCase(), {
+        value: key,
+        label: user?.name || key,
+        status: user?.status,
+      });
+    }
+    return [
+      { value: "all", label: "All TSM" },
+      ...Array.from(seen.values()).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      ),
+    ];
+  }, [customers, refIdUserMap]);
+
+  const filterManagerOptions = useMemo<ComboOption[]>(() => {
+    const seen = new Map<string, ComboOption>();
+    for (const c of customers) {
+      const key = (c.manager ?? "").trim();
+      if (!key || seen.has(key.toLowerCase())) continue;
+      const user = refIdUserMap.get(key.toLowerCase());
+      seen.set(key.toLowerCase(), {
+        value: key,
+        label: user?.name || key,
+        status: user?.status,
+      });
+    }
+    return [
+      { value: "all", label: "All Manager" },
+      ...Array.from(seen.values()).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      ),
+    ];
+  }, [customers, refIdUserMap]);
 
   // ── Filtered + sorted data ──────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -1055,7 +1070,19 @@ export default function AccountPage() {
         filterTSA === "all"
           ? true
           : c.referenceid?.trim().toLowerCase() ===
-          filterTSA.trim().toLowerCase(),
+            filterTSA.trim().toLowerCase(),
+      )
+      .filter((c) =>
+        filterTSM === "all"
+          ? true
+          : (c.tsm ?? "").trim().toLowerCase() ===
+            filterTSM.trim().toLowerCase(),
+      )
+      .filter((c) =>
+        filterManager === "all"
+          ? true
+          : (c.manager ?? "").trim().toLowerCase() ===
+            filterManager.trim().toLowerCase(),
       )
       .filter((c) => {
         if (!startDate && !endDate) return true;
@@ -1077,6 +1104,8 @@ export default function AccountPage() {
     filterType,
     filterStatus,
     filterTSA,
+    filterTSM,
+    filterManager,
     startDate,
     endDate,
     sortOrder,
@@ -1202,9 +1231,7 @@ export default function AccountPage() {
           },
         );
         const result = await response.json();
-        if (!result.success && result.failed) {
-          failed.push(...result.failed);
-        }
+        if (!result.success && result.failed) failed.push(...result.failed);
       }
 
       const successCount = total - failed.length;
@@ -1303,10 +1330,6 @@ export default function AccountPage() {
   };
 
   // ── Audit helpers ───────────────────────────────────────────────────────────
-  const toggleAuditSelection = (key: AuditKey) => {
-    setAuditSelection((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const handleReturn = () => {
     setIsAuditView(false);
     setAudited([]);
@@ -1484,23 +1507,24 @@ export default function AccountPage() {
     const transfer: TransferDetail = {
       tsa: payload.tsa
         ? {
-          toId: payload.tsa.toId,
-          toName: payload.tsa.toName,
-          fromId: snapshot[0].referenceid || null,
-          fromName:
-            tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
-            snapshot[0].referenceid ||
-            null,
-        }
+            toId: payload.tsa.toId,
+            toName: payload.tsa.toName,
+            fromId: snapshot[0].referenceid || null,
+            fromName:
+              refIdUserMap.get(snapshot[0].referenceid?.trim().toLowerCase())
+                ?.name ||
+              snapshot[0].referenceid ||
+              null,
+          }
         : null,
       tsm: payload.tsm
         ? { toName: payload.tsm.toName, fromName: snapshot[0].tsm || null }
         : null,
       manager: payload.manager
         ? {
-          toName: payload.manager.toName,
-          fromName: snapshot[0].manager || null,
-        }
+            toName: payload.manager.toName,
+            fromName: snapshot[0].manager || null,
+          }
         : null,
     };
     await Promise.all(
@@ -1525,8 +1549,9 @@ export default function AccountPage() {
 
   // ── Reset filters ───────────────────────────────────────────────────────────
   const handleResetFilters = () => {
-    setFilterTSM("all");
     setFilterTSA("all");
+    setFilterTSM("all");
+    setFilterManager("all");
     setFilterType("all");
     setFilterStatus("all");
     setStartDate("");
@@ -1537,8 +1562,9 @@ export default function AccountPage() {
   };
 
   const hasActiveFilters =
-    filterTSM !== "all" ||
     filterTSA !== "all" ||
+    filterTSM !== "all" ||
+    filterManager !== "all" ||
     filterType !== "all" ||
     filterStatus !== "all" ||
     !!startDate ||
@@ -1597,8 +1623,7 @@ export default function AccountPage() {
                   <span className="font-semibold text-foreground">
                     {filtered.length}
                   </span>{" "}
-                  customer
-                  {filtered.length !== 1 ? "s" : ""}
+                  customer{filtered.length !== 1 ? "s" : ""}
                 </>
               )}
             </p>
@@ -1672,7 +1697,7 @@ export default function AccountPage() {
                     />
                   </div>
 
-                  {/* TSA — locked until TSM selected; results scoped to that TSM */}
+                  {/* TSA */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase opacity-60">
                       Territory Sales Associate{" "}
@@ -1713,7 +1738,7 @@ export default function AccountPage() {
                     />
                   </div>
 
-                  {/* ── Parse Console ── */}
+                  {/* Parse Console */}
                   {parseLog.length > 0 && (
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold uppercase opacity-60 flex items-center gap-1.5">
@@ -1871,13 +1896,29 @@ export default function AccountPage() {
                 </CardHeader>
 
                 <CardContent className="pt-4 px-4 space-y-3">
-                  {/* TSM Filter */}
+                  {/* Manager Filter — flat combobox from customer data */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Manager
+                    </label>
+                    <Combobox
+                      options={filterManagerOptions}
+                      value={filterManager}
+                      onValueChange={(v) => {
+                        setFilterManager(v || "all");
+                        setPage(1);
+                      }}
+                      placeholder="All Managers"
+                    />
+                  </div>
+
+                  {/* TSM Filter — flat combobox from customer data */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase opacity-60">
                       Sales Manager
                     </label>
                     <Combobox
-                      options={filterTSMList}
+                      options={filterTsmOptions}
                       value={filterTSM}
                       onValueChange={(v) => {
                         setFilterTSM(v || "all");
@@ -1887,24 +1928,19 @@ export default function AccountPage() {
                     />
                   </div>
 
-                  {/* TSA Filter */}
+                  {/* TSA Filter — flat combobox from customer data */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase opacity-60">
                       Sales Associate
                     </label>
                     <Combobox
-                      options={filterDynamicTsaOptions}
+                      options={filterTsaOptions}
                       value={filterTSA}
                       onValueChange={(v) => {
                         setFilterTSA(v || "all");
                         setPage(1);
                       }}
                       placeholder="All TSA"
-                      emptyText={
-                        filterTSM !== "all"
-                          ? "No TSAs found under this TSM."
-                          : "No TSAs found."
-                      }
                     />
                   </div>
 
@@ -2041,7 +2077,6 @@ export default function AccountPage() {
 
                 {/* Action buttons */}
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {/* ── Date Range calendar — inline beside Download ── */}
                   <Calendar
                     startDate={startDate}
                     endDate={endDate}
@@ -2101,14 +2136,7 @@ export default function AccountPage() {
                   <div className="flex justify-between items-center flex-wrap gap-2">
                     <div
                       className="font-medium cursor-pointer select-none underline text-red-600"
-                      onClick={() => {
-                        setAuditSelection({
-                          duplicates: true,
-                          missingType: true,
-                          missingStatus: true,
-                        });
-                        setShowAuditDialog(true);
-                      }}
+                      onClick={() => setShowAuditDialog(true)}
                     >
                       🧾 Audit Summary:{" "}
                       <span className="font-semibold text-red-600">
@@ -2128,7 +2156,7 @@ export default function AccountPage() {
                           className={cn(
                             "rounded-l-md",
                             auditFilter === "missingType" &&
-                            "bg-yellow-100 text-yellow-900",
+                              "bg-yellow-100 text-yellow-900",
                           )}
                           onClick={() =>
                             setAuditFilter(
@@ -2154,7 +2182,7 @@ export default function AccountPage() {
                           }
                           className={cn(
                             auditFilter === "missingStatus" &&
-                            "bg-yellow-100 text-yellow-900",
+                              "bg-yellow-100 text-yellow-900",
                           )}
                           onClick={() =>
                             setAuditFilter(
@@ -2181,7 +2209,7 @@ export default function AccountPage() {
                           className={cn(
                             "rounded-r-md",
                             auditFilter === "duplicates" &&
-                            "bg-red-100 text-red-900",
+                              "bg-red-100 text-red-900",
                           )}
                           onClick={() =>
                             setAuditFilter(
@@ -2293,8 +2321,8 @@ export default function AccountPage() {
                                 <span
                                   className={
                                     isDuplicate ||
-                                      isMissingType ||
-                                      isMissingStatus
+                                    isMissingType ||
+                                    isMissingStatus
                                       ? "line-through underline decoration-red-500 decoration-2"
                                       : ""
                                   }
@@ -2338,31 +2366,29 @@ export default function AccountPage() {
                                   const key = c.referenceid
                                     ?.trim()
                                     .toLowerCase();
-                                  const tsaEntry = tsaList.find(
-                                    (t) => t.value.toLowerCase() === key,
-                                  );
+                                  const user = refIdUserMap.get(key ?? "");
                                   const label =
-                                    tsaMap[key ?? ""] || c.referenceid || "-";
-                                  const isInactiveTsa =
-                                    tsaEntry &&
+                                    user?.name || c.referenceid || "-";
+                                  const isInactive =
+                                    user &&
                                     INACTIVE_STATUSES.includes(
-                                      tsaEntry.status ?? "",
+                                      user.status ?? "",
                                     );
                                   return (
                                     <span className="flex items-center gap-1 flex-wrap">
                                       {label}
-                                      {isInactiveTsa && (
+                                      {isInactive && (
                                         <span
                                           className={cn(
                                             "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
-                                            tsaEntry?.status === "Terminated"
+                                            user?.status === "Terminated"
                                               ? "bg-red-100 text-red-700"
-                                              : tsaEntry?.status === "Resigned"
+                                              : user?.status === "Resigned"
                                                 ? "bg-orange-100 text-orange-700"
                                                 : "bg-gray-100 text-gray-600",
                                           )}
                                         >
-                                          {tsaEntry?.status}
+                                          {user?.status}
                                         </span>
                                       )}
                                     </span>
@@ -2370,8 +2396,72 @@ export default function AccountPage() {
                                 })()}
                               </TableCell>
 
-                              <TableCell>{c.tsm}</TableCell>
-                              <TableCell>{c.manager}</TableCell>
+                              <TableCell className="capitalize">
+                                {(() => {
+                                  const key = (c.tsm ?? "")
+                                    .trim()
+                                    .toLowerCase();
+                                  const user = refIdUserMap.get(key);
+                                  const label = user?.name || c.tsm || "-";
+                                  const isInactive =
+                                    user &&
+                                    INACTIVE_STATUSES.includes(
+                                      user.status ?? "",
+                                    );
+                                  return (
+                                    <span className="flex items-center gap-1 flex-wrap">
+                                      {label}
+                                      {isInactive && (
+                                        <span
+                                          className={cn(
+                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
+                                            user?.status === "Terminated"
+                                              ? "bg-red-100 text-red-700"
+                                              : user?.status === "Resigned"
+                                                ? "bg-orange-100 text-orange-700"
+                                                : "bg-gray-100 text-gray-600",
+                                          )}
+                                        >
+                                          {user?.status}
+                                        </span>
+                                      )}
+                                    </span>
+                                  );
+                                })()}
+                              </TableCell>
+                              <TableCell className="capitalize">
+                                {(() => {
+                                  const key = (c.manager ?? "")
+                                    .trim()
+                                    .toLowerCase();
+                                  const user = refIdUserMap.get(key);
+                                  const label = user?.name || c.manager || "-";
+                                  const isInactive =
+                                    user &&
+                                    INACTIVE_STATUSES.includes(
+                                      user.status ?? "",
+                                    );
+                                  return (
+                                    <span className="flex items-center gap-1 flex-wrap">
+                                      {label}
+                                      {isInactive && (
+                                        <span
+                                          className={cn(
+                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
+                                            user?.status === "Terminated"
+                                              ? "bg-red-100 text-red-700"
+                                              : user?.status === "Resigned"
+                                                ? "bg-orange-100 text-orange-700"
+                                                : "bg-gray-100 text-gray-600",
+                                          )}
+                                        >
+                                          {user?.status}
+                                        </span>
+                                      )}
+                                    </span>
+                                  );
+                                })()}
+                              </TableCell>
                               <TableCell>
                                 {new Date(c.date_created).toLocaleDateString()}
                               </TableCell>
@@ -2381,8 +2471,8 @@ export default function AccountPage() {
                               <TableCell>
                                 {c.next_available_date
                                   ? new Date(
-                                    c.next_available_date,
-                                  ).toLocaleDateString()
+                                      c.next_available_date,
+                                    ).toLocaleDateString()
                                   : "-"}
                               </TableCell>
                             </TableRow>
