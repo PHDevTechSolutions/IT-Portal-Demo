@@ -44,7 +44,6 @@ import {
   Hash,
   SlidersHorizontal,
   Terminal,
-  CalendarDays,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -687,9 +686,6 @@ export default function AccountPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // ── Date range inline toggle ────────────────────────────────────────────────
-  const [showDateRange, setShowDateRange] = useState(false);
-
   // ── Selection state ─────────────────────────────────────────────────────────
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedIds, setSelectedIdsAction] = useState<Set<number>>(new Set());
@@ -776,8 +772,6 @@ export default function AccountPage() {
   }, []);
 
   // ── Fetch ALL TSAs (for table column display + filter panel) ────────────────
-  // FetchAllTSA returns every TSA regardless of Status so inactive owners
-  // are still visible and badged in the table.
   useEffect(() => {
     const fetchTSA = async () => {
       try {
@@ -823,7 +817,6 @@ export default function AccountPage() {
   }, []);
 
   // ── Dynamic TSA options for filter panel — scoped to selected TSM ───────────
-  // Uses FetchAllTSA with managerReferenceID so only TSAs under that TSM appear.
   useEffect(() => {
     if (filterTSM === "all") {
       const sorted = tsaList
@@ -974,9 +967,9 @@ export default function AccountPage() {
     setImportSelectedTSA("");
   }, [importSelectedManager]);
 
-  // ── Import form: fetch TSAs scoped to selected TSM via FetchAllTSA ──────────
-  // Passes managerReferenceID (= the TSM's ReferenceID) so only that TSM's
-  // TSAs are returned. Uses FetchAllTSA so inactive/resigned accounts appear.
+  // ── Import form: fetch TSAs scoped to selected TSM via FetchTSA ─────────────
+  // Uses FetchTSA with managerReferenceID (= the TSM's ReferenceID) so only
+  // that TSM's TSAs are returned.
   useEffect(() => {
     if (!importSelectedTSM) {
       setImportTsaOptions([]);
@@ -984,7 +977,7 @@ export default function AccountPage() {
       return;
     }
     fetch(
-      `/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate&managerReferenceID=${importSelectedTSM}`,
+      `/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate&managerReferenceID=${importSelectedTSM}`,
     )
       .then((res) => res.json())
       .then((data) => {
@@ -1062,7 +1055,7 @@ export default function AccountPage() {
         filterTSA === "all"
           ? true
           : c.referenceid?.trim().toLowerCase() ===
-            filterTSA.trim().toLowerCase(),
+          filterTSA.trim().toLowerCase(),
       )
       .filter((c) => {
         if (!startDate && !endDate) return true;
@@ -1491,23 +1484,23 @@ export default function AccountPage() {
     const transfer: TransferDetail = {
       tsa: payload.tsa
         ? {
-            toId: payload.tsa.toId,
-            toName: payload.tsa.toName,
-            fromId: snapshot[0].referenceid || null,
-            fromName:
-              tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
-              snapshot[0].referenceid ||
-              null,
-          }
+          toId: payload.tsa.toId,
+          toName: payload.tsa.toName,
+          fromId: snapshot[0].referenceid || null,
+          fromName:
+            tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
+            snapshot[0].referenceid ||
+            null,
+        }
         : null,
       tsm: payload.tsm
         ? { toName: payload.tsm.toName, fromName: snapshot[0].tsm || null }
         : null,
       manager: payload.manager
         ? {
-            toName: payload.manager.toName,
-            fromName: snapshot[0].manager || null,
-          }
+          toName: payload.manager.toName,
+          fromName: snapshot[0].manager || null,
+        }
         : null,
     };
     await Promise.all(
@@ -2048,21 +2041,13 @@ export default function AccountPage() {
 
                 {/* Action buttons */}
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {/* ── Date Range toggle — no popover, opens inline panel below ── */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowDateRange((v) => !v)}
-                    className={cn(
-                      "gap-1.5 text-xs",
-                      (startDate || endDate) && "border-primary text-primary",
-                    )}
-                  >
-                    <CalendarDays className="w-3.5 h-3.5" />
-                    {startDate || endDate
-                      ? `${startDate || "…"} → ${endDate || "…"}`
-                      : "Date Range"}
-                  </Button>
+                  {/* ── Date Range calendar — inline beside Download ── */}
+                  <Calendar
+                    startDate={startDate}
+                    endDate={endDate}
+                    setStartDateAction={setStartDate}
+                    setEndDateAction={setEndDate}
+                  />
 
                   <Download data={filtered} filename="CustomerDatabase" />
 
@@ -2110,44 +2095,6 @@ export default function AccountPage() {
                 </div>
               </div>
 
-              {/* ── Inline date range panel — shown/hidden by toggle button ── */}
-              {showDateRange && (
-                <div className="flex flex-wrap items-end gap-3 border border-border bg-muted/30 px-4 py-3">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase opacity-60 mb-1.5">
-                      Date Created Range
-                    </p>
-                    <Calendar
-                      startDate={startDate}
-                      endDate={endDate}
-                      setStartDateAction={setStartDate}
-                      setEndDateAction={setEndDate}
-                    />
-                  </div>
-                  {(startDate || endDate) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-8 self-end"
-                      onClick={() => {
-                        setStartDate("");
-                        setEndDate("");
-                      }}
-                    >
-                      <RotateCcw className="w-3 h-3 mr-1" /> Clear
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs h-8 self-end ml-auto"
-                    onClick={() => setShowDateRange(false)}
-                  >
-                    <X className="w-3 h-3 mr-1" /> Close
-                  </Button>
-                </div>
-              )}
-
               {/* Audit summary bar */}
               {isAuditView && (
                 <div className="flex flex-col gap-2 bg-muted/50 rounded-none px-4 py-2 border border-border text-[13px]">
@@ -2181,7 +2128,7 @@ export default function AccountPage() {
                           className={cn(
                             "rounded-l-md",
                             auditFilter === "missingType" &&
-                              "bg-yellow-100 text-yellow-900",
+                            "bg-yellow-100 text-yellow-900",
                           )}
                           onClick={() =>
                             setAuditFilter(
@@ -2207,7 +2154,7 @@ export default function AccountPage() {
                           }
                           className={cn(
                             auditFilter === "missingStatus" &&
-                              "bg-yellow-100 text-yellow-900",
+                            "bg-yellow-100 text-yellow-900",
                           )}
                           onClick={() =>
                             setAuditFilter(
@@ -2234,7 +2181,7 @@ export default function AccountPage() {
                           className={cn(
                             "rounded-r-md",
                             auditFilter === "duplicates" &&
-                              "bg-red-100 text-red-900",
+                            "bg-red-100 text-red-900",
                           )}
                           onClick={() =>
                             setAuditFilter(
@@ -2346,8 +2293,8 @@ export default function AccountPage() {
                                 <span
                                   className={
                                     isDuplicate ||
-                                    isMissingType ||
-                                    isMissingStatus
+                                      isMissingType ||
+                                      isMissingStatus
                                       ? "line-through underline decoration-red-500 decoration-2"
                                       : ""
                                   }
@@ -2434,8 +2381,8 @@ export default function AccountPage() {
                               <TableCell>
                                 {c.next_available_date
                                   ? new Date(
-                                      c.next_available_date,
-                                    ).toLocaleDateString()
+                                    c.next_available_date,
+                                  ).toLocaleDateString()
                                   : "-"}
                               </TableCell>
                             </TableRow>
