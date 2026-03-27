@@ -680,8 +680,6 @@ export default function AccountPage() {
   const [filterTSA, setFilterTSA] = useState("all");
   const [filterTSM, setFilterTSM] = useState("all");
   const [filterTSMList, setFilterTSMList] = useState<ComboOption[]>([]);
-  const [filterManagerList, setFilterManagerList] = useState<ComboOption[]>([]);
-  const [filterManager, setFilterManager] = useState("all");
   const [filterDynamicTsaOptions, setFilterDynamicTsaOptions] = useState<
     ComboOption[]
   >([]);
@@ -801,9 +799,8 @@ export default function AccountPage() {
   }, []);
 
   // ── Fetch TSMs for filter panel ─────────────────────────────────────────────
-  // ── Filter panel: Manager list ──────────────────────────────────────────────
   useEffect(() => {
-    fetch("/api/UserManagement/FetchManager?Role=Manager")
+    fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager")
       .then((res) => res.json())
       .then((data) => {
         const opts: ComboOption[] = (Array.isArray(data) ? data : [])
@@ -811,35 +808,15 @@ export default function AccountPage() {
             value: u.ReferenceID,
             label: `${u.Firstname} ${u.Lastname}`,
           }))
-          .sort((a, b) => a.label.localeCompare(b.label));
-        setFilterManagerList([{ value: "all", label: "All Managers" }, ...opts]);
+          .sort((a: ComboOption, b: ComboOption) =>
+            a.label.localeCompare(b.label),
+          );
+        setFilterTSMList([{ value: "all", label: "All TSM" }, ...opts]);
       })
-      .catch(console.error);
+      .catch((err) => console.error("Error fetching TSMs for filter:", err));
   }, []);
 
-  // ── Filter panel: TSM list scoped to selected Manager ──────────────────────
-  useEffect(() => {
-    const url = filterManager === "all"
-      ? "/api/UserManagement/FetchTSM?Role=Territory Sales Manager"
-      : `/api/UserManagement/FetchTSM?Role=Territory Sales Manager&managerReferenceID=${filterManager}`;
-
-    fetch(url)
-      .then((res) => res.json())
-      .then((data) => {
-        const opts: ComboOption[] = (Array.isArray(data) ? data : [])
-          .map((u: any) => ({
-            value: u.ReferenceID,
-            label: `${u.Firstname} ${u.Lastname}`,
-          }))
-          .sort((a, b) => a.label.localeCompare(b.label));
-        setFilterTSMList([{ value: "all", label: "All TSM" }, ...opts]);
-        setFilterTSM("all");
-        setFilterTSA("all");
-      })
-      .catch(console.error);
-  }, [filterManager]);
-
-  // ── Filter panel: TSA list scoped to selected TSM ──────────────────────────
+  // ── Dynamic TSA options for filter panel — scoped to selected TSM ───────────
   useEffect(() => {
     if (filterTSM === "all") {
       const sorted = tsaList
@@ -853,7 +830,7 @@ export default function AccountPage() {
       return;
     }
     fetch(
-      `/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate&managerReferenceID=${filterTSM}`,
+      `/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate&managerReferenceID=${filterTSM}`,
     )
       .then((res) => res.json())
       .then((data) => {
@@ -863,12 +840,42 @@ export default function AccountPage() {
             label: `${u.Firstname} ${u.Lastname}`,
             status: u.Status ?? "Active",
           }))
-          .sort((a, b) => a.label.localeCompare(b.label));
-        setFilterDynamicTsaOptions([{ value: "all", label: "All TSA" }, ...opts]);
+          .sort((a: ComboOption, b: ComboOption) =>
+            a.label.localeCompare(b.label),
+          );
+        setFilterDynamicTsaOptions([
+          { value: "all", label: "All TSA" },
+          ...opts,
+        ]);
         setFilterTSA("all");
       })
-      .catch(console.error);
+      .catch((err) => console.error("Error fetching TSAs for filter:", err));
   }, [filterTSM, tsaList]);
+
+  // ── Fetch customers ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsFetching(true);
+      const toastId = toast.loading("Fetching customer data...");
+      try {
+        const response = await fetch(
+          "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch",
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await safeJson(response);
+        if (!json) throw new Error("Invalid JSON from server");
+        setCustomers(json.data || []);
+        toast.success("Customer data loaded successfully!", { id: toastId });
+      } catch (err: any) {
+        toast.error(`Failed to load customer data: ${err.message}`, {
+          id: toastId,
+        });
+      } finally {
+        setIsFetching(false);
+      }
+    };
+    fetchData();
+  }, []);
 
   // ── Fetch dropdowns for TransferDialog ─────────────────────────────────────
   useEffect(() => {
@@ -1518,7 +1525,6 @@ export default function AccountPage() {
 
   // ── Reset filters ───────────────────────────────────────────────────────────
   const handleResetFilters = () => {
-    setFilterManager("all");
     setFilterTSM("all");
     setFilterTSA("all");
     setFilterType("all");
@@ -1531,7 +1537,6 @@ export default function AccountPage() {
   };
 
   const hasActiveFilters =
-    filterManager !== "all" ||
     filterTSM !== "all" ||
     filterTSA !== "all" ||
     filterType !== "all" ||
@@ -1608,7 +1613,7 @@ export default function AccountPage() {
                 <CardHeader className="border-b px-4 py-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                      <Upload className="w-4 h-4" /> Import Customers
+                      <Upload className="w-4 h-4" /> Import Customer Database
                     </CardTitle>
                     {(importFile || importSelectedManager) && (
                       <Button
@@ -1864,22 +1869,6 @@ export default function AccountPage() {
                     )}
                   </div>
                 </CardHeader>
-
-                {/* Manager Filter */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold uppercase opacity-60">
-                    Manager
-                  </label>
-                  <Combobox
-                    options={filterManagerList}
-                    value={filterManager}
-                    onValueChange={(v) => {
-                      setFilterManager(v || "all");
-                      setPage(1);
-                    }}
-                    placeholder="All Managers"
-                  />
-                </div>
 
                 <CardContent className="pt-4 px-4 space-y-3">
                   {/* TSM Filter */}
