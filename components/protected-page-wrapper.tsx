@@ -35,7 +35,10 @@ function AuthSkeleton() {
         </div>
         <div className="flex flex-col gap-1 p-3 flex-1">
           {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-md">
+            <div
+              key={i}
+              className="flex items-center gap-3 px-3 py-2 rounded-md"
+            >
               <div className="h-4 w-4 rounded bg-muted animate-pulse" />
               <div
                 className="h-3 rounded bg-muted animate-pulse"
@@ -74,16 +77,26 @@ function AuthSkeleton() {
           <div className="rounded-lg border border-border overflow-hidden">
             <div className="flex gap-4 px-4 py-3 bg-muted/50 border-b border-border">
               {[10, 25, 22, 18, 15, 10].map((w, i) => (
-                <div key={i} className="h-3 rounded bg-muted animate-pulse" style={{ width: `${w}%` }} />
+                <div
+                  key={i}
+                  className="h-3 rounded bg-muted animate-pulse"
+                  style={{ width: `${w}%` }}
+                />
               ))}
             </div>
             {Array.from({ length: 6 }).map((_, row) => (
-              <div key={row} className="flex gap-4 px-4 py-3 border-b border-border/50 last:border-0">
+              <div
+                key={row}
+                className="flex gap-4 px-4 py-3 border-b border-border/50 last:border-0"
+              >
                 {[10, 25, 22, 18, 15, 10].map((w, col) => (
                   <div
                     key={col}
                     className="h-3 rounded bg-muted/60 animate-pulse"
-                    style={{ width: `${w - (row % 3)}%`, animationDelay: `${(row * 6 + col) * 40}ms` }}
+                    style={{
+                      width: `${w - (row % 3)}%`,
+                      animationDelay: `${(row * 6 + col) * 40}ms`,
+                    }}
                   />
                 ))}
               </div>
@@ -95,9 +108,13 @@ function AuthSkeleton() {
   );
 }
 
-export default function ProtectedPageWrapper({ children }: ProtectedPageWrapperProps) {
+export default function ProtectedPageWrapper({
+  children,
+}: ProtectedPageWrapperProps) {
   const router = useRouter();
-  const [status, setStatus] = useState<"checking" | "ok" | "redirect">("checking");
+  const [status, setStatus] = useState<"checking" | "ok" | "redirect">(
+    "checking",
+  );
   const hasChecked = useRef(false);
 
   useEffect(() => {
@@ -123,7 +140,9 @@ export default function ProtectedPageWrapper({ children }: ProtectedPageWrapperP
     }
 
     validateSession();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (status === "checking") return <AuthSkeleton />;
