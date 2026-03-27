@@ -7,7 +7,8 @@ import React, {
   useRef,
   useCallback,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import * as ExcelJS from "exceljs";
 import {
   SidebarProvider,
   SidebarInset,
@@ -16,18 +17,23 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 import { Pagination } from "@/components/app-pagination";
 import { Download } from "@/components/taskflow/customer-database/download";
+import { Audit } from "@/components/taskflow/customer-database/audit";
 import { Calendar } from "@/components/taskflow/customer-database/calendar";
-import { ImportDialog } from "@/components/taskflow/customer-database/import";
+import { AuditDialog } from "@/components/taskflow/customer-database/audit-dialog";
 import { DeleteDialog } from "@/components/taskflow/customer-database/delete";
 import { TransferDialog } from "@/components/taskflow/customer-database/transfer";
-import { FilterDialog } from "@/components/taskflow/customer-database/filter";
-import {
-  AuditDialog,
-  type AuditResult,
-} from "@/components/taskflow/customer-database/audit-dialog";
 import { toast } from "sonner";
-import { Loader2, Filter } from "lucide-react";
 import {
+  Loader2,
+  Search,
+  ArrowRight,
+  Check,
+  ChevronsUpDown,
+  FileSpreadsheet,
+  Upload,
+  X,
+  RotateCcw,
+  Download as DownloadIcon,
   BadgeCheck,
   AlertTriangle,
   Clock,
@@ -35,7 +41,10 @@ import {
   PauseCircle,
   UserX,
   UserCheck,
-  ArrowRight,
+  Hash,
+  SlidersHorizontal,
+  Terminal,
+  CalendarDays,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -57,9 +66,26 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
-import { ButtonGroup } from "@/components/ui/button-group";
-import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -67,11 +93,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-
-// ─── Session hook ─────────────────────────────────────────────────────────────
-import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
-
-// ─── Audit logger ─────────────────────────────────────────────────────────────
+import { ButtonGroup } from "@/components/ui/button-group";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { cn } from "@/lib/utils";
 import {
   logCustomerAudit,
   type AuditActor,
@@ -80,6 +104,8 @@ import {
 import type { TransferSuccessPayload } from "@/components/taskflow/customer-database/transfer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type AuditKey = "duplicates" | "missingType" | "missingStatus";
 
 interface Customer {
   id: number;
@@ -107,10 +133,16 @@ interface TsaOption {
   status?: string;
 }
 
+interface ComboOption {
+  value: string;
+  label: string;
+  status?: string;
+}
+
 const INACTIVE_STATUSES = ["Terminated", "Resigned", "Inactive"];
 const AUDIT_PAGE = "Customer Database";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Safe JSON ────────────────────────────────────────────────────────────────
 
 async function safeJson(res: Response): Promise<any> {
   const text = await res.text();
@@ -118,99 +150,238 @@ async function safeJson(res: Response): Promise<any> {
     return JSON.parse(text);
   } catch {
     console.error(
-      `[safeJson] Non-JSON response (HTTP ${res.status}) from ${res.url}\n`,
+      `[safeJson] Non-JSON (HTTP ${res.status}) from ${res.url}\n`,
       text.slice(0, 300),
     );
     return null;
   }
 }
 
-// ─── StatusBadge ──────────────────────────────────────────────────────────────
+// ─── Excel Parser (pure, module-level) ───────────────────────────────────────
 
-function StatusBadge({ status }: { status?: string | null }) {
-  const s = (status ?? "").trim().toLowerCase();
-  if (!s)
-    return (
-      <Badge variant="outline" className="text-muted-foreground">
-        —
-      </Badge>
-    );
-  if (s === "active")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1"
-      >
-        <BadgeCheck className="size-3.5" /> Active
-      </Badge>
-    );
-  if (s === "new client")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1"
-      >
-        <UserCheck className="size-3.5" /> New Client
-      </Badge>
-    );
-  if (s === "non-buying")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1"
-      >
-        <AlertTriangle className="size-3.5" /> Non-Buying
-      </Badge>
-    );
-  if (s === "inactive")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1"
-      >
-        <XCircle className="size-3.5" /> Inactive
-      </Badge>
-    );
-  if (s === "on hold")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1"
-      >
-        <PauseCircle className="size-3.5" /> On Hold
-      </Badge>
-    );
-  if (s === "used")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1"
-      >
-        <Clock className="size-3.5" /> Used
-      </Badge>
-    );
-  if (s === "park")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-slate-500/90 hover:bg-slate-600 text-white flex items-center gap-1"
-      >
-        <PauseCircle className="size-3.5" /> Parked
-      </Badge>
-    );
-  if (s === "for deletion" || s === "remove")
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
-      >
-        <UserX className="size-3.5" /> {status}
-      </Badge>
-    );
+async function parseExcelForFile(
+  file: File,
+  tsaValue: string,
+  managerValue: string,
+  tsmValue: string,
+): Promise<any[]> {
+  const reader = new FileReader();
+  return new Promise<any[]>((resolve, reject) => {
+    reader.onload = async (event) => {
+      try {
+        const data = event.target?.result as ArrayBuffer;
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(data);
+        const worksheet = workbook.worksheets[0];
+        const parsed: any[] = [];
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber === 1) return;
+          parsed.push({
+            referenceid: tsaValue,
+            manager: managerValue,
+            tsm: tsmValue,
+            tsa: tsaValue,
+            company_name: row.getCell(1).value || "",
+            contact_person: row.getCell(2).value || "",
+            contact_number: row.getCell(3).value || "",
+            email_address: row.getCell(4).value || "",
+            type_client: row.getCell(5).value || "",
+            address: row.getCell(6).value || "",
+            region: row.getCell(7).value || "",
+            status: row.getCell(8).value || "",
+            company_group: row.getCell(9).value || "",
+            delivery_address: row.getCell(10).value || "",
+            industry: row.getCell(11).value || "",
+          });
+        });
+        resolve(parsed);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ─── Combobox ─────────────────────────────────────────────────────────────────
+
+interface ComboboxProps {
+  options: ComboOption[];
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  emptyText?: string;
+  className?: string;
+}
+
+function Combobox({
+  options,
+  value,
+  onValueChange,
+  placeholder = "Select…",
+  disabled = false,
+  emptyText = "No results found.",
+  className,
+}: ComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.value === value);
+
   return (
-    <Badge variant="outline" className="text-muted-foreground">
-      {status}
-    </Badge>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className={cn(
+            "w-full justify-between font-normal h-9 text-xs rounded-none",
+            !selected && "text-muted-foreground",
+            className,
+          )}
+        >
+          <span className="truncate">
+            {selected ? selected.label : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 min-w-[220px]" align="start">
+        <Command>
+          <CommandInput placeholder="Search…" className="h-9 text-xs" />
+          <CommandEmpty className="py-3 text-xs text-center text-muted-foreground">
+            {emptyText}
+          </CommandEmpty>
+          <CommandGroup className="max-h-56 overflow-auto">
+            {options.map((opt) => (
+              <CommandItem
+                key={opt.value}
+                value={opt.label}
+                onSelect={() => {
+                  onValueChange(opt.value === value ? "" : opt.value);
+                  setOpen(false);
+                }}
+                className="text-xs"
+              >
+                <Check
+                  className={cn(
+                    "mr-2 h-4 w-4 flex-shrink-0",
+                    value === opt.value ? "opacity-100" : "opacity-0",
+                  )}
+                />
+                <span className="truncate">{opt.label}</span>
+                {opt.status && INACTIVE_STATUSES.includes(opt.status) && (
+                  <span
+                    className={cn(
+                      "ml-auto text-[9px] font-bold px-1 py-0.5 rounded-full leading-none",
+                      opt.status === "Terminated"
+                        ? "bg-red-100 text-red-700"
+                        : opt.status === "Resigned"
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-gray-100 text-gray-600",
+                    )}
+                  >
+                    {opt.status}
+                  </span>
+                )}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── DropZone ─────────────────────────────────────────────────────────────────
+
+interface DropZoneProps {
+  file: File | null;
+  fileName: string | null;
+  onFileSelect: (file: File) => void;
+  onClear: () => void;
+  disabled?: boolean;
+}
+
+function DropZone({
+  file,
+  fileName,
+  onFileSelect,
+  onClear,
+  disabled,
+}: DropZoneProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (disabled) return;
+    const f = e.dataTransfer.files[0];
+    if (f) onFileSelect(f);
+  };
+
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!disabled) setIsDragging(true);
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+      onClick={() => !disabled && inputRef.current?.click()}
+      className={cn(
+        "relative border-2 border-dashed rounded-none p-5 text-center cursor-pointer transition-all select-none",
+        isDragging
+          ? "border-primary bg-primary/5"
+          : "border-border hover:border-primary/50 hover:bg-muted/30",
+        disabled && "opacity-50 pointer-events-none",
+        file && "border-primary/40 bg-primary/5",
+      )}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden"
+        disabled={disabled}
+        onChange={(e) => e.target.files?.[0] && onFileSelect(e.target.files[0])}
+      />
+      {file ? (
+        <div className="flex flex-col items-center gap-1.5">
+          <FileSpreadsheet className="h-8 w-8 text-primary" />
+          <p className="text-xs font-medium text-foreground truncate max-w-[180px]">
+            {fileName}
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            Click to replace or drag a new file
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute top-1.5 right-1.5 h-6 w-6 p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-1.5">
+          <Upload className="h-8 w-8 text-muted-foreground" />
+          <p className="text-xs font-semibold text-foreground">
+            Drag & drop an Excel file
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            or click to browse (.xlsx, .xls)
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -258,8 +429,9 @@ function EditCustomerDialog({
 
   if (!form) return null;
 
-  const handleChange = (key: keyof Customer, value: string) =>
+  const handleChange = (key: keyof Customer, value: string) => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
 
   const handleSubmit = async () => {
     if (!form || !customer) return;
@@ -379,32 +551,103 @@ function EditCustomerDialog({
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── StatusBadge ──────────────────────────────────────────────────────────────
 
-export default function CustomerDatabasePage() {
+function StatusBadge({ status }: { status?: string | null }) {
+  const s = (status ?? "").trim().toLowerCase();
+  if (!s)
+    return (
+      <Badge variant="outline" className="text-muted-foreground">
+        —
+      </Badge>
+    );
+  if (s === "active")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1"
+      >
+        <BadgeCheck className="size-3.5" /> Active
+      </Badge>
+    );
+  if (s === "new client")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1"
+      >
+        <UserCheck className="size-3.5" /> New Client
+      </Badge>
+    );
+  if (s === "non-buying")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1"
+      >
+        <AlertTriangle className="size-3.5" /> Non-Buying
+      </Badge>
+    );
+  if (s === "inactive")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1"
+      >
+        <XCircle className="size-3.5" /> Inactive
+      </Badge>
+    );
+  if (s === "on hold")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1"
+      >
+        <PauseCircle className="size-3.5" /> On Hold
+      </Badge>
+    );
+  if (s === "used")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1"
+      >
+        <Clock className="size-3.5" /> Used
+      </Badge>
+    );
+  if (s === "park")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-slate-500/90 hover:bg-slate-600 text-white flex items-center gap-1"
+      >
+        <PauseCircle className="size-3.5" /> Parked
+      </Badge>
+    );
+  if (s === "for deletion" || s === "remove")
+    return (
+      <Badge
+        variant="secondary"
+        className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
+      >
+        <UserX className="size-3.5" /> {status}
+      </Badge>
+    );
+  return (
+    <Badge variant="outline" className="text-muted-foreground">
+      {status}
+    </Badge>
+  );
+}
+
+// ─── AccountPage ──────────────────────────────────────────────────────────────
+
+export default function AccountPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
 
-  // ── Session-based identity (no localStorage, no URL params) ──────────────
-  const currentUser = useCurrentUser();
-
-  const currentActorRef = useRef<AuditActor>({
-    uid: null,
-    name: null,
-    email: null,
-    role: null,
-    referenceId: null,
-  });
-  useEffect(() => {
-    currentActorRef.current = {
-      uid: currentUser.uid,
-      name: currentUser.name,
-      email: currentUser.email,
-      role: currentUser.role,
-      referenceId: currentUser.referenceId,
-    };
-  }, [currentUser]);
-
-  // ── State ─────────────────────────────────────────────────────────────────
+  // ── Customer table state ────────────────────────────────────────────────────
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -413,59 +656,141 @@ export default function CustomerDatabasePage() {
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  const [showFilters, setShowFilters] = useState(false);
-  const [isFetching, setIsFetching] = useState(false);
-  const [isFiltering, setIsFiltering] = useState(false);
-
-  const [tsaList, setTsaList] = useState<TsaOption[]>([]);
-  const [filterTSA, setFilterTSA] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [selectAll, setSelectAll] = useState(false);
-
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-
-  const [tsas, setTsas] = useState<TsaOption[]>([]);
-  const [tsms, setTsms] = useState<{ label: string; value: string }[]>([]);
-  const [managers, setManagers] = useState<{ label: string; value: string }[]>(
-    [],
-  );
-  const [showTransferDialog, setShowTransferDialog] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const [showAuditDialog, setShowAuditDialog] = useState(false);
+  // ── Audit state ─────────────────────────────────────────────────────────────
   const [audited, setAudited] = useState<Customer[]>([]);
   const [isAuditView, setIsAuditView] = useState(false);
   const [duplicateIds, setDuplicateIds] = useState<Set<number>>(new Set());
   const [auditFilter, setAuditFilter] = useState<
     "" | "all" | "missingType" | "missingStatus" | "duplicates"
   >("");
+  const [showAuditDialog, setShowAuditDialog] = useState(false);
+  const [auditSelection, setAuditSelection] = useState<
+    Record<AuditKey, boolean>
+  >({
+    duplicates: false,
+    missingType: false,
+    missingStatus: false,
+  });
 
+  // ── Fetch / loading state ───────────────────────────────────────────────────
+  const [isFetching, setIsFetching] = useState(false);
+  const [isFiltering, setIsFiltering] = useState(false);
+
+  // ── TSA / filter state ──────────────────────────────────────────────────────
+  const [tsaList, setTsaList] = useState<TsaOption[]>([]);
+  const [filterTSA, setFilterTSA] = useState("all");
+  const [filterTSM, setFilterTSM] = useState("all");
+  const [filterTSMList, setFilterTSMList] = useState<ComboOption[]>([]);
+  const [filterDynamicTsaOptions, setFilterDynamicTsaOptions] = useState<
+    ComboOption[]
+  >([]);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  // ── Date range inline toggle ────────────────────────────────────────────────
+  const [showDateRange, setShowDateRange] = useState(false);
+
+  // ── Selection state ─────────────────────────────────────────────────────────
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedIds, setSelectedIdsAction] = useState<Set<number>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+
+  // ── Edit state ──────────────────────────────────────────────────────────────
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+
+  // ── Transfer state ──────────────────────────────────────────────────────────
+  const [tsas, setTsas] = useState<ComboOption[]>([]);
+  const [tsms, setTsms] = useState<ComboOption[]>([]);
+  const [managers, setManagers] = useState<ComboOption[]>([]);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+
+  // ── Auto-generate state ─────────────────────────────────────────────────────
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // ── Actor / audit refs ──────────────────────────────────────────────────────
+  const [currentActor, setCurrentActor] = useState<AuditActor>({
+    uid: null,
+    name: null,
+    email: null,
+    role: null,
+    referenceId: null,
+  });
+  const currentActorRef = useRef<AuditActor>(currentActor);
+  useEffect(() => {
+    currentActorRef.current = currentActor;
+  }, [currentActor]);
   const preTransferSnapshotRef = useRef<Customer[]>([]);
 
-  // ── Fetch TSA list ────────────────────────────────────────────────────────
+  // ── Import form state ───────────────────────────────────────────────────────
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importOriginalFileName, setImportOriginalFileName] = useState<
+    string | null
+  >(null);
+  const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
+  const [importFailedRows, setImportFailedRows] = useState<any[]>([]);
+  const [importManagerOptions, setImportManagerOptions] = useState<
+    ComboOption[]
+  >([]);
+  const [importTsmOptions, setImportTsmOptions] = useState<ComboOption[]>([]);
+  const [importTsaOptions, setImportTsaOptions] = useState<ComboOption[]>([]);
+  const [importSelectedManager, setImportSelectedManager] = useState("");
+  const [importSelectedTSM, setImportSelectedTSM] = useState("");
+  const [importSelectedTSA, setImportSelectedTSA] = useState("");
+  const [isImportLoading, setIsImportLoading] = useState(false);
+
+  // ── Parse console state ─────────────────────────────────────────────────────
+  const [parseLog, setParseLog] = useState<
+    { type: "info" | "warn" | "ok" | "err"; msg: string }[]
+  >([]);
+  const [isParsing, setIsParsing] = useState(false);
+  const parseLogEndRef = useRef<HTMLDivElement>(null);
+
+  // ── Parse log helper ────────────────────────────────────────────────────────
+  const addParseLog = useCallback(
+    (type: "info" | "warn" | "ok" | "err", msg: string) =>
+      setParseLog((prev) => [...prev, { type, msg }]),
+    [],
+  );
+
+  useEffect(() => {
+    parseLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [parseLog]);
+
+  // ── Load current actor ──────────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("currentUser");
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      setCurrentActor({
+        uid: parsed.uid ?? null,
+        name: parsed.name ?? null,
+        email: parsed.email ?? null,
+        role: parsed.role ?? null,
+        referenceId: parsed.referenceId ?? null,
+      });
+    } catch {
+      console.warn("[CustomerAudit] Could not read user from localStorage.");
+    }
+  }, []);
+
+  // ── Fetch ALL TSAs (for table column display + filter panel) ────────────────
+  // FetchAllTSA returns every TSA regardless of Status so inactive owners
+  // are still visible and badged in the table.
   useEffect(() => {
     const fetchTSA = async () => {
       try {
-        let res = await fetch(
+        const res = await fetch(
           "/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate",
         );
-        if (!res.ok)
-          res = await fetch(
-            "/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate",
-          );
         if (!res.ok) return;
         const json = await safeJson(res);
         if (!json) return;
         const list: any[] = Array.isArray(json) ? json : (json.data ?? []);
         const formatted: TsaOption[] = list.map((user: any) => ({
           value: user.ReferenceID ?? "",
-          label:
-            `${user.Firstname ?? ""} ${user.Lastname ?? ""}${INACTIVE_STATUSES.includes(user.Status) ? ` (${user.Status})` : ""}`.trim(),
+          label: `${user.Firstname ?? ""} ${user.Lastname ?? ""}`.trim(),
           status: user.Status ?? "Active",
         }));
         setTsaList([
@@ -479,7 +804,62 @@ export default function CustomerDatabasePage() {
     fetchTSA();
   }, []);
 
-  // ── Fetch customers ───────────────────────────────────────────────────────
+  // ── Fetch TSMs for filter panel ─────────────────────────────────────────────
+  useEffect(() => {
+    fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager")
+      .then((res) => res.json())
+      .then((data) => {
+        const opts: ComboOption[] = (Array.isArray(data) ? data : [])
+          .map((u: any) => ({
+            value: u.ReferenceID,
+            label: `${u.Firstname} ${u.Lastname}`,
+          }))
+          .sort((a: ComboOption, b: ComboOption) =>
+            a.label.localeCompare(b.label),
+          );
+        setFilterTSMList([{ value: "all", label: "All TSM" }, ...opts]);
+      })
+      .catch((err) => console.error("Error fetching TSMs for filter:", err));
+  }, []);
+
+  // ── Dynamic TSA options for filter panel — scoped to selected TSM ───────────
+  // Uses FetchAllTSA with managerReferenceID so only TSAs under that TSM appear.
+  useEffect(() => {
+    if (filterTSM === "all") {
+      const sorted = tsaList
+        .filter((t) => t.value !== "all")
+        .sort((a, b) => a.label.localeCompare(b.label));
+      setFilterDynamicTsaOptions([
+        { value: "all", label: "All TSA", status: "Active" },
+        ...sorted,
+      ]);
+      setFilterTSA("all");
+      return;
+    }
+    fetch(
+      `/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate&managerReferenceID=${filterTSM}`,
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        const opts: ComboOption[] = (Array.isArray(data) ? data : [])
+          .map((u: any) => ({
+            value: u.ReferenceID,
+            label: `${u.Firstname} ${u.Lastname}`,
+            status: u.Status ?? "Active",
+          }))
+          .sort((a: ComboOption, b: ComboOption) =>
+            a.label.localeCompare(b.label),
+          );
+        setFilterDynamicTsaOptions([
+          { value: "all", label: "All TSA" },
+          ...opts,
+        ]);
+        setFilterTSA("all");
+      })
+      .catch((err) => console.error("Error fetching TSAs for filter:", err));
+  }, [filterTSM, tsaList]);
+
+  // ── Fetch customers ─────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchData = async () => {
       setIsFetching(true);
@@ -494,7 +874,6 @@ export default function CustomerDatabasePage() {
         setCustomers(json.data || []);
         toast.success("Customer data loaded successfully!", { id: toastId });
       } catch (err: any) {
-        console.error("Error fetching customers:", err);
         toast.error(`Failed to load customer data: ${err.message}`, {
           id: toastId,
         });
@@ -505,7 +884,7 @@ export default function CustomerDatabasePage() {
     fetchData();
   }, []);
 
-  // ── Fetch dropdowns for TransferDialog ───────────────────────────────────
+  // ── Fetch dropdowns for TransferDialog ─────────────────────────────────────
   useEffect(() => {
     if (!showTransferDialog) return;
     const fetchDropdowns = async () => {
@@ -545,19 +924,90 @@ export default function CustomerDatabasePage() {
     fetchDropdowns();
   }, [showTransferDialog]);
 
-  // ── Filter options ────────────────────────────────────────────────────────
-  const typeOptions = useMemo(
-    () => [
-      "all",
-      ...new Set(customers.map((c) => c.type_client).filter(Boolean)),
-    ],
-    [customers],
-  );
-  const statusOptions = useMemo(
-    () => ["all", ...new Set(customers.map((c) => c.status).filter(Boolean))],
-    [customers],
-  );
+  // ── Import form: fetch managers ─────────────────────────────────────────────
+  useEffect(() => {
+    fetch("/api/UserManagement/FetchManager?Role=Manager")
+      .then((res) => res.json())
+      .then((data) => {
+        const opts: ComboOption[] = (Array.isArray(data) ? data : [])
+          .map((u: any) => ({
+            value: u.ReferenceID,
+            label: `${u.Firstname} ${u.Lastname}`,
+          }))
+          .sort((a: ComboOption, b: ComboOption) =>
+            a.label.localeCompare(b.label),
+          );
+        setImportManagerOptions(opts);
+      })
+      .catch((err) => console.error("Error fetching managers:", err));
+  }, []);
 
+  // ── Import form: fetch TSMs scoped to selected manager ──────────────────────
+  useEffect(() => {
+    if (!importSelectedManager) {
+      setImportTsmOptions([]);
+      setImportSelectedTSM("");
+      setImportSelectedTSA("");
+      return;
+    }
+    fetch(
+      `/api/UserManagement/FetchTSM?Role=Territory Sales Manager&managerReferenceID=${importSelectedManager}`,
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const opts: ComboOption[] = data
+            .map((u: any) => ({
+              value: u.ReferenceID,
+              label: `${u.Firstname} ${u.Lastname}`,
+            }))
+            .sort((a: ComboOption, b: ComboOption) =>
+              a.label.localeCompare(b.label),
+            );
+          setImportTsmOptions(opts);
+        } else {
+          setImportTsmOptions([]);
+        }
+      })
+      .catch((err) => console.error("Error fetching TSMs:", err));
+    setImportSelectedTSM("");
+    setImportSelectedTSA("");
+  }, [importSelectedManager]);
+
+  // ── Import form: fetch TSAs scoped to selected TSM via FetchAllTSA ──────────
+  // Passes managerReferenceID (= the TSM's ReferenceID) so only that TSM's
+  // TSAs are returned. Uses FetchAllTSA so inactive/resigned accounts appear.
+  useEffect(() => {
+    if (!importSelectedTSM) {
+      setImportTsaOptions([]);
+      setImportSelectedTSA("");
+      return;
+    }
+    fetch(
+      `/api/UserManagement/FetchAllTSA?Role=Territory%20Sales%20Associate&managerReferenceID=${importSelectedTSM}`,
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const opts: ComboOption[] = data
+            .map((u: any) => ({
+              value: u.ReferenceID,
+              label: `${u.Firstname} ${u.Lastname}`,
+              status: u.Status ?? "Active",
+            }))
+            .sort((a: ComboOption, b: ComboOption) =>
+              a.label.localeCompare(b.label),
+            );
+          setImportTsaOptions(opts);
+        } else {
+          setImportTsaOptions([]);
+        }
+      })
+      .catch((err) => console.error("Error fetching TSAs:", err));
+    setImportSelectedTSA("");
+  }, [importSelectedTSM]);
+
+  // ── Filter update effect ────────────────────────────────────────────────────
   useEffect(() => {
     setIsFiltering(true);
     const timer = setTimeout(() => {
@@ -569,7 +1019,18 @@ export default function CustomerDatabasePage() {
 
   useEffect(() => setPage(1), [search, filterType, filterStatus]);
 
-  // ── TSA map ───────────────────────────────────────────────────────────────
+  // ── Derived: filter options ─────────────────────────────────────────────────
+  const typeOptions = useMemo(() => {
+    const types = new Set(customers.map((c) => c.type_client).filter(Boolean));
+    return ["all", ...Array.from(types)];
+  }, [customers]);
+
+  const statusOptions = useMemo(() => {
+    const statuses = new Set(customers.map((c) => c.status).filter(Boolean));
+    return ["all", ...Array.from(statuses)];
+  }, [customers]);
+
+  // ── TSA map ─────────────────────────────────────────────────────────────────
   const tsaMap = useMemo(() => {
     const map: Record<string, string> = {};
     tsaList.forEach((t) => {
@@ -578,7 +1039,7 @@ export default function CustomerDatabasePage() {
     return map;
   }, [tsaList]);
 
-  // ── Filtered + sorted data ────────────────────────────────────────────────
+  // ── Filtered + sorted data ──────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return customers
       .filter((c) =>
@@ -589,7 +1050,7 @@ export default function CustomerDatabasePage() {
           c.region,
           c.manager,
           c.tsm,
-        ].some((f) => f?.toLowerCase().includes(search.toLowerCase())),
+        ].some((field) => field?.toLowerCase().includes(search.toLowerCase())),
       )
       .filter((c) =>
         filterType === "all" ? true : c.type_client === filterType,
@@ -613,9 +1074,9 @@ export default function CustomerDatabasePage() {
         return true;
       })
       .sort((a, b) => {
-        const dA = new Date(a.date_created).getTime();
-        const dB = new Date(b.date_created).getTime();
-        return sortOrder === "asc" ? dA - dB : dB - dA;
+        const dateA = new Date(a.date_created).getTime();
+        const dateB = new Date(b.date_created).getTime();
+        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
       });
   }, [
     customers,
@@ -647,23 +1108,225 @@ export default function CustomerDatabasePage() {
   );
   const totalCount = filtered.length;
 
-  const handleReturn = useCallback(() => {
+  // ── Import handlers ─────────────────────────────────────────────────────────
+  const handleFileSelect = async (file: File) => {
+    setImportFile(file);
+    setImportOriginalFileName(file.name.replace(/\.[^/.]+$/, ""));
+    setParseLog([]);
+    setIsParsing(true);
+    addParseLog("info", `📂 Reading "${file.name}"…`);
+    try {
+      const data = await parseExcelForFile(
+        file,
+        importSelectedTSA,
+        importSelectedManager,
+        importSelectedTSM,
+      );
+      addParseLog("ok", `✅ Parsed ${data.length} row(s)`);
+
+      const types = [
+        ...new Set(data.map((r: any) => r.type_client).filter(Boolean)),
+      ] as string[];
+      const statuses = [
+        ...new Set(data.map((r: any) => r.status).filter(Boolean)),
+      ] as string[];
+      const regions = [
+        ...new Set(data.map((r: any) => r.region).filter(Boolean)),
+      ] as string[];
+
+      if (types.length)
+        addParseLog(
+          "info",
+          `  → ${types.length} type(s): ${types.slice(0, 4).join(", ")}${types.length > 4 ? " …" : ""}`,
+        );
+      if (statuses.length)
+        addParseLog(
+          "info",
+          `  → ${statuses.length} status(es): ${statuses.slice(0, 4).join(", ")}${statuses.length > 4 ? " …" : ""}`,
+        );
+      if (regions.length)
+        addParseLog(
+          "info",
+          `  → ${regions.length} region(s): ${regions.slice(0, 4).join(", ")}${regions.length > 4 ? " …" : ""}`,
+        );
+
+      const missingStatus = data.filter((r: any) => !r.status?.trim()).length;
+      const missingType = data.filter(
+        (r: any) => !r.type_client?.trim(),
+      ).length;
+      if (missingStatus)
+        addParseLog("warn", `  ⚠️  ${missingStatus} row(s) missing status`);
+      if (missingType)
+        addParseLog("warn", `  ⚠️  ${missingType} row(s) missing type`);
+
+      addParseLog(
+        "ok",
+        `🚀 Ready — ${data.length} record(s) queued for upload`,
+      );
+      setImportPreviewData(data);
+    } catch {
+      addParseLog("err", `❌ Failed to parse "${file.name}"`);
+      toast.error("Failed to parse Excel file.");
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const handleImportUpload = async () => {
+    if (!importFile) return toast.error("Please select a file.");
+    if (!importSelectedTSA) return toast.error("Please select a TSA.");
+
+    setIsImportLoading(true);
+    setImportFailedRows([]);
+
+    try {
+      const parsed = await parseExcelForFile(
+        importFile,
+        importSelectedTSA,
+        importSelectedManager,
+        importSelectedTSM,
+      );
+      const total = parsed.length;
+      const batchSize = 10;
+      const failed: any[] = [];
+
+      for (let i = 0; i < total; i += batchSize) {
+        const batch = parsed.slice(i, i + batchSize);
+        toast(
+          `Uploading ${i + 1}–${Math.min(i + batchSize, total)}/${total}: ${batch[0].company_name}`,
+          { duration: 1000 },
+        );
+        const response = await fetch(
+          "/api/Data/Applications/Taskflow/CustomerDatabase/Import",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              referenceid: importSelectedTSA,
+              tsm: importSelectedTSM || "",
+              data: batch,
+            }),
+          },
+        );
+        const result = await response.json();
+        if (!result.success && result.failed) {
+          failed.push(...result.failed);
+        }
+      }
+
+      const successCount = total - failed.length;
+      if (failed.length > 0) {
+        setImportFailedRows(failed);
+        toast.error(
+          `Failed to import ${failed.length} records. Download the failed rows for review.`,
+        );
+      } else {
+        toast.success(`Successfully imported ${total} records.`);
+      }
+
+      if (successCount > 0) {
+        const tsaLabel =
+          importTsaOptions.find((o) => o.value === importSelectedTSA)?.label ??
+          importSelectedTSA;
+        handleImportSuccess(successCount, importSelectedTSA, tsaLabel);
+      }
+
+      setImportFile(null);
+      setImportPreviewData([]);
+      setParseLog([]);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to import file.");
+    } finally {
+      setIsImportLoading(false);
+    }
+  };
+
+  const handleDownloadFailed = () => {
+    if (importFailedRows.length === 0) {
+      toast.info("No failed rows to download.");
+      return;
+    }
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Failed Rows");
+    worksheet.addRow([
+      "company_name",
+      "contact_person",
+      "contact_number",
+      "email_address",
+      "type_client",
+      "address",
+      "region",
+      "status",
+      "company_group",
+      "delivery_address",
+      "industry",
+    ]);
+    importFailedRows.forEach((row) => {
+      worksheet.addRow([
+        row.company_name,
+        row.contact_person,
+        row.contact_number,
+        row.email_address,
+        row.type_client,
+        row.address,
+        row.region,
+        row.status,
+        row.company_group,
+        row.delivery_address,
+        row.industry,
+      ]);
+    });
+    workbook.xlsx.writeBuffer().then((buffer) => {
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${importOriginalFileName || "failed_rows"}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  };
+
+  // ── Import success callback ─────────────────────────────────────────────────
+  const handleImportSuccess = async (
+    count: number,
+    tsaId: string,
+    tsaName: string,
+  ) => {
+    await logCustomerAudit({
+      action: "create",
+      affectedCount: count,
+      customerName: `${count} customers imported`,
+      transfer: null,
+      changes: { assigned_tsa: { before: null, after: tsaName } },
+      actor: currentActorRef.current,
+      context: { page: AUDIT_PAGE, source: "ImportForm", bulk: count > 1 },
+    });
+  };
+
+  // ── Audit helpers ───────────────────────────────────────────────────────────
+  const toggleAuditSelection = (key: AuditKey) => {
+    setAuditSelection((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleReturn = () => {
     setIsAuditView(false);
     setAudited([]);
     setDuplicateIds(new Set());
-    setAuditFilter("");
-  }, []);
+  };
 
-  // ── Audit confirm ─────────────────────────────────────────────────────────
-  const handleConfirmAudit = useCallback((result: AuditResult) => {
-    setAudited(result.allAffectedCustomers);
-    setDuplicateIds(result.duplicateIds);
-    setIsAuditView(true);
-    setAuditFilter("all");
-  }, []);
+  // ── Bulk delete ─────────────────────────────────────────────────────────────
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return toast.error("No customers selected.");
+    setShowDeleteDialog(true);
+  };
 
-  // ── Bulk delete ───────────────────────────────────────────────────────────
-  const executeBulkDelete = useCallback(async (): Promise<void> => {
+  const executeBulkDelete = async (): Promise<void> => {
     if (selectedIds.size === 0) {
       toast.error("No customers selected.");
       return;
@@ -672,7 +1335,6 @@ export default function CustomerDatabasePage() {
     const deletedCustomers = customers.filter((c) => selectedIds.has(c.id));
     let deletedCount = 0;
     let loadingToastId = toast.loading(`Deleting 0/${idsArray.length}...`);
-
     try {
       const res = await fetch(
         "/api/Data/Applications/Taskflow/CustomerDatabase/BulkDelete",
@@ -687,7 +1349,6 @@ export default function CustomerDatabasePage() {
         toast.error(result.error || `Delete failed (HTTP ${res.status})`);
         return;
       }
-
       for (let i = 0; i < idsArray.length; i++) {
         deletedCount++;
         toast.dismiss(loadingToastId);
@@ -698,8 +1359,7 @@ export default function CustomerDatabasePage() {
       }
       toast.success(`Deleted ${deletedCount} customers.`);
       setCustomers((prev) => prev.filter((c) => !selectedIds.has(c.id)));
-      setSelectedIds(new Set());
-
+      setSelectedIdsAction(new Set());
       await Promise.all(
         deletedCustomers.map((c) =>
           logCustomerAudit({
@@ -720,33 +1380,28 @@ export default function CustomerDatabasePage() {
       console.error(err);
       toast.error("Bulk delete failed.");
     }
-  }, [selectedIds, customers]);
+  };
 
-  const toggleSelect = useCallback(
-    (id: number) => {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        setSelectAll(next.size === current.length);
-        return next;
-      });
-    },
-    [current.length],
-  );
+  const toggleSelect = (id: number) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedIdsAction(newSet);
+    setSelectAll(newSet.size === current.length);
+  };
 
-  const handleSelectAll = useCallback(() => {
+  const handleSelectAll = () => {
     if (selectAll) {
-      setSelectedIds(new Set());
+      setSelectedIdsAction(new Set());
       setSelectAll(false);
     } else {
-      setSelectedIds(new Set(current.map((c) => c.id)));
+      setSelectedIdsAction(new Set(current.map((c) => c.id)));
       setSelectAll(true);
     }
-  }, [selectAll, current]);
+  };
 
-  // ── Auto-generate reference numbers ──────────────────────────────────────
-  const handleAutoGenerate = useCallback(async () => {
+  // ── Auto-generate reference numbers ────────────────────────────────────────
+  const handleAutoGenerate = async () => {
     if (selectedIds.size === 0) {
       toast.error("No customers selected.");
       return;
@@ -759,11 +1414,17 @@ export default function CustomerDatabasePage() {
         if (parts.length === 1) return parts[0][0].toUpperCase();
         return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
       };
-      const updates = selectedCustomers.map((customer, index) => ({
-        id: customer.id,
-        account_reference_number: `${getInitials(customer.company_name)}-${(customer.region || "NCR").toUpperCase().replace(/\s+/g, "")}-${(index + 1).toString().padStart(10, "0")}`,
-      }));
-
+      const updates = selectedCustomers.map((customer, index) => {
+        const initials = getInitials(customer.company_name);
+        const regionCode = (customer.region || "NCR")
+          .toUpperCase()
+          .replace(/\s+/g, "");
+        const seqNum = (index + 1).toString().padStart(10, "0");
+        return {
+          id: customer.id,
+          account_reference_number: `${initials}-${regionCode}-${seqNum}`,
+        };
+      });
       const res = await fetch(
         "/api/Data/Applications/Taskflow/CustomerDatabase/UpdateReferenceNumber",
         {
@@ -777,7 +1438,6 @@ export default function CustomerDatabasePage() {
         toast.error(result.error || "Failed to update reference numbers.");
         return;
       }
-
       setCustomers((prev) =>
         prev.map((c) => {
           const u = updates.find((u) => u.id === c.id);
@@ -787,7 +1447,6 @@ export default function CustomerDatabasePage() {
         }),
       );
       toast.success("Reference numbers generated and updated successfully.");
-
       await Promise.all(
         selectedCustomers.map((c, i) =>
           logCustomerAudit({
@@ -816,76 +1475,93 @@ export default function CustomerDatabasePage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [selectedIds, customers]);
+  };
 
-  // ── Transfer success callback ─────────────────────────────────────────────
-  const handleTransferSuccess = useCallback(
-    async (payload: TransferSuccessPayload) => {
-      const snapshot = preTransferSnapshotRef.current;
-      if (!snapshot.length) return;
+  // ── Transfer ────────────────────────────────────────────────────────────────
+  const handleOpenTransferDialog = () => {
+    preTransferSnapshotRef.current = customers.filter((c) =>
+      selectedIds.has(c.id),
+    );
+    setShowTransferDialog(true);
+  };
 
-      const transfer: TransferDetail = {
-        tsa: payload.tsa
-          ? {
-              toId: payload.tsa.toId,
-              toName: payload.tsa.toName,
-              fromId: snapshot[0].referenceid || null,
-              fromName:
-                tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
-                snapshot[0].referenceid ||
-                null,
-            }
-          : null,
-        tsm: payload.tsm
-          ? { toName: payload.tsm.toName, fromName: snapshot[0].tsm || null }
-          : null,
-        manager: payload.manager
-          ? {
-              toName: payload.manager.toName,
-              fromName: snapshot[0].manager || null,
-            }
-          : null,
-      };
+  const handleTransferSuccess = async (payload: TransferSuccessPayload) => {
+    const snapshot = preTransferSnapshotRef.current;
+    if (!snapshot.length) return;
+    const transfer: TransferDetail = {
+      tsa: payload.tsa
+        ? {
+            toId: payload.tsa.toId,
+            toName: payload.tsa.toName,
+            fromId: snapshot[0].referenceid || null,
+            fromName:
+              tsaMap[snapshot[0].referenceid?.trim().toLowerCase()] ||
+              snapshot[0].referenceid ||
+              null,
+          }
+        : null,
+      tsm: payload.tsm
+        ? { toName: payload.tsm.toName, fromName: snapshot[0].tsm || null }
+        : null,
+      manager: payload.manager
+        ? {
+            toName: payload.manager.toName,
+            fromName: snapshot[0].manager || null,
+          }
+        : null,
+    };
+    await Promise.all(
+      snapshot.map((c) =>
+        logCustomerAudit({
+          action: "transfer",
+          affectedCount: snapshot.length,
+          customerId: String(c.id),
+          customerName: c.company_name,
+          transfer,
+          actor: currentActorRef.current,
+          context: {
+            page: AUDIT_PAGE,
+            source: "TransferDialog",
+            bulk: snapshot.length > 1,
+          },
+        }),
+      ),
+    );
+    preTransferSnapshotRef.current = [];
+  };
 
-      await Promise.all(
-        snapshot.map((c) =>
-          logCustomerAudit({
-            action: "transfer",
-            affectedCount: snapshot.length,
-            customerId: String(c.id),
-            customerName: c.company_name,
-            transfer,
-            actor: currentActorRef.current,
-            context: {
-              page: AUDIT_PAGE,
-              source: "TransferDialog",
-              bulk: snapshot.length > 1,
-            },
-          }),
-        ),
-      );
-      preTransferSnapshotRef.current = [];
-    },
-    [tsaMap],
-  );
+  // ── Reset filters ───────────────────────────────────────────────────────────
+  const handleResetFilters = () => {
+    setFilterTSM("all");
+    setFilterTSA("all");
+    setFilterType("all");
+    setFilterStatus("all");
+    setStartDate("");
+    setEndDate("");
+    setSortOrder("desc");
+    setRowsPerPage(20);
+    setPage(1);
+  };
 
-  // ── Import callback ───────────────────────────────────────────────────────
-  const handleImportSuccess = useCallback(
-    async (count: number, tsaId: string, tsaName: string) => {
-      await logCustomerAudit({
-        action: "create",
-        affectedCount: count,
-        customerName: `${count} customers imported`,
-        transfer: null,
-        changes: { assigned_tsa: { before: null, after: tsaName } },
-        actor: currentActorRef.current,
-        context: { page: AUDIT_PAGE, source: "ImportDialog", bulk: count > 1 },
-      });
-    },
-    [],
-  );
+  const hasActiveFilters =
+    filterTSM !== "all" ||
+    filterTSA !== "all" ||
+    filterType !== "all" ||
+    filterStatus !== "all" ||
+    !!startDate ||
+    !!endDate ||
+    sortOrder !== "desc" ||
+    rowsPerPage !== 20;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ── Parse log color helper ──────────────────────────────────────────────────
+  const parseLogColor = (type: string) => {
+    if (type === "ok") return "text-emerald-400";
+    if (type === "warn") return "text-amber-400";
+    if (type === "err") return "text-red-400";
+    return "text-zinc-400";
+  };
+
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <ProtectedPageWrapper>
       <SidebarProvider>
@@ -905,15 +1581,7 @@ export default function CustomerDatabasePage() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbLink
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      router.push("/taskflow/customer-database");
-                    }}
-                  >
-                    Taskflow
-                  </BreadcrumbLink>
+                  <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
@@ -923,387 +1591,914 @@ export default function CustomerDatabasePage() {
             </Breadcrumb>
           </header>
 
-          {/* Toolbar */}
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 px-4 py-3">
-            <div className="relative w-full sm:max-w-xs">
-              <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Search customers..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 w-full pr-8"
-              />
-              {isFiltering && (
-                <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end w-full gap-2 sm:w-auto">
-              <Button
-                variant="outline"
-                onClick={() => setShowFilters((prev) => !prev)}
-              >
-                <Filter />
-              </Button>
-              <Calendar
-                startDate={startDate}
-                endDate={endDate}
-                setStartDateAction={setStartDate}
-                setEndDateAction={setEndDate}
-              />
-              <ImportDialog onSuccessAction={handleImportSuccess} />
-              <Download data={filtered} filename="CustomerDatabase" />
-
-              {selectedIds.size > 0 && (
+          {/* Page title */}
+          <div className="px-4 pb-2">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Customer Database
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {isFetching ? (
+                "Loading…"
+              ) : (
                 <>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      preTransferSnapshotRef.current = customers.filter((c) =>
-                        selectedIds.has(c.id),
-                      );
-                      setShowTransferDialog(true);
-                    }}
-                  >
-                    <ArrowRight className="w-4 h-4" /> Transfer
-                  </Button>
-                  <Button onClick={handleAutoGenerate} disabled={isGenerating}>
-                    {isGenerating ? "Generating..." : "Auto-Generate ID"} (
-                    {selectedIds.size})
-                  </Button>
-                  <Button
-                    onClick={() => setShowDeleteDialog(true)}
-                    variant="destructive"
-                  >
-                    Delete Selected ({selectedIds.size})
-                  </Button>
+                  <span className="font-semibold text-foreground">
+                    {filtered.length}
+                  </span>{" "}
+                  customer
+                  {filtered.length !== 1 ? "s" : ""}
                 </>
               )}
-
-              {!isAuditView ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAuditDialog(true)}
-                >
-                  Audit
-                </Button>
-              ) : (
-                <Button variant="outline" onClick={handleReturn}>
-                  Return to List
-                </Button>
-              )}
-
-              <TransferDialog
-                open={showTransferDialog}
-                onOpenChangeAction={setShowTransferDialog}
-                selectedIds={new Set(Array.from(selectedIds).map(String))}
-                setSelectedIdsAction={(ids: Set<string>) =>
-                  setSelectedIds(new Set(Array.from(ids).map(Number)))
-                }
-                setAccountsAction={(fn) => setCustomers((prev) => fn(prev))}
-                tsas={tsas}
-                tsms={tsms}
-                managers={managers}
-                onSuccessAction={handleTransferSuccess}
-              />
-            </div>
-
-            {showFilters && (
-              <FilterDialog
-                open={showFilters}
-                onOpenChange={setShowFilters}
-                filterTSA={filterTSA}
-                setFilterTSA={setFilterTSA}
-                filterType={filterType}
-                setFilterType={setFilterType}
-                filterStatus={filterStatus}
-                setFilterStatus={setFilterStatus}
-                rowsPerPage={rowsPerPage}
-                setRowsPerPage={setRowsPerPage}
-                tsaList={tsaList}
-                typeOptions={typeOptions}
-                statusOptions={statusOptions}
-                sortOrder={sortOrder}
-                setSortOrder={setSortOrder}
-                onClose={() => setShowFilters(false)}
-              />
-            )}
+            </p>
           </div>
 
-          {/* Audit summary bar */}
-          {isAuditView && (
-            <div className="mx-4 mb-2 mt-1 flex flex-col gap-2 bg-muted/50 rounded-md px-4 py-2 border border-border text-[13px]">
-              <div className="flex justify-between items-center flex-wrap gap-2">
-                <div className="font-medium select-none text-red-600">
-                  🧾 Audit Summary:{" "}
-                  <span className="font-semibold text-red-600">
-                    {audited.length}
-                  </span>{" "}
-                  total issues found
+          {/* ── Two-column layout ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 px-4 pb-8 items-start">
+            {/* ═══ LEFT: Import + Filter ═══ */}
+            <div className="lg:col-span-4 sticky top-4 space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
+              {/* ── Import Form Card ── */}
+              <Card className="rounded-none shadow-none border-foreground/10">
+                <CardHeader className="border-b px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                      <Upload className="w-4 h-4" /> Import Customers
+                    </CardTitle>
+                    {(importFile || importSelectedManager) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 rounded-none text-[9px] uppercase font-bold text-muted-foreground"
+                        disabled={isImportLoading}
+                        onClick={() => {
+                          setImportFile(null);
+                          setImportOriginalFileName(null);
+                          setImportPreviewData([]);
+                          setImportFailedRows([]);
+                          setImportSelectedManager("");
+                          setImportSelectedTSM("");
+                          setImportSelectedTSA("");
+                          setParseLog([]);
+                        }}
+                      >
+                        <RotateCcw className="mr-1 h-3 w-3" /> Reset
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="pt-4 px-4 space-y-3">
+                  {/* Manager */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Manager
+                    </label>
+                    <Combobox
+                      options={importManagerOptions}
+                      value={importSelectedManager}
+                      onValueChange={setImportSelectedManager}
+                      placeholder="Select Manager…"
+                      disabled={isImportLoading}
+                    />
+                  </div>
+
+                  {/* TSM */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Territory Sales Manager
+                    </label>
+                    <Combobox
+                      options={importTsmOptions}
+                      value={importSelectedTSM}
+                      onValueChange={setImportSelectedTSM}
+                      placeholder="Select TSM…"
+                      disabled={isImportLoading || !importSelectedManager}
+                      emptyText={
+                        !importSelectedManager
+                          ? "Select a Manager first."
+                          : "No TSMs found."
+                      }
+                    />
+                  </div>
+
+                  {/* TSA — locked until TSM selected; results scoped to that TSM */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Territory Sales Associate{" "}
+                      <span className="text-destructive">*</span>
+                    </label>
+                    <Combobox
+                      options={importTsaOptions}
+                      value={importSelectedTSA}
+                      onValueChange={setImportSelectedTSA}
+                      placeholder="Select TSA…"
+                      disabled={isImportLoading || !importSelectedTSM}
+                      emptyText={
+                        !importSelectedManager
+                          ? "Select a Manager first."
+                          : !importSelectedTSM
+                            ? "Select a TSM first."
+                            : "No TSAs found."
+                      }
+                    />
+                  </div>
+
+                  {/* Dropzone */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Excel File <span className="text-destructive">*</span>
+                    </label>
+                    <DropZone
+                      file={importFile}
+                      fileName={importOriginalFileName}
+                      onFileSelect={handleFileSelect}
+                      onClear={() => {
+                        setImportFile(null);
+                        setImportOriginalFileName(null);
+                        setImportPreviewData([]);
+                        setParseLog([]);
+                      }}
+                      disabled={isImportLoading}
+                    />
+                  </div>
+
+                  {/* ── Parse Console ── */}
+                  {parseLog.length > 0 && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase opacity-60 flex items-center gap-1.5">
+                        <Terminal className="w-3 h-3" /> Parse Output
+                        {isParsing && (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        )}
+                      </label>
+                      <div className="rounded-none border border-zinc-700 bg-zinc-950 overflow-hidden">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border-b border-zinc-800">
+                          <span className="w-2 h-2 rounded-full bg-red-500" />
+                          <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                          <span className="w-2 h-2 rounded-full bg-green-500" />
+                          <span className="font-mono text-[10px] text-zinc-500 ml-1 select-none">
+                            parser — bash
+                          </span>
+                        </div>
+                        <div className="px-3 py-2 font-mono text-[10px] space-y-0.5 max-h-36 overflow-y-auto">
+                          {parseLog.map((line, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                "leading-relaxed",
+                                parseLogColor(line.type),
+                              )}
+                            >
+                              {line.msg}
+                            </div>
+                          ))}
+                          {isParsing && (
+                            <span className="inline-block w-1.5 h-3 bg-emerald-400 animate-pulse align-middle" />
+                          )}
+                          <div ref={parseLogEndRef} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview */}
+                  {importPreviewData.length > 0 && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase opacity-60">
+                        Preview ({importPreviewData.length} rows)
+                      </label>
+                      <div className="overflow-auto max-h-44 border rounded-none text-[10px]">
+                        <table className="w-full whitespace-nowrap">
+                          <thead className="bg-muted/50 sticky top-0">
+                            <tr>
+                              {[
+                                "Company",
+                                "Contact",
+                                "Email",
+                                "Type",
+                                "Region",
+                                "Status",
+                              ].map((h) => (
+                                <th
+                                  key={h}
+                                  className="px-2 py-1.5 text-left font-semibold text-muted-foreground uppercase tracking-wider"
+                                >
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {importPreviewData.slice(0, 20).map((row, i) => (
+                              <tr key={i} className="hover:bg-muted/30">
+                                <td className="px-2 py-1 truncate max-w-[100px]">
+                                  {row.company_name}
+                                </td>
+                                <td className="px-2 py-1 truncate max-w-[80px]">
+                                  {row.contact_person}
+                                </td>
+                                <td className="px-2 py-1 truncate max-w-[100px]">
+                                  {row.email_address}
+                                </td>
+                                <td className="px-2 py-1">{row.type_client}</td>
+                                <td className="px-2 py-1">{row.region}</td>
+                                <td className="px-2 py-1">{row.status}</td>
+                              </tr>
+                            ))}
+                            {importPreviewData.length > 20 && (
+                              <tr>
+                                <td
+                                  colSpan={6}
+                                  className="px-2 py-1.5 text-center text-muted-foreground italic"
+                                >
+                                  +{importPreviewData.length - 20} more rows
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    {importFailedRows.length > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDownloadFailed}
+                        className="rounded-none text-xs flex-1 gap-1"
+                      >
+                        <DownloadIcon className="h-3.5 w-3.5" />
+                        Failed ({importFailedRows.length})
+                      </Button>
+                    )}
+                    <Button
+                      onClick={handleImportUpload}
+                      disabled={
+                        isImportLoading || !importFile || !importSelectedTSA
+                      }
+                      className="rounded-none uppercase font-bold text-[10px] h-10 tracking-widest gap-2 flex-1"
+                    >
+                      {isImportLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />{" "}
+                          Uploading…
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4" /> Upload
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Filter Panel Card ── */}
+              <Card className="rounded-none shadow-none border-foreground/10">
+                <CardHeader className="border-b px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                      <SlidersHorizontal className="w-4 h-4" /> Filters
+                      {hasActiveFilters && (
+                        <span className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </CardTitle>
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 rounded-none text-[9px] uppercase font-bold text-muted-foreground"
+                        onClick={handleResetFilters}
+                      >
+                        <RotateCcw className="mr-1 h-3 w-3" /> Reset
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="pt-4 px-4 space-y-3">
+                  {/* TSM Filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Sales Manager
+                    </label>
+                    <Combobox
+                      options={filterTSMList}
+                      value={filterTSM}
+                      onValueChange={(v) => {
+                        setFilterTSM(v || "all");
+                        setPage(1);
+                      }}
+                      placeholder="All TSM"
+                    />
+                  </div>
+
+                  {/* TSA Filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Sales Associate
+                    </label>
+                    <Combobox
+                      options={filterDynamicTsaOptions}
+                      value={filterTSA}
+                      onValueChange={(v) => {
+                        setFilterTSA(v || "all");
+                        setPage(1);
+                      }}
+                      placeholder="All TSA"
+                      emptyText={
+                        filterTSM !== "all"
+                          ? "No TSAs found under this TSM."
+                          : "No TSAs found."
+                      }
+                    />
+                  </div>
+
+                  {/* Type Filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Client Type
+                    </label>
+                    <Select
+                      value={filterType}
+                      onValueChange={(v) => {
+                        setFilterType(v);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs rounded-none">
+                        <SelectValue placeholder="All Types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {typeOptions.map((t) => (
+                          <SelectItem
+                            key={t}
+                            value={t}
+                            className="text-xs capitalize"
+                          >
+                            {t === "all" ? "All Types" : t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Status Filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Status
+                    </label>
+                    <Select
+                      value={filterStatus}
+                      onValueChange={(v) => {
+                        setFilterStatus(v);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs rounded-none">
+                        <SelectValue placeholder="All Statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((s) => (
+                          <SelectItem
+                            key={s}
+                            value={s}
+                            className="text-xs capitalize"
+                          >
+                            {s === "all" ? "All Statuses" : s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Sort Order */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Sort Order
+                    </label>
+                    <Select
+                      value={sortOrder}
+                      onValueChange={(v) => setSortOrder(v as "asc" | "desc")}
+                    >
+                      <SelectTrigger className="h-9 text-xs rounded-none">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="desc" className="text-xs">
+                          Latest First
+                        </SelectItem>
+                        <SelectItem value="asc" className="text-xs">
+                          Oldest First
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Rows per page */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase opacity-60">
+                      Rows per Page
+                    </label>
+                    <Select
+                      value={rowsPerPage.toString()}
+                      onValueChange={(v) => {
+                        setRowsPerPage(Number(v));
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs rounded-none">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[20, 50, 100, 1000, 12000, 30000].map((n) => (
+                          <SelectItem
+                            key={n}
+                            value={n.toString()}
+                            className="text-xs"
+                          >
+                            {n}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ═══ RIGHT: Table ═══ */}
+            <div className="lg:col-span-8 space-y-4">
+              {/* Toolbar */}
+              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3">
+                {/* Search */}
+                <div className="relative w-full sm:max-w-xs">
+                  <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search customers…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-8 w-full pr-8"
+                  />
+                  {isFiltering && (
+                    <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-2 justify-end ml-auto">
-                  <ButtonGroup
-                    aria-label="Audit Filter Buttons"
-                    className="flex"
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {/* ── Date Range toggle — no popover, opens inline panel below ── */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDateRange((v) => !v)}
+                    className={cn(
+                      "gap-1.5 text-xs",
+                      (startDate || endDate) && "border-primary text-primary",
+                    )}
                   >
-                    <Button
-                      size="sm"
-                      variant={
-                        auditFilter === "missingType" ? "secondary" : "outline"
-                      }
-                      className={`rounded-l-md ${auditFilter === "missingType" ? "bg-yellow-100 text-yellow-900" : ""}`}
-                      onClick={() =>
-                        setAuditFilter(
-                          auditFilter === "missingType" ? "" : "missingType",
-                        )
-                      }
-                    >
-                      ⚠ Missing Type:{" "}
-                      {
-                        audited.filter(
-                          (c) => !c.type_client?.trim() && c.status?.trim(),
-                        ).length
-                      }
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    {startDate || endDate
+                      ? `${startDate || "…"} → ${endDate || "…"}`
+                      : "Date Range"}
+                  </Button>
+
+                  <Download data={filtered} filename="CustomerDatabase" />
+
+                  {selectedIds.size > 0 && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleOpenTransferDialog}
+                      >
+                        <ArrowRight className="w-4 h-4 mr-1" /> Transfer
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleAutoGenerate}
+                        disabled={isGenerating}
+                      >
+                        <Hash className="w-4 h-4 mr-1" />
+                        {isGenerating
+                          ? "Generating…"
+                          : `Auto-ID (${selectedIds.size})`}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={handleBulkDelete}
+                      >
+                        Delete ({selectedIds.size})
+                      </Button>
+                    </>
+                  )}
+
+                  {!isAuditView ? (
+                    <Audit
+                      customers={customers}
+                      setAuditedAction={setAudited}
+                      setDuplicateIdsAction={setDuplicateIds}
+                      setIsAuditViewAction={setIsAuditView}
+                    />
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={handleReturn}>
+                      Return to List
                     </Button>
-                    <Button
-                      size="sm"
-                      variant={
-                        auditFilter === "missingStatus"
-                          ? "secondary"
-                          : "outline"
-                      }
-                      className={
-                        auditFilter === "missingStatus"
-                          ? "bg-yellow-100 text-yellow-900"
-                          : ""
-                      }
-                      onClick={() =>
-                        setAuditFilter(
-                          auditFilter === "missingStatus"
-                            ? ""
-                            : "missingStatus",
-                        )
-                      }
-                    >
-                      ⚠ Missing Status:{" "}
-                      {
-                        audited.filter(
-                          (c) => !c.status?.trim() && c.type_client?.trim(),
-                        ).length
-                      }
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={
-                        auditFilter === "duplicates" ? "secondary" : "outline"
-                      }
-                      className={`rounded-r-md ${auditFilter === "duplicates" ? "bg-red-100 text-red-900" : ""}`}
-                      onClick={() =>
-                        setAuditFilter(
-                          auditFilter === "duplicates" ? "" : "duplicates",
-                        )
-                      }
-                    >
-                      🔁 Duplicates: {Array.from(duplicateIds).length}
-                    </Button>
-                  </ButtonGroup>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Dialogs */}
-          <DeleteDialog
-            open={showDeleteDialog}
-            onOpenChange={setShowDeleteDialog}
-            selectedCount={selectedIds.size}
-            onConfirm={executeBulkDelete}
-          />
-          <AuditDialog
-            open={showAuditDialog}
-            onOpenChange={setShowAuditDialog}
-            customers={customers}
-            userId={currentUser.uid}
-            referenceId={currentUser.referenceId}
-            performedByRole={currentUser.role}
-            onConfirmAudit={handleConfirmAudit}
-          />
-
-          {/* Table */}
-          <div className="p-4">
-            <div className="flex justify-start mb-2">
-              <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
-            </div>
-
-            <div className="overflow-auto min-h-[200px] flex items-center justify-center">
-              {isFetching ? (
-                <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
-                  <Loader2 className="size-6 animate-spin" />
-                  <span>Loading customers...</span>
-                </div>
-              ) : current.length > 0 ? (
-                <Table className="whitespace-nowrap text-[13px] min-w-full">
-                  <TableHeader className="bg-muted sticky top-0 z-10">
-                    <TableRow>
-                      <TableHead className="w-8 text-center">
-                        <input
-                          type="checkbox"
-                          checked={selectAll}
-                          onChange={handleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead className="text-center">Actions</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Contact</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Area</TableHead>
-                      <TableHead>TSA</TableHead>
-                      <TableHead>TSM</TableHead>
-                      <TableHead>Manager</TableHead>
-                      <TableHead>Date Created</TableHead>
-                      <TableHead>Date Updated</TableHead>
-                      <TableHead>Next Available</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="text-[12px]">
-                    {current.map((c) => {
-                      const isMissingType = !c.type_client?.trim();
-                      const isMissingStatus = !c.status?.trim();
-                      const isDuplicate = duplicateIds.has(c.id);
-                      const isSelected = selectedIds.has(c.id);
-                      const isParked =
-                        c.status?.trim().toLowerCase() === "park";
-                      const tsaKey = c.referenceid?.trim().toLowerCase();
-                      const tsaEntry = tsaList.find(
-                        (t) => t.value.toLowerCase() === tsaKey,
-                      );
-                      const tsaLabel =
-                        tsaMap[tsaKey ?? ""] || c.referenceid || "-";
-                      const isInactiveTsa =
-                        tsaEntry &&
-                        INACTIVE_STATUSES.includes(tsaEntry.status ?? "");
-
-                      return (
-                        <TableRow
-                          key={c.id}
-                          className={isParked ? "opacity-60" : ""}
-                        >
-                          <TableCell className="text-center">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleSelect(c.id)}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingCustomer(c);
-                                setShowEditDialog(true);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                          </TableCell>
-                          <TableCell className="uppercase whitespace-normal break-words max-w-[250px]">
-                            <span
-                              className={
-                                isDuplicate || isMissingType || isMissingStatus
-                                  ? "line-through underline decoration-red-500 decoration-2"
-                                  : ""
-                              }
-                            >
-                              {c.company_name}
-                              <br />
-                              {c.account_reference_number}
-                            </span>
-                          </TableCell>
-                          <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
-                            {c.contact_person}
-                          </TableCell>
-                          <TableCell className="whitespace-normal break-words max-w-[250px]">
-                            {c.email_address}
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              className={
-                                isMissingType
-                                  ? "line-through underline decoration-red-500 decoration-2"
-                                  : ""
-                              }
-                            >
-                              {c.type_client || "—"}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <StatusBadge status={c.status} />
-                          </TableCell>
-                          <TableCell>{c.region}</TableCell>
-                          <TableCell className="capitalize">
-                            <span className="flex items-center gap-1 flex-wrap">
-                              {tsaLabel}
-                              {isInactiveTsa && (
-                                <span
-                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${tsaEntry?.status === "Terminated" ? "bg-red-100 text-red-700" : tsaEntry?.status === "Resigned" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"}`}
-                                >
-                                  {tsaEntry?.status}
-                                </span>
-                              )}
-                            </span>
-                          </TableCell>
-                          <TableCell>{c.tsm}</TableCell>
-                          <TableCell>{c.manager}</TableCell>
-                          <TableCell>
-                            {new Date(c.date_created).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            {new Date(c.date_updated).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            {c.next_available_date
-                              ? new Date(
-                                  c.next_available_date,
-                                ).toLocaleDateString()
-                              : "-"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="py-10 text-center text-xs text-muted-foreground">
-                  No customers found.
+              {/* ── Inline date range panel — shown/hidden by toggle button ── */}
+              {showDateRange && (
+                <div className="flex flex-wrap items-end gap-3 border border-border bg-muted/30 px-4 py-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase opacity-60 mb-1.5">
+                      Date Created Range
+                    </p>
+                    <Calendar
+                      startDate={startDate}
+                      endDate={endDate}
+                      setStartDateAction={setStartDate}
+                      setEndDateAction={setEndDate}
+                    />
+                  </div>
+                  {(startDate || endDate) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-8 self-end"
+                      onClick={() => {
+                        setStartDate("");
+                        setEndDate("");
+                      }}
+                    >
+                      <RotateCcw className="w-3 h-3 mr-1" /> Clear
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-8 self-end ml-auto"
+                    onClick={() => setShowDateRange(false)}
+                  >
+                    <X className="w-3 h-3 mr-1" /> Close
+                  </Button>
                 </div>
               )}
+
+              {/* Audit summary bar */}
+              {isAuditView && (
+                <div className="flex flex-col gap-2 bg-muted/50 rounded-none px-4 py-2 border border-border text-[13px]">
+                  <div className="flex justify-between items-center flex-wrap gap-2">
+                    <div
+                      className="font-medium cursor-pointer select-none underline text-red-600"
+                      onClick={() => {
+                        setAuditSelection({
+                          duplicates: true,
+                          missingType: true,
+                          missingStatus: true,
+                        });
+                        setShowAuditDialog(true);
+                      }}
+                    >
+                      🧾 Audit Summary:{" "}
+                      <span className="font-semibold text-red-600">
+                        {audited.length}
+                      </span>{" "}
+                      total issues found
+                    </div>
+                    <div className="flex flex-wrap gap-2 justify-end ml-auto">
+                      <ButtonGroup>
+                        <Button
+                          size="sm"
+                          variant={
+                            auditFilter === "missingType"
+                              ? "secondary"
+                              : "outline"
+                          }
+                          className={cn(
+                            "rounded-l-md",
+                            auditFilter === "missingType" &&
+                              "bg-yellow-100 text-yellow-900",
+                          )}
+                          onClick={() =>
+                            setAuditFilter(
+                              auditFilter === "missingType"
+                                ? ""
+                                : "missingType",
+                            )
+                          }
+                        >
+                          ⚠ Missing Type:{" "}
+                          {
+                            audited.filter(
+                              (c) => !c.type_client?.trim() && c.status?.trim(),
+                            ).length
+                          }
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={
+                            auditFilter === "missingStatus"
+                              ? "secondary"
+                              : "outline"
+                          }
+                          className={cn(
+                            auditFilter === "missingStatus" &&
+                              "bg-yellow-100 text-yellow-900",
+                          )}
+                          onClick={() =>
+                            setAuditFilter(
+                              auditFilter === "missingStatus"
+                                ? ""
+                                : "missingStatus",
+                            )
+                          }
+                        >
+                          ⚠ Missing Status:{" "}
+                          {
+                            audited.filter(
+                              (c) => !c.status?.trim() && c.type_client?.trim(),
+                            ).length
+                          }
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={
+                            auditFilter === "duplicates"
+                              ? "secondary"
+                              : "outline"
+                          }
+                          className={cn(
+                            "rounded-r-md",
+                            auditFilter === "duplicates" &&
+                              "bg-red-100 text-red-900",
+                          )}
+                          onClick={() =>
+                            setAuditFilter(
+                              auditFilter === "duplicates" ? "" : "duplicates",
+                            )
+                          }
+                        >
+                          🔁 Duplicates: {Array.from(duplicateIds).length}
+                        </Button>
+                      </ButtonGroup>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dialogs */}
+              <DeleteDialog
+                open={showDeleteDialog}
+                onOpenChange={setShowDeleteDialog}
+                selectedCount={selectedIds.size}
+                onConfirm={executeBulkDelete}
+              />
+              <AuditDialog
+                open={showAuditDialog}
+                onOpenChange={setShowAuditDialog}
+                customers={customers}
+                onConfirmAudit={(result) => {
+                  setAudited(result.allAffectedCustomers);
+                  setDuplicateIds(result.duplicateIds);
+                  setIsAuditView(true);
+                }}
+              />
+
+              {/* Table */}
+              <div>
+                <div className="flex justify-start mb-2">
+                  <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
+                </div>
+
+                <div className="overflow-auto min-h-[200px] border border-border rounded-none flex items-center justify-center">
+                  {isFetching ? (
+                    <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
+                      <Loader2 className="size-6 animate-spin" />
+                      <span>Loading customers…</span>
+                    </div>
+                  ) : current.length > 0 ? (
+                    <Table className="whitespace-nowrap text-[13px] min-w-full">
+                      <TableHeader className="bg-muted sticky top-0 z-10">
+                        <TableRow>
+                          <TableHead className="w-8 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectAll}
+                              onChange={handleSelectAll}
+                            />
+                          </TableHead>
+                          <TableHead className="text-center">Actions</TableHead>
+                          <TableHead>Company</TableHead>
+                          <TableHead>Contact</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Area</TableHead>
+                          <TableHead>TSA</TableHead>
+                          <TableHead>TSM</TableHead>
+                          <TableHead>Manager</TableHead>
+                          <TableHead>Date Created</TableHead>
+                          <TableHead>Date Updated</TableHead>
+                          <TableHead>Next Available</TableHead>
+                        </TableRow>
+                      </TableHeader>
+
+                      <TableBody className="text-[12px]">
+                        {current.map((c) => {
+                          const isMissingType = !c.type_client?.trim();
+                          const isMissingStatus = !c.status?.trim();
+                          const isDuplicate = duplicateIds.has(c.id);
+                          const isSelected = selectedIds.has(c.id);
+                          const isParked =
+                            c.status?.trim().toLowerCase() === "park";
+
+                          return (
+                            <TableRow
+                              key={c.id}
+                              className={isParked ? "opacity-60" : ""}
+                            >
+                              <TableCell className="text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelect(c.id)}
+                                />
+                              </TableCell>
+
+                              <TableCell className="text-center">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingCustomer(c);
+                                    setShowEditDialog(true);
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                              </TableCell>
+
+                              <TableCell className="uppercase whitespace-normal break-words max-w-[250px]">
+                                <span
+                                  className={
+                                    isDuplicate ||
+                                    isMissingType ||
+                                    isMissingStatus
+                                      ? "line-through underline decoration-red-500 decoration-2"
+                                      : ""
+                                  }
+                                >
+                                  {c.company_name}
+                                  <br />
+                                  <span className="text-[10px] normal-case">
+                                    {c.account_reference_number}
+                                  </span>
+                                </span>
+                              </TableCell>
+
+                              <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
+                                {c.contact_person}
+                              </TableCell>
+
+                              <TableCell className="whitespace-normal break-words max-w-[250px]">
+                                {c.email_address}
+                              </TableCell>
+
+                              <TableCell>
+                                <span
+                                  className={
+                                    isMissingType
+                                      ? "line-through underline decoration-red-500 decoration-2"
+                                      : ""
+                                  }
+                                >
+                                  {c.type_client || "—"}
+                                </span>
+                              </TableCell>
+
+                              <TableCell className="text-center">
+                                <StatusBadge status={c.status} />
+                              </TableCell>
+
+                              <TableCell>{c.region}</TableCell>
+
+                              <TableCell className="capitalize">
+                                {(() => {
+                                  const key = c.referenceid
+                                    ?.trim()
+                                    .toLowerCase();
+                                  const tsaEntry = tsaList.find(
+                                    (t) => t.value.toLowerCase() === key,
+                                  );
+                                  const label =
+                                    tsaMap[key ?? ""] || c.referenceid || "-";
+                                  const isInactiveTsa =
+                                    tsaEntry &&
+                                    INACTIVE_STATUSES.includes(
+                                      tsaEntry.status ?? "",
+                                    );
+                                  return (
+                                    <span className="flex items-center gap-1 flex-wrap">
+                                      {label}
+                                      {isInactiveTsa && (
+                                        <span
+                                          className={cn(
+                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
+                                            tsaEntry?.status === "Terminated"
+                                              ? "bg-red-100 text-red-700"
+                                              : tsaEntry?.status === "Resigned"
+                                                ? "bg-orange-100 text-orange-700"
+                                                : "bg-gray-100 text-gray-600",
+                                          )}
+                                        >
+                                          {tsaEntry?.status}
+                                        </span>
+                                      )}
+                                    </span>
+                                  );
+                                })()}
+                              </TableCell>
+
+                              <TableCell>{c.tsm}</TableCell>
+                              <TableCell>{c.manager}</TableCell>
+                              <TableCell>
+                                {new Date(c.date_created).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                {new Date(c.date_updated).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                {c.next_available_date
+                                  ? new Date(
+                                      c.next_available_date,
+                                    ).toLocaleDateString()
+                                  : "-"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="py-10 text-center text-xs text-muted-foreground">
+                      No customers found.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Pagination + rows info */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Showing{" "}
+                  {displayData.length === 0 ? 0 : (page - 1) * rowsPerPage + 1}–
+                  {Math.min(page * rowsPerPage, displayData.length)} of{" "}
+                  {displayData.length} customers
+                </p>
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChangeAction={setPage}
+                />
+              </div>
             </div>
-          </div>
-
-          <EditCustomerDialog
-            open={showEditDialog}
-            onOpenChange={setShowEditDialog}
-            customer={editingCustomer}
-            actorRef={currentActorRef}
-            onSave={(updated) =>
-              setCustomers((prev) =>
-                prev.map((c) => (c.id === updated.id ? updated : c)),
-              )
-            }
-          />
-
-          <div className="flex justify-center items-center gap-4 my-4">
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChangeAction={setPage}
-            />
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* EditCustomerDialog */}
+      <EditCustomerDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        customer={editingCustomer}
+        actorRef={currentActorRef}
+        onSave={(updated) =>
+          setCustomers((prev) =>
+            prev.map((c) => (c.id === updated.id ? updated : c)),
+          )
+        }
+      />
+
+      {/* TransferDialog */}
+      <TransferDialog
+        open={showTransferDialog}
+        onOpenChangeAction={(open) => setShowTransferDialog(open)}
+        selectedIds={new Set(Array.from(selectedIds).map(String))}
+        setSelectedIdsAction={(ids: Set<string>) => {
+          setSelectedIdsAction(
+            new Set(Array.from(ids).map((id) => Number(id))),
+          );
+        }}
+        setAccountsAction={(updateFn) => setCustomers((prev) => updateFn(prev))}
+        tsas={tsas}
+        tsms={tsms}
+        managers={managers}
+        onSuccessAction={handleTransferSuccess}
+      />
     </ProtectedPageWrapper>
   );
 }
