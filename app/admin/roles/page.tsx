@@ -24,9 +24,9 @@ import {
   RotateCcw,
   UserPlus,
   SlidersHorizontal,
-  Check,
   Save,
   X as XIcon,
+  ShieldOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,6 +113,7 @@ interface UserAccount {
   TargetQuota: string;
   profilePicture?: string;
   Directories?: string[];
+  LoginAttempts?: number; // needed for Reset Client Access guard
 }
 
 type SortKey = keyof Pick<
@@ -248,7 +249,7 @@ export default function AccountPage() {
   );
   const [tsms, setTsms] = useState<{ label: string; value: string }[]>([]);
 
-  // ── Inline create-form state ───────────────────────────────────────────────
+  // ── Inline create/edit form state ──────────────────────────────────────────
   const [newUser, setNewUser] = useState<
     Partial<UserAccount> & { Password?: string; ConfirmPassword?: string }
   >({
@@ -276,6 +277,9 @@ export default function AccountPage() {
   const [formTsms, setFormTsms] = useState<{ label: string; value: string }[]>(
     [],
   );
+
+  // ── Reset Client Access state ───────────────────────────────────────────────
+  const [isResetting, setIsResetting] = useState(false);
 
   // ─── Fetch accounts ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -554,7 +558,6 @@ export default function AccountPage() {
     delete copy.Password;
     setNewUser({ ...copy, Password: "" });
     setFormMode("edit");
-    // Scroll the form into view
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -579,11 +582,7 @@ export default function AccountPage() {
     }
   };
 
-  // ─── Cross-DB sync helper — delegates to the unified TransferTSA service ──────
-  /**
-   * Calls POST /api/UserManagement/TransferTSA which updates MongoDB, Neon,
-   * and Supabase in one request. Neon failure rolls back MongoDB automatically.
-   */
+  // ─── Cross-DB sync helper ─────────────────────────────────────────────────────
   const syncTsmManager = async (
     tsaReferenceId: string,
     field: "tsm" | "manager",
@@ -600,12 +599,10 @@ export default function AccountPage() {
           newSupervisorReferenceId,
         }),
       });
-      // Guard against HTML error pages (404/500) before calling .json()
       const contentType = res.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
         console.error(
-          `[TransferTSA] HTTP ${res.status} — route not found or server error. ` +
-            "Ensure app/api/UserManagement/TransferTSA/route.ts is deployed.",
+          `[TransferTSA] HTTP ${res.status} — route not found or server error.`,
         );
         return;
       }
@@ -627,7 +624,6 @@ export default function AccountPage() {
     const toastId = toast.loading("Updating account...");
     setIsFormLoading(true);
 
-    // Snapshot before update so we can detect TSM/Manager changes
     const prevUser = accounts.find((a) => a._id === newUser._id);
 
     try {
@@ -697,6 +693,54 @@ export default function AccountPage() {
       toast.error((err as Error).message, { id: toastId });
     } finally {
       setIsFormLoading(false);
+    }
+  };
+
+  // ─── Reset Client Access ──────────────────────────────────────────────────────
+  /**
+   * Calls POST /api/UserManagement/ResetClientAccess
+   * Only updates Status → "Active" and LoginAttempts → 0 in MongoDB.
+   * All other user fields are untouched (see ResetClientAccess.ts).
+   */
+  const handleResetClientAccess = async () => {
+    if (!newUser._id) {
+      toast.error("No user selected.");
+      return;
+    }
+    setIsResetting(true);
+    const toastId = toast.loading("Resetting client access...");
+    try {
+      const res = await fetch("/api/UserManagement/ResetClientAccess", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: newUser._id }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.success)
+        throw new Error(result.message || "Reset failed");
+
+      // Update local form state — only Status and LoginAttempts change
+      setNewUser((prev) => ({
+        ...prev,
+        Status: "Active",
+        LoginAttempts: 0,
+        LockUntil: null,
+      }));
+
+      // Update accounts list — only the Status column needs to reflect
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a._id === newUser._id
+            ? { ...a, Status: "Active", LoginAttempts: 0 }
+            : a,
+        ),
+      );
+
+      toast.success("Client access reset successfully!", { id: toastId });
+    } catch (err) {
+      toast.error((err as Error).message, { id: toastId });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -811,6 +855,12 @@ export default function AccountPage() {
     });
   };
 
+  // ─── Derived: whether the user being edited is locked ─────────────────────────
+  const isEditingLockedUser =
+    formMode === "edit" &&
+    ((newUser.Status || "").trim().toLowerCase() === "locked" ||
+      (newUser.LoginAttempts ?? 0) >= 5);
+
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <UserProvider>
@@ -849,7 +899,7 @@ export default function AccountPage() {
                   User Management
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Manage CMS accounts and create new users —{" "}
+                  Manage company accounts and create new users —{" "}
                   {isFetching ? (
                     <span>Loading…</span>
                   ) : (
@@ -865,7 +915,7 @@ export default function AccountPage() {
 
               {/* ══ Two-column layout ══ */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 pb-8 items-start">
-                {/* ═══ LEFT: Inline Create Form ═══ */}
+                {/* ═══ LEFT: Inline Create / Edit Form ═══ */}
                 <div className="lg:col-span-4 sticky top-6 z-10">
                   <Card className="rounded-none shadow-none border-foreground/10 max-h-[calc(100vh-10rem)] overflow-y-auto">
                     <CardHeader className="border-b">
@@ -1039,7 +1089,7 @@ export default function AccountPage() {
                           </Select>
                         </div>
 
-                        {/* Email (auto-filled from company, but editable) */}
+                        {/* Email */}
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-bold uppercase opacity-60">
                             Email <span className="text-destructive">*</span>
@@ -1239,8 +1289,58 @@ export default function AccountPage() {
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
                             <option value="Suspended">Suspended</option>
+                            {/* Locked is read-only from the system; shown so it
+                                displays correctly when editing a locked user */}
+                            <option value="Locked">Locked</option>
                           </select>
                         </div>
+
+                        {/* ── Reset Client Access ─────────────────────────────
+                            Only visible in edit mode when the user is Locked
+                            or has reached 5 login attempts.
+                            Calls POST /api/UserManagement/ResetClientAccess
+                            which only updates Status + LoginAttempts + LockUntil.
+                            All other fields remain untouched in MongoDB.
+                        ─────────────────────────────────────────────────────── */}
+                        {isEditingLockedUser && (
+                          <div className="rounded-none border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <ShieldOff className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                              <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                                Account is Locked
+                              </span>
+                              {(newUser.LoginAttempts ?? 0) > 0 && (
+                                <span className="ml-auto text-[10px] text-amber-700 dark:text-amber-400">
+                                  {newUser.LoginAttempts}/5 attempts
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                              Reset the user's status to Active and clear their
+                              failed login count.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={isResetting || isFormLoading}
+                              onClick={handleResetClientAccess}
+                              className="w-full rounded-none h-9 text-[10px] uppercase font-bold tracking-widest gap-2 border-amber-400 text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                            >
+                              {isResetting ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />{" "}
+                                  Resetting…
+                                </>
+                              ) : (
+                                <>
+                                  <RotateCcw className="h-3.5 w-3.5" /> Reset
+                                  Client Access
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
 
                         {/* Password */}
                         <div className="space-y-1.5">
@@ -1355,6 +1455,7 @@ export default function AccountPage() {
                           </div>
                         </div>
 
+                        {/* Submit */}
                         <Button
                           type="submit"
                           disabled={isFormLoading}
@@ -1589,7 +1690,7 @@ export default function AccountPage() {
                               </DropdownMenuCheckboxItem>
                             ))}
 
-                            {/* Sales roles sub-filter — only when Sales is selected */}
+                            {/* Sales roles sub-filter */}
                             {filterDepartment === "Sales" && (
                               <>
                                 <DropdownMenuSeparator />
@@ -1879,7 +1980,6 @@ export default function AccountPage() {
             (() => {
               const u = viewingUser;
 
-              // TSAs that report to this user (by TSM or Manager ReferenceID)
               const subordinateTSAs = accounts.filter(
                 (a) =>
                   a.Role === "Territory Sales Associate" &&
@@ -1891,7 +1991,6 @@ export default function AccountPage() {
                 u.Role,
               );
 
-              // Resolve TSM / Manager names from accounts list
               const tsmUser = accounts.find((a) => a.ReferenceID === u.TSM);
               const managerUser = accounts.find(
                 (a) => a.ReferenceID === u.Manager,
@@ -1904,7 +2003,6 @@ export default function AccountPage() {
                 >
                   <DialogContent className="sm:max-w-2xl max-w-[95vw] max-h-[90vh] overflow-y-auto">
                     <DialogHeader className="pb-0">
-                      {/* Avatar + name row */}
                       <div className="flex items-start gap-4">
                         {u.profilePicture ? (
                           <img
@@ -1951,7 +2049,7 @@ export default function AccountPage() {
                     </DialogHeader>
 
                     <div className="space-y-5 pt-2">
-                      {/* ── Core details ── */}
+                      {/* Core details */}
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
                           Account Details
@@ -1987,7 +2085,7 @@ export default function AccountPage() {
                         </div>
                       </div>
 
-                      {/* ── TSA: show TSM + Manager hierarchy ── */}
+                      {/* TSA: show TSM + Manager hierarchy */}
                       {isTSA && (
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
@@ -2059,7 +2157,7 @@ export default function AccountPage() {
                         </div>
                       )}
 
-                      {/* ── TSM / Manager: show TSAs under them ── */}
+                      {/* TSM / Manager: show TSAs under them */}
                       {isLeader && (
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
@@ -2123,7 +2221,7 @@ export default function AccountPage() {
                         </div>
                       )}
 
-                      {/* ── Directory access ── */}
+                      {/* Directory access */}
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
                           Directory Access
