@@ -2,6 +2,99 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Sci-Fi Theme Colors */
+  --sci-bg-primary: #0a0f1a;
+  --sci-bg-secondary: #0d1424;
+  --sci-bg-card: #111827;
+  --sci-bg-panel: #0f172a;
+  
+  --sci-cyan: #06b6d4;
+  --sci-cyan-glow: rgba(6, 182, 212, 0.4);
+  --sci-purple: #8b5cf6;
+  --sci-purple-glow: rgba(139, 92, 246, 0.4);
+  --sci-amber: #f59e0b;
+  --sci-amber-glow: rgba(245, 158, 11, 0.4);
+  --sci-emerald: #10b981;
+  --sci-emerald-glow: rgba(16, 185, 129, 0.4);
+  --sci-rose: #f43f5e;
+  --sci-rose-glow: rgba(244, 63, 94, 0.4);
+  
+  --sci-border: rgba(6, 182, 212, 0.2);
+  --sci-text-primary: #e2e8f0;
+  --sci-text-secondary: #94a3b8;
+  --sci-text-muted: #64748b;
+}
+
+@layer base {
+  body {
+    background: linear-gradient(135deg, var(--sci-bg-primary) 0%, var(--sci-bg-secondary) 100%);
+    color: var(--sci-text-primary);
+  }
+}
+
+@layer components {
+  .sci-fi-panel {
+    @apply relative bg-slate-900/80 backdrop-blur-xl border border-cyan-500/20 rounded-xl overflow-hidden;
+    box-shadow: 0 0 40px rgba(6, 182, 212, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  
+  .sci-fi-panel::before {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-px;
+    background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.5), transparent);
+  }
+  
+  .sci-fi-button {
+    @apply relative px-4 py-2 font-medium text-sm uppercase tracking-wider rounded-lg border transition-all duration-200;
+    @apply bg-cyan-500/10 text-cyan-400 border-cyan-500/40;
+    @apply hover:bg-cyan-500/20 hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(6,182,212,0.3)];
+  }
+  
+  .sci-fi-button-danger {
+    @apply sci-fi-button;
+    @apply bg-rose-500/10 text-rose-400 border-rose-500/40;
+    @apply hover:bg-rose-500/20 hover:border-rose-400 hover:shadow-[0_0_20px_rgba(244,63,94,0.3)];
+  }
+  
+  .sci-fi-input {
+    @apply bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2 text-sm;
+    @apply text-slate-200 placeholder:text-slate-500;
+    @apply focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30;
+    @apply transition-all duration-200;
+  }
+  
+  .sci-fi-table {
+    @apply w-full border-collapse;
+  }
+  
+  .sci-fi-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider;
+    @apply text-cyan-400 bg-slate-800/50 border-b border-cyan-500/20;
+  }
+  
+  .sci-fi-table td {
+    @apply px-4 py-3 text-sm border-b border-slate-700/50;
+    @apply text-slate-300;
+  }
+  
+  .sci-fi-table tr:hover td {
+    @apply bg-slate-800/30;
+  }
+  
+  .sci-fi-glow-cyan {
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+  }
+  
+  .sci-fi-glow-purple {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  }
+  
+  .sci-fi-text-glow {
+    text-shadow: 0 0 10px currentColor;
+  }
+}
+
 @keyframes continuous-shake {
   0%, 100% {
     transform: translateX(0);

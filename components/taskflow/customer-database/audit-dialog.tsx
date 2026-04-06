@@ -25,6 +25,8 @@ import {
 import { cn } from "@/lib/utils";
 import { logCustomerAudit } from "@/lib/audit/customer-audit";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { exportAuditDialogToPDF } from "@/lib/utils/audit-dialog-pdf-export";
+import { FileDown } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +46,7 @@ export interface Customer {
   status: string;
   remarks: string;
   date_created: string;
-  industry: string;
+  industry?: string;
   date_updated: string;
   next_available_date?: string;
 }
@@ -743,6 +745,16 @@ export function AuditDialog({
             ← Back to Log
           </Button>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => auditResult && exportAuditDialogToPDF(auditResult, customers)}
+              disabled={!auditResult || auditResult.allAffectedCustomers.length === 0}
+              className="gap-1.5"
+            >
+              <FileDown className="size-4" />
+              Export PDF
+            </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </Button>

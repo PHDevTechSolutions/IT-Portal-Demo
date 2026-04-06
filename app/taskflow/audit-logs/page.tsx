@@ -73,6 +73,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { exportAuditLogsToPDF } from "@/lib/utils/audit-pdf-export";
+import { FileDown } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -675,6 +677,16 @@ export default function CustomerAuditLogsPage() {
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   Refresh
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 text-xs"
+                  onClick={() => exportAuditLogsToPDF(filtered)}
+                  disabled={filtered.length === 0}
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  Export PDF
                 </Button>
               </div>
 

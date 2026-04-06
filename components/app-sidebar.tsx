@@ -61,6 +61,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         isActive: pathname?.startsWith("/taskflow"),
         items: [
           { title: "Customer Database", url: "/taskflow/customer-database" },
+          { title: "Removal Accounts", url: "/taskflow/removal-accounts" },
           { title: "Customer Audits", url: "/taskflow/customer-audits" },
           { title: "Audit Logs", url: "/taskflow/audit-logs" },
           { title: "Approval of Accounts", url: "/taskflow/customer-approval" },
