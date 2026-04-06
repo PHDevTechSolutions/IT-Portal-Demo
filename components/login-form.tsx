@@ -6,7 +6,7 @@
  * After login, redirects to /dashboard without any userId in the URL.
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
 import { toast } from "sonner";
@@ -22,7 +22,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-import { ShieldCheck, Mail, Lock, Loader2, Cpu, Fingerprint } from "lucide-react";
+import { ShieldCheck, Mail, Lock, Loader2, Cpu, Fingerprint, ScanFace } from "lucide-react";
+import { authenticateWithBiometric, isBiometricAvailable } from "@/lib/utils/biometric";
 
 export function LoginForm({
   className,
@@ -35,10 +36,20 @@ export function LoginForm({
   const [showLocationDialog, setShowLocationDialog] = useState(false);
   const [loadingRedirect, setLoadingRedirect] = useState(false);
 
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
+
   const router = useRouter();
   const { setUserId } = useUser();
 
-  // ── Location helper ──────────────────────────────────────────────────────────
+  // Check if biometric is available on mount
+  useEffect(() => {
+    const checkBiometric = async () => {
+      const available = await isBiometricAvailable();
+      setBiometricAvailable(available);
+    };
+    checkBiometric();
+  }, []);
   const getLocation = async () => {
     if (!navigator.geolocation) return null;
     try {
@@ -113,6 +124,52 @@ export function LoginForm({
     setShowLocationDialog(false);
     setLoadingRedirect(true);
     router.push("/dashboard");
+  };
+
+  // Biometric login handler
+  const handleBiometricLogin = async () => {
+    if (!Email) {
+      toast.error("Please enter your email first");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // First, we need to get the userId from the email
+      const userLookupResponse = await fetch("/api/auth/biometric/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: Email }),
+      });
+
+      if (!userLookupResponse.ok) {
+        const error = await userLookupResponse.json();
+        toast.error(error.message || "User not found");
+        setLoading(false);
+        return;
+      }
+
+      const userData = await userLookupResponse.json();
+      const userId = userData.userId;
+
+      // Now authenticate with biometric
+      const result = await authenticateWithBiometric(userId);
+
+      if (result.success) {
+        toast.success("Biometric authentication successful");
+        if (result.userId) {
+          setUserId(result.userId);
+        }
+        setShowLocationDialog(true);
+      } else {
+        toast.error(result.error || "Biometric authentication failed");
+      }
+    } catch (error) {
+      toast.error("Biometric authentication error");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -253,6 +310,44 @@ export function LoginForm({
                       )}
                     </span>
                   </Button>
+
+                  {/* Biometric Login Button */}
+                  {biometricAvailable && (
+                    <>
+                      <div className="relative my-4">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t border-cyan-500/30" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-slate-900 px-2 text-cyan-400/60">Or</span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        disabled={loading}
+                        onClick={handleBiometricLogin}
+                        variant="outline"
+                        className="w-full h-12 relative overflow-hidden bg-slate-800/50 hover:bg-slate-700/50 text-cyan-400 font-semibold tracking-wider uppercase rounded-lg border border-cyan-400/30 hover:border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.1)] hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all duration-300"
+                      >
+                        <span className="relative flex items-center justify-center gap-2">
+                          {loading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : (
+                            <>
+                              <ScanFace className="h-4 w-4" />
+                              Biometric Login
+                            </>
+                          )}
+                        </span>
+                      </Button>
+                      <p className="text-xs text-cyan-400/40 text-center mt-2">
+                        Use fingerprint or face recognition
+                      </p>
+                    </>
+                  )}
 
                   <div className="mt-6 flex items-center justify-center gap-2 text-xs">
                     <div className="flex items-center gap-1.5">

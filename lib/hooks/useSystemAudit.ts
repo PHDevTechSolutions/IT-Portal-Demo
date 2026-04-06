@@ -60,7 +60,7 @@ export function useSystemAudit(options: UseSystemAuditOptions) {
           changes: details?.changes ?? null,
           transfer: details?.transfer ?? null,
           metadata: details?.metadata ?? null,
-          source: details?.source ?? null,
+          source: details?.source ?? undefined,
           status: details?.status ?? "completed",
           remarks: details?.remarks ?? null,
         });

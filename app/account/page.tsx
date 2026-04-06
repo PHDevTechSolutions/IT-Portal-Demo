@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
+import { BiometricSettings } from "@/components/account/BiometricSettings"
 
 // ShadCN Field + Select
 import { Field, FieldLabel, FieldDescription, FieldGroup, FieldSet } from "@/components/ui/field"
@@ -328,6 +329,13 @@ export default function AccountPage() {
                                     </Field>
                                 </FieldGroup>
                             </FieldSet>
+                            <div className="mt-6">
+                                <BiometricSettings 
+                                    userId={user.id} 
+                                    userName={user.Email} 
+                                    userDisplayName={`${user.Firstname} ${user.Lastname}`} 
+                                />
+                            </div>
                             <Field orientation="horizontal" className="pt-4">
                                 <Button type="submit" disabled={loading}>{loading ? "Saving..." : "Save Changes"}</Button>
                             </Field>
