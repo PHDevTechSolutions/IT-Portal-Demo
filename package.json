@@ -120,22 +120,22 @@
   },
   "overrides": {
     "draft-js": {
-      "react": "^18.3.1"
+      "react": "^19.0.0"
     },
     "draft-js-export-html": {
-      "react": "^18.3.1"
+      "react": "^19.0.0"
     },
     "@dnd-kit/core": {
-      "react": "^18.3.1"
+      "react": "^19.0.0"
     },
     "@dnd-kit/sortable": {
-      "react": "^18.3.1"
+      "react": "^19.0.0"
     },
     "@dnd-kit/utilities": {
-      "react": "^18.3.1"
+      "react": "^19.0.0"
     },
     "lucide-react": {
-      "react": "^18.3.1"
+      "react": "^19.0.0"
     }
   },
   "devDependencies": {
