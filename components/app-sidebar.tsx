@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Sidebar,
   SidebarContent,
@@ -20,7 +21,6 @@ import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Activity, Box
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
 
-  const [userId, setUserId] = React.useState<string | null>(null);
   const [userDetails, setUserDetails] = React.useState({
     UserId: "",
     Firstname: "",
@@ -29,41 +29,22 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     profilePicture: "",
   });
 
-  // Load userId from query param
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setUserId(params.get("id"));
-  }, []);
-
-  // Fetch user details
-  React.useEffect(() => {
-    if (!userId) return;
-
-    fetch(`/api/user?id=${encodeURIComponent(userId)}`)
-      .then((res) => res.json())
+    fetch("/api/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (!data) return;
         setUserDetails({
-          UserId: data._id || userId,
-          Firstname: data.Firstname || "",
-          Lastname: data.Lastname || "",
-          Email: data.Email || "",
-          profilePicture: data.profilePicture || "/avatars/default.jpg",
+          UserId: data.userId ?? "",
+          Firstname: data.firstname ?? "",
+          Lastname: data.lastname ?? "",
+          Email: data.email ?? "",
+          profilePicture: data.profilePicture ?? "/avatars/default.jpg",
         });
       })
       .catch(console.error);
-  }, [userId]);
+  }, []);
 
-  const appendUserId = React.useCallback(
-    (url: string) => {
-      if (!userId || url === "#") return url;
-      return url.includes("?")
-        ? `${url}&id=${encodeURIComponent(userId)}`
-        : `${url}?id=${encodeURIComponent(userId)}`;
-    },
-    [userId]
-  );
-
-  // 🔓 FULL ACCESS SIDEBAR (NO ROLE FILTERING)
   const sidebarData = {
     navMain: [
       {
@@ -71,7 +52,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         url: "#",
         icon: SquareTerminal,
         isActive: pathname?.startsWith("/application"),
-        items: [{ title: "Modules", url: appendUserId("/application/modules") }],
+        items: [{ title: "Modules", url: "/application/modules" }],
       },
       {
         title: "Taskflow",
@@ -79,11 +60,13 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: Activity,
         isActive: pathname?.startsWith("/taskflow"),
         items: [
-          { title: "Customer Database", url: appendUserId("/taskflow/customer-database") },
-          { title: "Approval of Accounts", url: appendUserId("/taskflow/customer-approval") },
-          { title: "Activity Logs", url: appendUserId("/taskflow/activity-logs") },
-          { title: "Progress Logs", url: appendUserId("/taskflow/progress-logs") },
-          { title: "Endorsed Tickets", url: appendUserId("/taskflow/csr-inquiries") },
+          { title: "Customer Database", url: "/taskflow/customer-database" },
+          { title: "Customer Audits", url: "/taskflow/customer-audits" },
+          { title: "Audit Logs", url: "/taskflow/audit-logs" },
+          { title: "Approval of Accounts", url: "/taskflow/customer-approval" },
+          { title: "Activity Logs", url: "/taskflow/activity-logs" },
+          { title: "Progress Logs", url: "/taskflow/progress-logs" },
+          { title: "Endorsed Tickets", url: "/taskflow/csr-inquiries" },
         ],
       },
       {
@@ -92,9 +75,9 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: Boxes,
         isActive: pathname?.startsWith("/stash"),
         items: [
-          { title: "Inventory", url: appendUserId("/stash/inventory") },
-          { title: "Assigned Assets", url: appendUserId("/stash/assigned-assets") },
-          { title: "License", url: appendUserId("/stash/license") },
+          { title: "Inventory", url: "/stash/inventory" },
+          { title: "Assigned Assets", url: "/stash/assigned-assets" },
+          { title: "License", url: "/stash/license" },
         ],
       },
       {
@@ -103,8 +86,8 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: TicketCheck,
         isActive: pathname?.startsWith("/ticketing"),
         items: [
-          { title: "Tickets", url: appendUserId("/ticketing/tickets") },
-          { title: "Service Catalogue", url: appendUserId("/ticketing/service-catalogue") },
+          { title: "Tickets", url: "/ticketing/tickets" },
+          { title: "Service Catalogue", url: "/ticketing/service-catalogue" },
         ],
       },
       {
@@ -112,7 +95,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         url: "#",
         icon: Bot,
         isActive: pathname?.startsWith("/cloudflare"),
-        items: [{ title: "DNS", url: appendUserId("/cloudflare/dns") }],
+        items: [{ title: "DNS", url: "/cloudflare/dns" }],
       },
       {
         title: "User Accounts",
@@ -120,9 +103,9 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: BookOpen,
         isActive: pathname?.startsWith("/admin"),
         items: [
-          { title: "Roles", url: appendUserId("/admin/roles") },
-          { title: "Resigned and Terminated", url: appendUserId("/admin/roles-status") },
-          { title: "Sessions", url: appendUserId("/admin/sessions") },
+          { title: "Roles", url: "/admin/roles" },
+          { title: "Resigned and Terminated", url: "/admin/roles-status" },
+          { title: "Sessions", url: "/admin/sessions" },
         ],
       },
       {
@@ -130,15 +113,15 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         url: "#",
         icon: Settings2,
         isActive: pathname?.startsWith("/settings"),
-        items: [{ title: "General", url: appendUserId("/settings/general") }],
+        items: [{ title: "General", url: "/settings/general" }],
       },
     ],
     navSecondary: [
-      { title: "Support", url: appendUserId("/support"), icon: LifeBuoy },
-      { title: "Feedback", url: appendUserId("/feedback"), icon: Send },
+      { title: "Support", url: "/support", icon: LifeBuoy },
+      { title: "Feedback", url: "/feedback", icon: Send },
     ],
     projects: [
-      { name: "Acculog", url: appendUserId("/acculog/activity-logs"), icon: CalendarCheck },
+      { name: "Acculog", url: "/acculog/activity-logs", icon: CalendarCheck },
     ],
   };
 
@@ -148,10 +131,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href={appendUserId("/dashboard")} className="flex items-center gap-2">
+              <Link href="/dashboard" className="flex items-center gap-2">
                 <img src="/xchire-logo.png" className="w-8 h-8" alt="Logo" />
                 <span className="font-medium">IT Portal</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

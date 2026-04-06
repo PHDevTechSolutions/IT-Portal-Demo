@@ -12,6 +12,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+// Statuses that are considered "inactive" for badge display purposes
+const INACTIVE_STATUSES = ["Terminated", "Resigned", "Inactive"]
+
+interface TsaOption {
+  label: string
+  value: string
+  /** Raw Status field from MongoDB user document — optional for backwards-compat */
+  status?: string
+}
+
 interface FilterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -24,7 +34,7 @@ interface FilterDialogProps {
   setFilterStatus: (val: string) => void
   rowsPerPage: number
   setRowsPerPage: (val: number) => void
-  tsaList: { label: string; value: string }[]
+  tsaList: TsaOption[]
   typeOptions: string[]
   statusOptions: string[]
 
@@ -52,6 +62,11 @@ export function FilterDialog({
   setSortOrder,
   onClose,
 }: FilterDialogProps) {
+
+  // Split into active and inactive groups for visual separation
+  const activeTsas = tsaList.filter(t => t.value === "all" || !INACTIVE_STATUSES.includes(t.status ?? ""))
+  const inactiveTsas = tsaList.filter(t => t.value !== "all" && INACTIVE_STATUSES.includes(t.status ?? ""))
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
@@ -63,21 +78,49 @@ export function FilterDialog({
         </DialogHeader>
 
         <div className="mt-4 space-y-4">
-          {/* TSA Filter */}
+          {/* ── TSA Filter ── */}
           <Select value={filterTSA} onValueChange={setFilterTSA}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Filter by TSA" />
             </SelectTrigger>
-            <SelectContent className="rounded-none sm:rounded-r-md border-l sm:border-l-0 capitalize">
-              {tsaList.map((t) => (
+            <SelectContent className="capitalize">
+              {/* Active / "All" items */}
+              {activeTsas.map((t) => (
                 <SelectItem key={t.value} value={t.value}>
                   {t.label}
                 </SelectItem>
               ))}
+
+              {/* Inactive / Terminated / Resigned items — grouped with divider */}
+              {inactiveTsas.length > 0 && (
+                <>
+                  <div className="mx-2 my-1 h-px bg-border" />
+                  <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Inactive
+                  </p>
+                  {inactiveTsas.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      <span className="flex items-center gap-2">
+                        {t.label}
+                        <span
+                          className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${t.status === "Terminated"
+                              ? "bg-red-100 text-red-700"
+                              : t.status === "Resigned"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                        >
+                          {t.status}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </>
+              )}
             </SelectContent>
           </Select>
 
-          {/* Type Filter */}
+          {/* ── Type Filter ── */}
           <Select value={filterType} onValueChange={setFilterType}>
             <SelectTrigger className="rounded-none sm:rounded-r-md border-l sm:border-l-0">
               <SelectValue placeholder="Filter by Type" />
@@ -91,7 +134,7 @@ export function FilterDialog({
             </SelectContent>
           </Select>
 
-          {/* Status Filter */}
+          {/* ── Status Filter ── */}
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="rounded-none sm:rounded-r-md border-l sm:border-l-0">
               <SelectValue placeholder="Filter by Status" />
@@ -105,7 +148,7 @@ export function FilterDialog({
             </SelectContent>
           </Select>
 
-          {/* Rows per Page */}
+          {/* ── Rows per Page ── */}
           <Select
             value={rowsPerPage.toString()}
             onValueChange={(v) => setRowsPerPage(Number(v))}
@@ -123,7 +166,7 @@ export function FilterDialog({
             </SelectContent>
           </Select>
 
-          {/* NEW Sort Order */}
+          {/* ── Sort Order ── */}
           <Select
             value={sortOrder}
             onValueChange={(v) => setSortOrder(v as "asc" | "desc")}

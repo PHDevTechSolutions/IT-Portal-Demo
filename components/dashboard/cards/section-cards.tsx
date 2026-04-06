@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { IconTrendingUp } from "@tabler/icons-react";
-
-import { toast } from "react-toastify";
+import { useDashboardData } from "@/contexts/DashboardDataContext";
 import { Spinner } from "@/components/ui/spinner";
 
 import { Badge } from "@/components/ui/badge";
@@ -31,104 +29,9 @@ interface ActivityRecord {
 }
 
 export function SectionCards() {
-    const [allRecords, setAllRecords] = useState<CustomerRecord[]>([]);
-    const [userRecords, setUserRecords] = useState<UserRecord[]>([]);
-    const [progressRecords, setProgressRecords] = useState<ProgressRecord[]>([]);
-    const [activityRecords, setActivityRecords] = useState<ActivityRecord[]>([]);
-
-    const [loadingRecords, setLoadingRecords] = useState(false);
-    const [loadingUsers, setLoadingUsers] = useState(false);
-    const [loadingProgress, setLoadingProgress] = useState(false);
-    const [loadingActivity, setLoadingActivity] = useState(false);
-
-    const [errorRecords, setErrorRecords] = useState<string | null>(null);
-    const [errorUsers, setErrorUsers] = useState<string | null>(null);
-    const [errorProgress, setErrorProgress] = useState<string | null>(null);
-    const [errorActivity, setErrorActivity] = useState<string | null>(null);
-
+    const { data, loading, errors } = useDashboardData();
+    const { allRecords, userRecords, progressRecords, activityRecords } = data;
     const NEW_RECORDS_DAYS = 7;
-
-    // Fetch customer records
-    useEffect(() => {
-        async function fetchData() {
-            setLoadingRecords(true);
-            setErrorRecords(null);
-            try {
-                const res = await fetch(
-                    "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch"
-                );
-                if (!res.ok) throw new Error("Failed to fetch customer records");
-                const data = await res.json();
-                setAllRecords(Array.isArray(data) ? data : data.data ?? []);
-            } catch (err: any) {
-                setErrorRecords(err.message || "Error fetching customer records");
-                toast.error(`Customer Records Error: ${err.message || err}`);
-                setAllRecords([]);
-            } finally {
-                setLoadingRecords(false);
-            }
-        }
-        fetchData();
-    }, []);
-
-    // Fetch user records
-    useEffect(() => {
-        async function fetchUsers() {
-            setLoadingUsers(true);
-            setErrorUsers(null);
-            try {
-                const res = await fetch("/api/Dashboard/FetchUser");
-                if (!res.ok) throw new Error("Failed to fetch users");
-                const data = await res.json();
-                setUserRecords(Array.isArray(data) ? data : data.data ?? []);
-            } catch (err: any) {
-                setErrorUsers(err.message || "Error fetching users");
-                toast.error(`Users Error: ${err.message || err}`);
-                setUserRecords([]);
-            } finally {
-                setLoadingUsers(false);
-            }
-        }
-        fetchUsers();
-    }, []);
-
-    // Fetch progress records
-    useEffect(() => {
-        async function fetchProgress() {
-            setLoadingProgress(true);
-            setErrorProgress(null);
-            try {
-                const res = await fetch("/api/fetch-progress");
-                if (!res.ok) throw new Error("Failed to fetch progress records");
-                const data = await res.json();
-                setProgressRecords(Array.isArray(data.activities) ? data.activities : []);
-            } catch (err: any) {
-                setErrorProgress(err.message || "Error fetching progress records");
-            } finally {
-                setLoadingProgress(false);
-            }
-        }
-        fetchProgress();
-    }, []);
-
-    // Fetch activity records
-    useEffect(() => {
-        async function fetchActivity() {
-            setLoadingActivity(true);
-            setErrorActivity(null);
-            try {
-                const res = await fetch("/api/fetch-activity");
-                if (!res.ok) throw new Error("Failed to fetch activity records");
-                const data = await res.json();
-                setActivityRecords(Array.isArray(data.activities) ? data.activities : []);
-            } catch (err: any) {
-                setErrorActivity(err.message || "Error fetching activity records");
-            } finally {
-                setLoadingActivity(false);
-            }
-        }
-        fetchActivity();
-    }, []);
 
     // Calculate new customer records within last 7 days
     const newRecordsCount = allRecords.filter((record) => {
@@ -189,9 +92,9 @@ export function SectionCards() {
                         <div className="flex flex-1 flex-col justify-center gap-2">
                             <CardDescription className="text-cyan-300">Total Customer Records</CardDescription>
                             <CardTitle className="text-3xl font-extrabold text-white tabular-nums">
-                                {renderTitle(loadingRecords, errorRecords, allRecords.length)}
+                                {renderTitle(loading.records, errors.records, allRecords.length)}
                             </CardTitle>
-                            {!loadingRecords && !errorRecords && (
+                            {!loading.records && !errors.records && (
                                 <Badge variant="outline" className="flex items-center gap-1 w-max text-cyan-400 border-cyan-400">
                                     <IconTrendingUp />
                                     {totalRecordsTrend}
@@ -229,9 +132,9 @@ export function SectionCards() {
                                 New Customer Records (Last {NEW_RECORDS_DAYS} Days)
                             </CardDescription>
                             <CardTitle className="text-3xl font-extrabold text-white tabular-nums">
-                                {renderTitle(loadingRecords, errorRecords, newRecordsCount)}
+                                {renderTitle(loading.records, errors.records, newRecordsCount)}
                             </CardTitle>
-                            {!loadingRecords && !errorRecords && (
+                            {!loading.records && !errors.records && (
                                 <Badge variant="outline" className="flex items-center gap-1 w-max text-cyan-400 border-cyan-400">
                                     <IconTrendingUp />
                                     {newRecordsTrend}
@@ -268,9 +171,9 @@ export function SectionCards() {
                         <div className="flex flex-1 flex-col justify-center gap-2">
                             <CardDescription className="text-cyan-300">Total Users</CardDescription>
                             <CardTitle className="text-3xl font-extrabold text-white tabular-nums">
-                                {renderTitle(loadingUsers, errorUsers, userRecords.length)}
+                                {renderTitle(loading.users, errors.users, userRecords.length)}
                             </CardTitle>
-                            {!loadingRecords && !errorRecords && (
+                            {!loading.users && !errors.users && (
                                 <Badge variant="outline" className="flex items-center gap-1 w-max text-cyan-400 border-cyan-400">
                                     <IconTrendingUp />
                                     {totalUsersTrend}
@@ -307,9 +210,9 @@ export function SectionCards() {
                         <div className="flex flex-1 flex-col justify-center gap-2">
                             <CardDescription className="text-cyan-300">New Users (Last {NEW_RECORDS_DAYS} Days)</CardDescription>
                             <CardTitle className="text-3xl font-extrabold text-white tabular-nums">
-                                {renderTitle(loadingUsers, errorUsers, newUsersCount)}
+                                {renderTitle(loading.users, errors.users, newUsersCount)}
                             </CardTitle>
-                            {!loadingRecords && !errorRecords && (
+                            {!loading.users && !errors.users && (
                                 <Badge variant="outline" className="flex items-center gap-1 w-max text-cyan-400 border-cyan-400">
                                     <IconTrendingUp />
                                     {newUsersTrend}
@@ -346,9 +249,9 @@ export function SectionCards() {
                     <CardHeader className="flex flex-col gap-2">
                         <CardDescription>Total Progress Records</CardDescription>
                         <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                            {renderTitle(loadingProgress, errorProgress, progressRecords.length)}
+                            {renderTitle(loading.progress, errors.progress, progressRecords.length)}
                         </CardTitle>
-                        {!loadingProgress && !errorProgress && (
+                        {!loading.progress && !errors.progress && (
                             <Badge variant="outline" className="flex items-center gap-1 w-max">
                                 <IconTrendingUp />
                                 {totalProgressTrend}
@@ -368,9 +271,9 @@ export function SectionCards() {
                     <CardHeader className="flex flex-col gap-2">
                         <CardDescription>Total Activity Records</CardDescription>
                         <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                            {renderTitle(loadingActivity, errorActivity, activityRecords.length)}
+                            {renderTitle(loading.activity, errors.activity, activityRecords.length)}
                         </CardTitle>
-                        {!loadingActivity && !errorActivity && (
+                        {!loading.activity && !errors.activity && (
                             <Badge variant="outline" className="flex items-center gap-1 w-max">
                                 <IconTrendingUp />
                                 {totalActivityTrend}

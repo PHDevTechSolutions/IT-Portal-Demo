@@ -31,19 +31,28 @@ import {
 } from "@/components/ui/select";
 import * as ExcelJS from "exceljs";
 import { toast } from "sonner";
-import { Upload as UploadIcon } from "lucide-react";
-import { Download as DownloadIcon } from "lucide-react";
+import { Upload as UploadIcon, Download as DownloadIcon } from "lucide-react";
 
 interface Option {
   value: string;
   label: string;
 }
 
-export function ImportDialog() {
+interface ImportDialogProps {
+  /**
+   * Called after a successful import so the parent can write an audit log.
+   * `count`   – number of records successfully imported
+   * `tsaId`   – ReferenceID of the assigned TSA
+   * `tsaName` – Display name of the assigned TSA
+   */
+  onSuccessAction?: (count: number, tsaId: string, tsaName: string) => void;
+}
+
+export function ImportDialog({ onSuccessAction }: ImportDialogProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [previewData, setPreviewData] = useState<any[]>([]);
-  const [failedRows, setFailedRows] = useState<any[]>([]); // State to store failed rows
+  const [failedRows, setFailedRows] = useState<any[]>([]);
   const [originalFileName, setOriginalFileName] = useState<string | null>(null);
 
   const [managerOptions, setManagerOptions] = useState<Option[]>([]);
@@ -62,17 +71,16 @@ export function ImportDialog() {
           data.map((u: any) => ({
             value: u.ReferenceID,
             label: `${u.Firstname} ${u.Lastname}`,
-          }))
-        )
+          })),
+        ),
       )
       .catch((err) => console.error("Error fetching managers:", err));
   }, []);
 
   useEffect(() => {
-    // Fetch TSMs based on the selected Manager
     if (selectedManager) {
       fetch(
-        `/api/UserManagement/FetchTSM?Role=Territory Sales Manager&managerReferenceID=${selectedManager.value}`
+        `/api/UserManagement/FetchTSM?Role=Territory Sales Manager&managerReferenceID=${selectedManager.value}`,
       )
         .then((res) => res.json())
         .then((data) => {
@@ -81,27 +89,23 @@ export function ImportDialog() {
               data.map((u: any) => ({
                 value: u.ReferenceID,
                 label: `${u.Firstname} ${u.Lastname}`,
-              }))
+              })),
             );
           } else {
-            console.warn("Data is not an array:", data);
-            setTsmOptions([]); // Set to empty array to avoid errors
+            setTsmOptions([]);
           }
         })
         .catch((err) => console.error("Error fetching TSM:", err));
     } else {
-      // If no manager is selected, clear the TSM options
       setTsmOptions([]);
     }
-    // Reset selected TSM when manager changes
     setSelectedTSM(null);
   }, [selectedManager]);
 
   useEffect(() => {
-    // Fetch TSAs based on the selected Manager
     if (selectedTSM) {
       fetch(
-        `/api/UserManagement/FetchTSA?Role=Territory Sales Associate&managerReferenceID=${selectedTSM.value}`
+        `/api/UserManagement/FetchTSA?Role=Territory Sales Associate&managerReferenceID=${selectedTSM.value}`,
       )
         .then((res) => res.json())
         .then((data) => {
@@ -110,19 +114,16 @@ export function ImportDialog() {
               data.map((u: any) => ({
                 value: u.ReferenceID,
                 label: `${u.Firstname} ${u.Lastname}`,
-              }))
+              })),
             );
           } else {
-            console.warn("Data is not an array:", data);
-            setTsaOptions([]); // Set to empty array to avoid errors
+            setTsaOptions([]);
           }
         })
         .catch((err) => console.error("Error fetching TSA:", err));
     } else {
-      // If no manager is selected, clear the TSA options
       setTsaOptions([]);
     }
-    // Reset selected TSA when manager changes
     setSelectedTSA(null);
   }, [selectedTSM]);
 
@@ -138,7 +139,7 @@ export function ImportDialog() {
           const parsed: any[] = [];
 
           worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber === 1) return; // Skip header
+            if (rowNumber === 1) return;
             parsed.push({
               referenceid: selectedTSA?.value || "",
               manager: selectedManager?.value || "",
@@ -171,7 +172,7 @@ export function ImportDialog() {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
     setFile(selectedFile);
-    setOriginalFileName(selectedFile.name.replace(/\.[^/.]+$/, "")); // Store filename without extension
+    setOriginalFileName(selectedFile.name.replace(/\.[^/.]+$/, ""));
     parseExcel(selectedFile)
       .then(setPreviewData)
       .catch(() => toast.error("Failed to parse Excel file."));
@@ -182,23 +183,20 @@ export function ImportDialog() {
     if (!selectedTSA) return toast.error("Please select a TSA.");
 
     setIsLoading(true);
-    setFailedRows([]); // Clear previous failed rows
+    setFailedRows([]);
 
     try {
       const parsed = await parseExcel(file);
       const total = parsed.length;
-      const batchSize = 10; // adjust batch size as needed
-      const failed: any[] = []; // Accumulate failed rows
+      const batchSize = 10;
+      const failed: any[] = [];
 
       for (let i = 0; i < total; i += batchSize) {
         const batch = parsed.slice(i, i + batchSize);
 
-        // Show toast with count and first company in the batch
         toast(
-          `Uploading ${i + 1}-${Math.min(i + batchSize, total)}/${total}: ${
-            batch[0].company_name
-          }`,
-          { duration: 1000 }
+          `Uploading ${i + 1}-${Math.min(i + batchSize, total)}/${total}: ${batch[0].company_name}`,
+          { duration: 1000 },
         );
 
         const response = await fetch(
@@ -211,24 +209,30 @@ export function ImportDialog() {
               tsm: selectedTSM?.value || "",
               data: batch,
             }),
-          }
+          },
         );
 
         const result = await response.json();
 
         if (!result.success && result.failed) {
-          // Collect failed rows
           failed.push(...result.failed);
         }
       }
 
+      const successCount = total - failed.length;
+
       if (failed.length > 0) {
         setFailedRows(failed);
         toast.error(
-          `Failed to import ${failed.length} records. Download the failed rows for review.`
+          `Failed to import ${failed.length} records. Download the failed rows for review.`,
         );
       } else {
         toast.success(`Successfully imported ${total} records.`);
+      }
+
+      // ── Audit callback ─────────────────────────────────────────────────
+      if (successCount > 0) {
+        onSuccessAction?.(successCount, selectedTSA.value, selectedTSA.label);
       }
 
       setFile(null);
@@ -240,6 +244,7 @@ export function ImportDialog() {
       setIsLoading(false);
     }
   };
+
   const handleDownloadFailed = () => {
     if (failedRows.length === 0) {
       toast.info("No failed rows to download.");
@@ -249,7 +254,6 @@ export function ImportDialog() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Failed Rows");
 
-    // Add headers
     worksheet.addRow([
       "company_name",
       "contact_person",
@@ -264,7 +268,6 @@ export function ImportDialog() {
       "industry",
     ]);
 
-    // Add data rows
     failedRows.forEach((row) => {
       worksheet.addRow([
         row.company_name,
@@ -281,7 +284,6 @@ export function ImportDialog() {
       ]);
     });
 
-    // Generate and trigger download
     workbook.xlsx.writeBuffer().then((buffer) => {
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -313,12 +315,12 @@ export function ImportDialog() {
         </DialogHeader>
 
         <div className="grid gap-4">
-          {/* Manager / TSM / TSA selects */}
           <div className="flex gap-2">
             <Select
               value={selectedManager?.value || ""}
               onValueChange={(v) => {
-                const manager = managerOptions.find((m) => m.value === v) || null;
+                const manager =
+                  managerOptions.find((m) => m.value === v) || null;
                 setSelectedManager(manager);
                 setSelectedTSM(null);
                 setSelectedTSA(null);
@@ -338,7 +340,6 @@ export function ImportDialog() {
 
             <Select
               value={selectedTSM?.value || ""}
-              // onValueChange={(v) => setSelectedTSM(tsmOptions.find((t) => t.value === v) || null)}
               disabled={!selectedManager}
               onValueChange={(v) => {
                 const tsm = tsmOptions.find((t) => t.value === v) || null;
@@ -360,7 +361,6 @@ export function ImportDialog() {
 
             <Select
               value={selectedTSA?.value || ""}
-              // onValueChange={(v) => setSelectedTSA(tsaOptions.find((t) => t.value === v) || null)}
               disabled={!selectedManager}
               onValueChange={(v) => {
                 const tsa = tsaOptions.find((t) => t.value === v) || null;
@@ -380,13 +380,11 @@ export function ImportDialog() {
             </Select>
           </div>
 
-          {/* File input */}
           <div className="grid gap-2">
             <Label>Excel File</Label>
             <Input type="file" onChange={handleFileChange} />
           </div>
 
-          {/* Preview Table */}
           {previewData.length > 0 && (
             <div className="overflow-auto max-h-64 border rounded-md p-2 text-xs">
               <Table className="whitespace-nowrap">

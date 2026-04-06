@@ -1,60 +1,71 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ShieldAlert } from "lucide-react"
-import { toast } from "sonner"
+import {
+  AuditDialog,
+  type AuditResult,
+} from "@/components/taskflow/customer-database/audit-dialog"
 
 interface AuditProps<T> {
   customers: T[]
   setAuditedAction: React.Dispatch<React.SetStateAction<T[]>>
   setDuplicateIdsAction: React.Dispatch<React.SetStateAction<Set<number>>>
   setIsAuditViewAction: React.Dispatch<React.SetStateAction<boolean>>
+  setAuditFilterAction?: React.Dispatch<
+    React.SetStateAction<"" | "all" | "missingType" | "missingStatus" | "duplicates">
+  >
 }
 
-/**
- * 🔍 Audit component (reusable + no duplicate interface)
- */
-export function Audit<T extends { id: number; company_name?: string; contact_number?: string; contact_person?: string; type_client?: string; status?: string }>({
+export function Audit<
+  T extends {
+    id: number
+    account_reference_number?: string
+    company_name?: string
+    contact_person?: string
+    contact_number?: string
+    email_address?: string
+    address?: string
+    region?: string
+    type_client?: string
+    referenceid?: string
+    tsm?: string
+    manager?: string
+    status?: string
+    remarks?: string
+    date_created?: string
+    date_updated?: string
+    next_available_date?: string
+  }
+>({
   customers,
   setAuditedAction,
   setDuplicateIdsAction,
   setIsAuditViewAction,
+  setAuditFilterAction,
 }: AuditProps<T>) {
-  const handleAudit = () => {
-    const seen = new Map<string, number>()
-    const duplicates = new Set<number>()
+  const [open, setOpen] = useState(false)
 
-    customers.forEach((c) => {
-      const key = `${c.company_name?.trim().toLowerCase()}|${c.contact_number?.trim()}|${c.contact_person
-        ?.trim()
-        .toLowerCase()}`
-      if (seen.has(key)) {
-        duplicates.add(seen.get(key)!)
-        duplicates.add(c.id)
-      } else {
-        seen.set(key, c.id)
-      }
-    })
-
-    const issues = customers.filter(
-      (c) => !c.type_client?.trim() || !c.status?.trim() || duplicates.has(c.id)
-    )
-
-    toast.loading("Auditing database...")
-    setTimeout(() => {
-      toast.success("Audit completed successfully!")
-    }, 800)
-
-
-    setAuditedAction(issues)
-    setDuplicateIdsAction(duplicates)
+  const handleConfirm = (result: AuditResult) => {
+    setAuditedAction((result.allAffectedCustomers as unknown) as T[])
+    setDuplicateIdsAction(result.duplicateIds)
     setIsAuditViewAction(true)
+    setAuditFilterAction?.("all")
   }
 
   return (
-    <Button variant="destructive" onClick={handleAudit}>
-      <ShieldAlert className="size-4 mr-1" /> Audit
-    </Button>
+    <>
+      <Button variant="destructive" onClick={() => setOpen(true)}>
+        <ShieldAlert className="size-4 mr-1" /> Audit
+      </Button>
+
+      <AuditDialog
+        open={open}
+        onOpenChange={setOpen}
+        customers={customers as any}
+        onConfirmAudit={handleConfirm}
+      />
+    </>
   )
 }

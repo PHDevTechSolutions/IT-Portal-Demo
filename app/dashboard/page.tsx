@@ -12,6 +12,7 @@ import { ChartAreaInteractive } from "@/components/dashboard/chart/progress"
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
+import { DashboardDataProvider } from "@/contexts/DashboardDataContext";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 function DashboardContent() {
@@ -73,11 +74,13 @@ export default function Page() {
   return (
     <UserProvider>
       <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
-        </SidebarProvider>
+        <DashboardDataProvider>
+          <SidebarProvider>
+            <Suspense fallback={<div>Loading...</div>}>
+              <DashboardContent />
+            </Suspense>
+          </SidebarProvider>
+        </DashboardDataProvider>
       </FormatProvider>
     </UserProvider>
   );

@@ -29,14 +29,16 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group";
 
+import { useDashboardData } from "@/contexts/DashboardDataContext";
+
 interface ProgressRecord {
-  id: string;
+  _id: string;
   referenceid: string;
-  date_created: string; // ISO date string
+  date: string;
 }
 
 interface ActivityRecord {
-  id: string;
+  _id: string;
   date_created: string; // ISO date string
 }
 
@@ -78,11 +80,11 @@ function countDistinctIdsByDate<T>(
 export function ChartAreaInteractive() {
   const isMobile = useIsMobile();
   const [timeRange, setTimeRange] = React.useState("90d");
-
-  const [progressRecords, setProgressRecords] = React.useState<ProgressRecord[]>([]);
-  const [activityRecords, setActivityRecords] = React.useState<ActivityRecord[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const { data, loading, errors } = useDashboardData();
+  const progressRecords = data.progressRecords;
+  const activityRecords = data.activityRecords;
+  const loadingCombined = loading.progress || loading.activity;
+  const errorCombined = errors.progress || errors.activity;
 
   // Detect dark mode by observing class on <html>
   const [isDark, setIsDark] = React.useState(false);
@@ -105,36 +107,6 @@ export function ChartAreaInteractive() {
       setTimeRange("7d");
     }
   }, [isMobile]);
-
-  React.useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [progressRes, activityRes] = await Promise.all([
-          fetch("/api/fetch-progress"),
-          fetch("/api/fetch-activity"),
-        ]);
-        if (!progressRes.ok) throw new Error("Failed to fetch progress data");
-        if (!activityRes.ok) throw new Error("Failed to fetch activity data");
-
-        const progressResJson = await progressRes.json();
-        const activityResJson = await activityRes.json();
-
-        setProgressRecords(
-          Array.isArray(progressResJson.activities) ? progressResJson.activities : []
-        );
-        setActivityRecords(
-          Array.isArray(activityResJson.activities) ? activityResJson.activities : []
-        );
-      } catch (err: any) {
-        setError(err.message || "Error fetching data");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
 
   // Utility to get CSS variable value (H S L components)
   const getCssVar = (name: string) =>
@@ -165,15 +137,15 @@ export function ChartAreaInteractive() {
 
   // Count unique IDs per day
   const progressCountByDate = countDistinctIdsByDate(
-    progressRecords,
-    (r) => r.date_created,
-    (r) => r.id
+    progressRecords as ProgressRecord[],
+    (r) => (r as any).date_created || (r as any).date || "",
+    (r) => (r as any)._id || (r as any).id || ""
   );
 
   const activityCountByDate = countDistinctIdsByDate(
-    activityRecords,
-    (r) => r.date_created,
-    (r) => r.id
+    activityRecords as ActivityRecord[],
+    (r) => (r as any).date_created || (r as any).date || "",
+    (r) => (r as any)._id || (r as any).id || ""
   );
 
   // Combine all dates found in either dataset to form full timeline
@@ -205,12 +177,12 @@ export function ChartAreaInteractive() {
     activity: activityCountByDate[dateStr] || 0,
   }));
 
-  if (loading) {
+  if (loadingCombined) {
     return <div className="p-4 text-center">Loading chart data...</div>;
   }
 
-  if (error) {
-    return <div className="p-4 text-center text-red-600">Error: {error}</div>;
+  if (errorCombined) {
+    return <div className="p-4 text-center text-red-600">Error: {errorCombined}</div>;
   }
 
   return (

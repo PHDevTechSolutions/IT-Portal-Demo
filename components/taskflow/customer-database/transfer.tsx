@@ -18,6 +18,12 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
+export interface TransferSuccessPayload {
+  tsa?: { toId: string; toName: string } | null;
+  tsm?: { toId: string; toName: string } | null;
+  manager?: { toId: string; toName: string } | null;
+}
+
 interface TransferDialogProps {
   open: boolean;
   onOpenChangeAction: (open: boolean) => void;
@@ -27,6 +33,11 @@ interface TransferDialogProps {
   tsas: { label: string; value: string }[];
   tsms: { label: string; value: string }[];
   managers: { label: string; value: string }[];
+  /**
+   * Called once after ALL selected transfers succeed.
+   * Receives a single bundle so the parent can write one audit log entry.
+   */
+  onSuccessAction?: (payload: TransferSuccessPayload) => void;
 }
 
 export const TransferDialog: React.FC<TransferDialogProps> = ({
@@ -38,6 +49,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
   tsas,
   tsms,
   managers,
+  onSuccessAction,
 }) => {
   const [tsaSelection, setTsaSelection] = useState<string>("");
   const [tsmSelection, setTsmSelection] = useState<string>("");
@@ -52,7 +64,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
     const toastId = toast.loading("Transferring users...");
     try {
       if (tsaSelection) {
-        const resTsa = await fetch(
+        const res = await fetch(
           "/api/Data/Applications/Taskflow/CustomerDatabase/BulkTransfer",
           {
             method: "PUT",
@@ -62,17 +74,16 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
               type: "TSA",
               targetId: tsaSelection,
             }),
-          }
+          },
         );
-
-        if (!resTsa.ok) {
-          const errJson = await resTsa.json();
-          throw new Error(errJson.error || "TSA transfer failed");
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "TSA transfer failed");
         }
       }
 
       if (tsmSelection) {
-        const resTsm = await fetch(
+        const res = await fetch(
           "/api/Data/Applications/Taskflow/CustomerDatabase/BulkTransfer",
           {
             method: "PUT",
@@ -82,17 +93,16 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
               type: "TSM",
               targetId: tsmSelection,
             }),
-          }
+          },
         );
-
-        if (!resTsm.ok) {
-          const errJson = await resTsm.json();
-          throw new Error(errJson.error || "TSM transfer failed");
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "TSM transfer failed");
         }
       }
 
       if (managerSelection) {
-        const resManager = await fetch(
+        const res = await fetch(
           "/api/Data/Applications/Taskflow/CustomerDatabase/BulkTransfer",
           {
             method: "PUT",
@@ -102,16 +112,15 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
               type: "Manager",
               targetId: managerSelection,
             }),
-          }
+          },
         );
-
-        if (!resManager.ok) {
-          const errJson = await resManager.json();
-          throw new Error(errJson.error || "Manager transfer failed");
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Manager transfer failed");
         }
       }
 
-      // Update local state correctly (fix tsa assignment)
+      // Update local state
       setAccountsAction((prev) =>
         prev.map((u) =>
           selectedIds.has(String(u.id))
@@ -121,15 +130,42 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                 ...(tsmSelection ? { tsm: tsmSelection } : {}),
                 ...(managerSelection ? { manager: managerSelection } : {}),
               }
-            : u
-        )
+            : u,
+        ),
       );
 
       setSelectedIdsAction(new Set());
       toast.success("Users transferred successfully!", { id: toastId });
-      onOpenChangeAction(false);
 
-      // Reset selections
+      // ── Single bundled audit callback ──────────────────────────────────
+      onSuccessAction?.({
+        tsa: tsaSelection
+          ? {
+              toId: tsaSelection,
+              toName:
+                tsas.find((t) => t.value === tsaSelection)?.label ??
+                tsaSelection,
+            }
+          : null,
+        tsm: tsmSelection
+          ? {
+              toId: tsmSelection,
+              toName:
+                tsms.find((t) => t.value === tsmSelection)?.label ??
+                tsmSelection,
+            }
+          : null,
+        manager: managerSelection
+          ? {
+              toId: managerSelection,
+              toName:
+                managers.find((m) => m.value === managerSelection)?.label ??
+                managerSelection,
+            }
+          : null,
+      });
+
+      onOpenChangeAction(false);
       setTsaSelection("");
       setTsmSelection("");
       setManagerSelection("");
@@ -147,14 +183,20 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
         <div className="space-y-4 mt-4">
           <div>
-            <label className="block mb-1 font-medium text-xs">Transfer to TSA</label>
+            <label className="block mb-1 font-medium text-xs">
+              Transfer to TSA
+            </label>
             <Select value={tsaSelection} onValueChange={setTsaSelection}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select TSA" />
               </SelectTrigger>
               <SelectContent>
                 {tsas.map((u) => (
-                  <SelectItem key={u.value} value={u.value} className="capitalize">
+                  <SelectItem
+                    key={u.value}
+                    value={u.value}
+                    className="capitalize"
+                  >
                     {u.label}
                   </SelectItem>
                 ))}
@@ -163,14 +205,20 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
           </div>
 
           <div>
-            <label className="block mb-1 font-medium text-xs">Transfer to TSM</label>
+            <label className="block mb-1 font-medium text-xs">
+              Transfer to TSM
+            </label>
             <Select value={tsmSelection} onValueChange={setTsmSelection}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select TSM" />
               </SelectTrigger>
               <SelectContent>
                 {tsms.map((u) => (
-                  <SelectItem key={u.value} value={u.value} className="capitalize">
+                  <SelectItem
+                    key={u.value}
+                    value={u.value}
+                    className="capitalize"
+                  >
                     {u.label}
                   </SelectItem>
                 ))}
@@ -179,14 +227,23 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
           </div>
 
           <div>
-            <label className="block mb-1 font-medium text-xs">Transfer to Manager</label>
-            <Select value={managerSelection} onValueChange={setManagerSelection}>
+            <label className="block mb-1 font-medium text-xs">
+              Transfer to Manager
+            </label>
+            <Select
+              value={managerSelection}
+              onValueChange={setManagerSelection}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Manager" />
               </SelectTrigger>
               <SelectContent>
                 {managers.map((u) => (
-                  <SelectItem key={u.value} value={u.value} className="capitalize">
+                  <SelectItem
+                    key={u.value}
+                    value={u.value}
+                    className="capitalize"
+                  >
                     {u.label}
                   </SelectItem>
                 ))}
