@@ -2,7 +2,9 @@ export interface UserAccount {
   _id: string
   ReferenceID: string
   TSM: string
+  TSMName?: string
   Manager: string
+  ManagerName?: string
   Location: string
   Firstname: string
   Lastname: string
@@ -16,4 +18,6 @@ export interface UserAccount {
   TargetQuota: string
   profilePicture?: string
   Directories?: string[]
+  LoginAttempts?: number
+  LockUntil?: Date | null
 }

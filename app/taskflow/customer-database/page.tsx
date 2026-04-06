@@ -30,6 +30,7 @@ import { Calendar } from "@/components/taskflow/customer-database/calendar";
 import { AuditDialog } from "@/components/taskflow/customer-database/audit-dialog";
 import { DeleteDialog } from "@/components/taskflow/customer-database/delete";
 import { TransferDialog } from "@/components/taskflow/customer-database/transfer";
+import { SciFiThreeColumn, SciFiPanel } from "@/components/ui/sci-fi/layout";
 import { toast } from "sonner";
 import {
   Loader2,

@@ -27,6 +27,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     Lastname: "",
     Email: "",
     profilePicture: "",
+    Role: "",
   });
 
   React.useEffect(() => {
@@ -40,6 +41,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           Lastname: data.lastname ?? "",
           Email: data.email ?? "",
           profilePicture: data.profilePicture ?? "/avatars/default.jpg",
+          Role: data.role ?? "",
         });
       })
       .catch(console.error);
@@ -107,6 +109,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           { title: "Roles", url: "/admin/roles" },
           { title: "Resigned and Terminated", url: "/admin/roles-status" },
           { title: "Sessions", url: "/admin/sessions" },
+          ...(userDetails.Role === "SuperAdmin" ? [{ title: "IT Permissions", url: "/admin/it-permissions" }] : []),
         ],
       },
       {

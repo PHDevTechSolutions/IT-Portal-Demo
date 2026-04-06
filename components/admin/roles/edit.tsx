@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,29 @@ interface EditDialogProps {
   onSaveAction: (updated: UserAccount) => Promise<void>
 }
 
+// Role options per department
+const DEFAULT_ROLES = ["User", "Manager", "Admin", "SuperAdmin", "Developer"];
+
+const ROLES_BY_DEPARTMENT: Record<string, string[]> = {
+  Sales: ["Territory Sales Associate", "Territory Sales Manager", "Manager"],
+  "Sales Project": ["Office Sales"],
+  CSR: ["Staff", "Admin"],
+  IT: ["IT Staff", "IT Admin", "IT Manager", "IT Support", "Developer"],
+  HR: ["Staff", "Manager", "Admin"],
+  Ecommerce: ["Staff", "Manager", "Admin"],
+  Marketing: ["Staff", "Manager", "Admin"],
+  Engineering: ["Engineer", "Senior Engineer", "Manager"],
+  Admin: ["Staff", "Manager", "Admin"],
+  "Warehouse Operations": ["Staff", "Manager", "Supervisor"],
+  Accounting: ["Staff", "Manager", "Admin"],
+  Owner: ["Owner"],
+  Procurement: ["Staff", "Manager", "Admin"],
+};
+
+function getRolesForDepartment(dept: string): string[] {
+  return ROLES_BY_DEPARTMENT[dept] ?? DEFAULT_ROLES;
+}
+
 export function EditDialog({
   open,
   onOpenChangeAction,
@@ -29,6 +52,43 @@ export function EditDialog({
   onSaveAction,
 }: EditDialogProps) {
   const [showPassword, setShowPassword] = useState(false)
+  const [managers, setManagers] = useState<{ label: string; value: string }[]>([])
+  const [tsms, setTsms] = useState<{ label: string; value: string }[]>([])
+
+  // Fetch managers and TSMs when dialog opens and department is Sales
+  useEffect(() => {
+    if (!open || !editData || editData.Department !== "Sales") return;
+    
+    const fetchDropdowns = async () => {
+      try {
+        const [managerRes, tsmRes] = await Promise.all([
+          fetch("/api/UserManagement/FetchManager?Role=Manager"),
+          fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager"),
+        ]);
+        const managerData = await managerRes.json();
+        const tsmData = await tsmRes.json();
+
+        setManagers(
+          managerData.map((m: any) => ({
+            label: `${m.Firstname} ${m.Lastname}`,
+            value: m.ReferenceID,
+          }))
+        );
+
+        setTsms(
+          tsmData.map((t: any) => ({
+            label: `${t.Firstname} ${t.Lastname}`,
+            value: t.ReferenceID,
+          }))
+        );
+      } catch (err) {
+        console.error("Error fetching managers or TSMs:", err);
+        toast.error("Failed to fetch manager/TSM lists.");
+      }
+    };
+
+    fetchDropdowns();
+  }, [open, editData?.Department]);
 
   if (!editData) return null
 
@@ -179,13 +239,17 @@ export function EditDialog({
           {/* Company */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-600">Company</label>
-            <Input
-              placeholder="Company"
+            <select
+              className="border rounded-md px-3 py-2 text-sm"
               value={editData.Company || ""}
               onChange={(e) =>
                 setEditDataAction((prev) => ({ ...prev!, Company: e.target.value }))
               }
-            />
+            >
+              <option value="">Select Company</option>
+              <option value="Ecoshift Corporation">Ecoshift Corporation</option>
+              <option value="Disruptive Solutions Inc">Disruptive Solutions Inc</option>
+            </select>
           </div>
 
           {/* Department */}
@@ -194,9 +258,19 @@ export function EditDialog({
             <select
               className="border rounded-md px-3 py-2 text-sm"
               value={editData.Department || ""}
-              onChange={(e) =>
-                setEditDataAction((prev) => ({ ...prev!, Department: e.target.value }))
-              }
+              onChange={(e) => {
+                const newDept = e.target.value;
+                setEditDataAction((prev) => {
+                  if (!prev) return prev;
+                  return {
+                    ...prev,
+                    Department: newDept,
+                    Role: "", // Reset role when department changes
+                    // Clear Sales-specific fields if not Sales
+                    ...(newDept !== "Sales" ? { Manager: "", TSM: "", ManagerName: "", TSMName: "", TargetQuota: "" } : {}),
+                  };
+                });
+              }}
             >
               <option value="">Select Department</option>
               <option value="Sales">Sales</option>
@@ -222,44 +296,62 @@ export function EditDialog({
                 <Input
                   type="number"
                   placeholder="Enter target quota"
-                  value={(editData as any).TargetQuota || ""}
+                  value={editData.TargetQuota || ""}
                   onChange={(e) =>
                     setEditDataAction((prev) => ({ ...prev!, TargetQuota: e.target.value }))
                   }
                 />
               </div>
+              {/* Manager - Now a Select Dropdown */}
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-600">Manager</label>
-                <Input
-                  value={(editData as any).Manager || ""}
+                <select
+                  className="border rounded-md px-3 py-2 text-sm"
+                  value={editData.Manager || ""}
                   onChange={(e) =>
                     setEditDataAction((prev) => ({ ...prev!, Manager: e.target.value }))
                   }
-                />
+                >
+                  <option value="">Select Manager</option>
+                  {managers.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-600">Manager Name</label>
                 <Input
-                  value={(editData as any).ManagerName || ""}
+                  value={editData.ManagerName || ""}
                   onChange={(e) =>
                     setEditDataAction((prev) => ({ ...prev!, ManagerName: e.target.value }))
                   }
                   className="capitalize"
                 />
               </div>
+              {/* TSM - Now a Select Dropdown */}
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-600">TSM</label>
-                <Input
-                  value={(editData as any).TSM || ""}
+                <select
+                  className="border rounded-md px-3 py-2 text-sm"
+                  value={editData.TSM || ""}
                   onChange={(e) =>
                     setEditDataAction((prev) => ({ ...prev!, TSM: e.target.value }))
                   }
-                />
+                >
+                  <option value="">Select TSM</option>
+                  {tsms.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-600">TSM Name</label>
                 <Input
-                  value={(editData as any).TSMName || ""}
+                  value={editData.TSMName || ""}
                   onChange={(e) =>
                     setEditDataAction((prev) => ({ ...prev!, TSMName: e.target.value }))
                   }
@@ -281,16 +373,23 @@ export function EditDialog({
             />
           </div>
 
-          {/* Role */}
+          {/* Role - Now a Select Dropdown */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-600">Role</label>
-            <Input
-              placeholder="Role"
+            <select
+              className="border rounded-md px-3 py-2 text-sm"
               value={editData.Role || ""}
               onChange={(e) =>
                 setEditDataAction((prev) => ({ ...prev!, Role: e.target.value }))
               }
-            />
+            >
+              <option value="">Select Role</option>
+              {getRolesForDepartment(editData.Department || "").map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Status */}
@@ -299,15 +398,41 @@ export function EditDialog({
             <select
               className="border rounded-md px-3 py-2 text-sm"
               value={editData.Status || ""}
-              onChange={(e) =>
-                setEditDataAction((prev) => ({ ...prev!, Status: e.target.value }))
-              }
+              onChange={(e) => {
+                const newStatus = e.target.value;
+                const wasLocked = editData.Status?.toLowerCase() === "locked";
+                const nowActive = newStatus.toLowerCase() === "active";
+                
+                setEditDataAction((prev) => {
+                  if (!prev) return prev;
+                  
+                  if (wasLocked && nowActive) {
+                    // Reset login attempts and lock until when unlocking
+                    return {
+                      ...prev,
+                      Status: newStatus,
+                      LoginAttempts: 0,
+                      LockUntil: null,
+                    };
+                  }
+                  
+                  return { ...prev, Status: newStatus };
+                });
+              }}
             >
               <option value="">Select Status</option>
               <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Suspended">Suspended</option>
+              <option value="Locked">Locked</option>
               <option value="Terminated">Terminated</option>
               <option value="Resigned">Resigned</option>
             </select>
+            {editData.Status?.toLowerCase() === "locked" && (
+              <p className="text-xs text-amber-600 mt-1">
+                ⚠️ User is locked. Change to Active to unlock and reset login attempts.
+              </p>
+            )}
           </div>
 
           {/* Password */}
@@ -318,6 +443,7 @@ export function EditDialog({
                 <Input
                   type={showPassword ? "text" : "password"}
                   placeholder="Password (leave blank to keep unchanged)"
+                  value={editData.Password || ""}
                   onChange={(e) =>
                     setEditDataAction((prev) => ({ ...prev!, Password: e.target.value }))
                   }
@@ -400,7 +526,12 @@ export function EditDialog({
             onClick={async () => {
               const toastId = toast.loading("💾 Saving changes...")
               try {
-                await onSaveAction(editData)
+                // Create a copy of editData without empty password
+                const dataToSave = { ...editData }
+                if (!dataToSave.Password || dataToSave.Password.trim() === "") {
+                  delete dataToSave.Password
+                }
+                await onSaveAction(dataToSave)
                 toast.success("✅ Account updated successfully!", { id: toastId })
               } catch (err) {
                 toast.error("❌ Failed to update account", { id: toastId })

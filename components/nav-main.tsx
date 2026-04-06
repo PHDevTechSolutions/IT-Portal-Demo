@@ -44,12 +44,19 @@ export function NavMain({
         {items.map((item) => (
           <Collapsible key={item.title} asChild defaultOpen={item.isActive}>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip={item.title}>
-                <Link href={item.url}>
+              {item.items?.length ? (
+                <SidebarMenuButton tooltip={item.title}>
                   <item.icon />
                   <span>{item.title}</span>
-                </Link>
-              </SidebarMenuButton>
+                </SidebarMenuButton>
+              ) : (
+                <SidebarMenuButton asChild tooltip={item.title}>
+                  <Link href={item.url}>
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              )}
               {item.items?.length ? (
                 <>
                   <CollapsibleTrigger asChild>

@@ -99,7 +99,9 @@ interface UserAccount {
   _id: string;
   ReferenceID: string;
   TSM: string;
+  TSMName?: string;
   Manager: string;
+  ManagerName?: string;
   Location: string;
   Firstname: string;
   Lastname: string;
@@ -114,6 +116,7 @@ interface UserAccount {
   profilePicture?: string;
   Directories?: string[];
   LoginAttempts?: number; // needed for Reset Client Access guard
+  LockUntil?: Date | null;
 }
 
 type SortKey = keyof Pick<
@@ -183,7 +186,17 @@ const DEFAULT_ROLES = ["User", "Manager", "Admin", "SuperAdmin", "Developer"];
 const ROLES_BY_DEPARTMENT: Record<string, string[]> = {
   Sales: ["Territory Sales Associate", "Territory Sales Manager", "Manager"],
   "Sales Project": ["Office Sales"],
-  CSR: ["Staff", "Admin"],
+  IT: ["IT Staff", "IT Admin", "IT Manager", "IT Support", "Developer", "SuperAdmin"],
+  CSR: ["Staff", "Admin", "Manager"],
+  HR: ["Staff", "Manager", "Admin"],
+  Ecommerce: ["Staff", "Manager", "Admin"],
+  Marketing: ["Staff", "Manager", "Admin"],
+  Engineering: ["Engineer", "Senior Engineer", "Manager"],
+  Admin: ["Staff", "Manager", "Admin"],
+  "Warehouse Operations": ["Staff", "Manager", "Supervisor"],
+  Accounting: ["Staff", "Manager", "Admin"],
+  Owner: ["Owner"],
+  Procurement: ["Staff", "Manager", "Admin"],
 };
 
 function getRolesForDepartment(dept: string): string[] {
@@ -365,7 +378,6 @@ export default function AccountPage() {
       }
     };
     fetchFormDropdowns();
-    setNewUser((prev) => ({ ...prev, Manager: "", TSM: "" }));
   }, [newUser.Department]);
 
   // ─── Directory helpers ───────────────────────────────────────────────────────
@@ -627,10 +639,16 @@ export default function AccountPage() {
     const prevUser = accounts.find((a) => a._id === newUser._id);
 
     try {
+      // Create payload without empty password to preserve existing password
+      const payload = { ...newUser };
+      if (!payload.Password || payload.Password.trim() === "") {
+        delete payload.Password;
+      }
+
       const res = await fetch("/api/UserManagement/UserUpdate", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: newUser._id, ...newUser }),
+        body: JSON.stringify({ id: newUser._id, ...payload }),
       });
       const result = await res.json();
       if (!res.ok || !result.success)
@@ -1160,12 +1178,19 @@ export default function AccountPage() {
                               </label>
                               <Select
                                 value={newUser.Manager || ""}
-                                onValueChange={(v) =>
+                                onValueChange={(v) => {
+                                  const selectedManager = formManagers.find(
+                                    (m) => m.value === v
+                                  );
                                   setNewUser((prev) => ({
                                     ...prev,
                                     Manager: v,
-                                  }))
-                                }
+                                    ManagerName: selectedManager?.label || "",
+                                    // Reset TSM when manager changes
+                                    TSM: "",
+                                    TSMName: "",
+                                  }));
+                                }}
                                 disabled={isFormLoading}
                               >
                                 <SelectTrigger className="rounded-none h-10 text-xs">
@@ -1182,26 +1207,91 @@ export default function AccountPage() {
                             </div>
                             <div className="space-y-1.5">
                               <label className="text-[10px] font-bold uppercase opacity-60">
+                                Manager Name
+                              </label>
+                              <Input
+                                placeholder="Manager Name (auto-filled)"
+                                className="rounded-none h-10 text-xs capitalize bg-muted/40"
+                                value={newUser.ManagerName || ""}
+                                disabled={true}
+                                readOnly
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold uppercase opacity-60">
                                 TSM
                               </label>
                               <Select
                                 value={newUser.TSM || ""}
-                                onValueChange={(v) =>
-                                  setNewUser((prev) => ({ ...prev, TSM: v }))
-                                }
+                                onValueChange={(v) => {
+                                  const selectedTSM = formTsms.find(
+                                    (t) => t.value === v
+                                  );
+                                  // Find the TSM user to get their manager
+                                  const tsmUser = accounts.find(
+                                    (a) =>
+                                      a.ReferenceID === v &&
+                                      a.Role === "Territory Sales Manager"
+                                  );
+                                  // Find the manager details for auto-population
+                                  const managerDetails = tsmUser?.Manager
+                                    ? formManagers.find(
+                                        (m) => m.value === tsmUser.Manager
+                                      )
+                                    : null;
+                                  setNewUser((prev) => ({
+                                    ...prev,
+                                    TSM: v,
+                                    TSMName: selectedTSM?.label || "",
+                                    // Auto-populate Manager if TSM has a manager
+                                    ...(tsmUser?.Manager
+                                      ? {
+                                          Manager: tsmUser.Manager,
+                                          ManagerName:
+                                            managerDetails?.label || "",
+                                        }
+                                      : {}),
+                                  }));
+                                }}
                                 disabled={isFormLoading}
                               >
                                 <SelectTrigger className="rounded-none h-10 text-xs">
                                   <SelectValue placeholder="Select TSM" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {formTsms.map((t) => (
-                                    <SelectItem key={t.value} value={t.value}>
-                                      {t.label}
-                                    </SelectItem>
-                                  ))}
+                                  {formTsms
+                                    .filter((t) => {
+                                      // If a manager is already selected, filter by that manager
+                                      if (!newUser.Manager) return true;
+                                      const tsmUser = accounts.find(
+                                        (a) =>
+                                          a.ReferenceID === t.value &&
+                                          a.Role === "Territory Sales Manager"
+                                      );
+                                      return (
+                                        !tsmUser?.Manager ||
+                                        tsmUser.Manager === newUser.Manager
+                                      );
+                                    })
+                                    .map((t) => (
+                                      <SelectItem key={t.value} value={t.value}>
+                                        {t.label}
+                                      </SelectItem>
+                                    ))}
                                 </SelectContent>
                               </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold uppercase opacity-60">
+                                TSM Name
+                              </label>
+                              <Input
+                                placeholder="TSM Name (auto-filled)"
+                                className="rounded-none h-10 text-xs capitalize bg-muted/40"
+                                value={newUser.TSMName || ""}
+                                disabled={true}
+                                readOnly
+                              />
                             </div>
                             <div className="space-y-1.5">
                               <label className="text-[10px] font-bold uppercase opacity-60">
@@ -1279,20 +1369,39 @@ export default function AccountPage() {
                             className="w-full border rounded-none px-3 py-2 text-xs h-10"
                             value={newUser.Status || "Active"}
                             disabled={isFormLoading}
-                            onChange={(e) =>
-                              setNewUser((prev) => ({
-                                ...prev,
-                                Status: e.target.value,
-                              }))
-                            }
+                            onChange={(e) => {
+                              const newStatus = e.target.value;
+                              const wasLocked = (newUser.Status || "").toLowerCase() === "locked";
+                              const nowActive = newStatus.toLowerCase() === "active";
+                              
+                              setNewUser((prev) => {
+                                if (wasLocked && nowActive) {
+                                  // Reset login attempts and lock until when unlocking
+                                  return {
+                                    ...prev,
+                                    Status: newStatus,
+                                    LoginAttempts: 0,
+                                    LockUntil: null,
+                                  };
+                                }
+                                return { ...prev, Status: newStatus };
+                              });
+                            }}
                           >
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
                             <option value="Suspended">Suspended</option>
+                            <option value="Terminated">Terminated</option>
+                            <option value="Resigned">Resigned</option>
                             {/* Locked is read-only from the system; shown so it
                                 displays correctly when editing a locked user */}
                             <option value="Locked">Locked</option>
                           </select>
+                          {(newUser.Status || "").toLowerCase() === "locked" && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              ⚠️ User is locked. Change to Active to unlock.
+                            </p>
+                          )}
                         </div>
 
                         {/* ── Reset Client Access ─────────────────────────────

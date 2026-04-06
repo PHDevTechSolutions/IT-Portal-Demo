@@ -126,10 +126,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // ❗ SALES & IT ONLY
-  if (user.Department !== "Sales" && user.Department !== "IT") {
+  // ❗ IT DEPARTMENT ONLY
+  if (user.Department !== "IT") {
     return res.status(403).json({
-      message: "Only Sales or IT department users are allowed to log in.",
+      message: "Access denied. IT department authorization required.",
     });
   }
 

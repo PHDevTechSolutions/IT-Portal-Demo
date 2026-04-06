@@ -4,7 +4,7 @@ import { Cpu, Loader2 } from "lucide-react";
 
 export default function Loading() {
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-[#050a14] z-50">
+    <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-[#050a14]">
       {/* Animated background grid - full screen coverage */}
       <div className="absolute inset-0 h-full w-full">
         <div 
@@ -66,8 +66,7 @@ export default function Loading() {
 
         {/* Progress bar */}
         <div className="w-64 h-1 bg-slate-800 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400"
+          <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 animate-[loading_2s_ease-in-out_infinite]" 
             style={{
               width: '30%',
               animation: 'loading 2s ease-in-out infinite'

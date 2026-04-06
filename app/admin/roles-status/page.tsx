@@ -41,7 +41,9 @@ interface UserAccount {
     _id: string
     ReferenceID: string
     TSM: string
+    TSMName?: string
     Manager: string
+    ManagerName?: string
     Location: string
     Firstname: string
     Lastname: string
@@ -55,6 +57,8 @@ interface UserAccount {
     TargetQuota: string
     profilePicture?: string
     Directories?: string[]
+    LoginAttempts?: number
+    LockUntil?: Date | null
 }
 
 type SortKey = keyof Pick<UserAccount, "Firstname" | "Lastname" | "Email" | "Department" | "Company" | "Position">

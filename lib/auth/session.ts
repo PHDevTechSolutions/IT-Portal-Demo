@@ -98,7 +98,17 @@ export async function hasSession(): Promise<boolean> {
   return session !== null;
 }
 
-// ─── Cookie helpers ───────────────────────────────────────────────────────────
+/**
+ * Like requireSession() but also verifies the user is Super Admin.
+ * Throws a 403-style error if not Super Admin.
+ */
+export async function requireSuperAdmin(): Promise<SessionUser> {
+  const session = await requireSession();
+  if (session.role !== "SuperAdmin") {
+    throw new Error("Forbidden: Super Admin access required");
+  }
+  return session;
+}
 
 /** Standard cookie options shared by set / clear. */
 export const SESSION_COOKIE_OPTIONS = {
