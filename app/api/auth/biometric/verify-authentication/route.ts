@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     // Verify origin
     const expectedOrigin = process.env.NODE_ENV === "production"
-      ? `https://${process.env.VERCEL_URL || "your-domain.com"}`
+      ? "https://it-portal.devtech-erp-solutions.cloud"
       : "http://localhost:3000";
     
     if (clientData.origin !== expectedOrigin) {

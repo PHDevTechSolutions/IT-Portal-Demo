@@ -6,7 +6,7 @@ import crypto from "crypto";
 // RP (Relying Party) configuration
 const RP_NAME = "IT Portal ERP";
 const RP_ID = process.env.NODE_ENV === "production" 
-  ? process.env.VERCEL_URL || "your-domain.com"
+  ? "it-portal.devtech-erp-solutions.cloud"
   : "localhost";
 const ORIGIN = process.env.NODE_ENV === "production"
   ? `https://${RP_ID}`

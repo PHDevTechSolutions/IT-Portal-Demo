@@ -36,7 +36,7 @@ export function maskSensitiveData<T extends Record<string, unknown>>(
   data: T,
   fieldsToMask: string[] = SENSITIVE_FIELDS
 ): T {
-  const masked = { ...data };
+  const masked: Record<string, unknown> = { ...data };
 
   for (const key of Object.keys(masked)) {
     const lowerKey = key.toLowerCase();
@@ -49,20 +49,20 @@ export function maskSensitiveData<T extends Record<string, unknown>>(
     if (shouldMask) {
       const value = masked[key];
       if (typeof value === "string" && value.length > 0) {
-        masked[key] = maskValue(value) as T[Extract<keyof T, string>];
+        masked[key] = maskValue(value);
       } else if (value !== null && value !== undefined) {
-        masked[key] = "***MASKED***" as T[Extract<keyof T, string>];
+        masked[key] = "***MASKED***";
       }
     } else if (typeof masked[key] === "object" && masked[key] !== null) {
       // Recursively mask nested objects
       masked[key] = maskSensitiveData(
         masked[key] as Record<string, unknown>,
         fieldsToMask
-      ) as T[Extract<keyof T, string>];
+      );
     }
   }
 
-  return masked;
+  return masked as T;
 }
 
 /**

@@ -5,7 +5,7 @@ import crypto from "crypto";
 
 // RP configuration
 const RP_ID = process.env.NODE_ENV === "production" 
-  ? process.env.VERCEL_URL || "your-domain.com"
+  ? "it-portal.devtech-erp-solutions.cloud"
   : "localhost";
 
 // Generate a random challenge
