@@ -14,17 +14,16 @@ import { Separator } from "@/components/ui/separator";
 import {
   Bell,
   Check,
-  Trash2,
   X,
   Database,
   UserPlus,
   Activity,
   TrendingUp,
   History,
-  Info,
-  CheckCircle2,
+  CheckCircle,
   AlertTriangle,
-  AlertCircle,
+  Info,
+  Download,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -40,8 +39,8 @@ const categoryIcons: Record<string, React.ReactNode> = {
 };
 
 const typeIcons: Record<string, React.ReactNode> = {
-  success: <CheckCircle2 className="h-4 w-4 text-green-500" />,
-  error: <AlertCircle className="h-4 w-4 text-red-500" />,
+  success: <CheckCircle className="h-4 w-4 text-green-500" />,
+  error: <AlertTriangle className="h-4 w-4 text-red-500" />,
   warning: <AlertTriangle className="h-4 w-4 text-yellow-500" />,
   info: <Info className="h-4 w-4 text-blue-500" />,
 };
@@ -63,38 +62,54 @@ export function NotificationBell() {
     toast.success("All notifications marked as read");
   };
 
-  const handleNotificationClick = async (notification: any) => {
+  const handleNotificationClick = async (notification: {
+    id: string;
+    title: string;
+    message: string;
+    type: string;
+    category: string;
+    createdAt: string;
+    read: boolean;
+    metadata?: Record<string, any>;
+  }) => {
+    // Mark as read
     if (!notification.read) {
       await markAsRead(notification.id);
     }
-    
-    // Handle backup notifications - offer download
-    if (notification.category === "backup" && notification.metadata?.backupId) {
-      if (notification.type === "success") {
-        toast.info("Backup available for download", {
-          action: {
-            label: "Download",
-            onClick: () => downloadBackup(notification.metadata.backupId),
-          },
-        });
-      }
+
+    // Handle backup download notifications
+    if (notification.category === "backup" && notification.metadata && "backupId" in notification.metadata) {
+      await downloadBackup(notification.metadata.backupId);
     }
   };
 
   const downloadBackup = async (backupId: string) => {
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
+      const response = await fetch("/api/Data/Applications/Admin/BackupSettings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "download", backupId }),
+        body: JSON.stringify({
+          action: "download",
+          backupId: backupId,
+        }),
       });
-      const data = await res.json();
-      if (data.success && data.downloadUrl) {
-        window.open(data.downloadUrl, "_blank");
+
+      const result = await response.json();
+      if (result.success && result.downloadUrl) {
+        // Create download link
+        const link = document.createElement("a");
+        link.href = result.downloadUrl;
+        link.download = `backup-${backupId}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success("Backup downloaded successfully");
       } else {
-        toast.error("Failed to get download URL");
+        toast.error(result.error || "Failed to download backup");
       }
-    } catch (err) {
+    } catch (error) {
+      console.error("Download error:", error);
       toast.error("Failed to download backup");
     }
   };
@@ -206,14 +221,32 @@ export function NotificationBell() {
                                   { addSuffix: true }
                                 )}
                               </span>
-                              {!notification.read && (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
-                                  New
-                                </Badge>
-                              )}
+                              <div className="flex items-center gap-2">
+                                {!notification.read && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    New
+                                  </Badge>
+                                )}
+                                {notification.category === "backup" && notification.metadata && typeof notification.metadata === "object" && "backupId" in notification.metadata && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 px-2"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const metadata = notification.metadata as any;
+                                      if (metadata?.backupId) {
+                                        downloadBackup(metadata.backupId);
+                                      }
+                                    }}
+                                  >
+                                    <CheckCircle className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <Button

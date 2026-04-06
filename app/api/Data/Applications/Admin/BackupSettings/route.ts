@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/MongoDB";
 import { ObjectId } from "mongodb";
+import crypto from "crypto";
+import JSZip from "jszip";
+import * as ExcelJS from "exceljs";
 import { createClient } from "@supabase/supabase-js";
 import { neon } from "@neondatabase/serverless";
-import * as ExcelJS from "exceljs";
 import { sendBackupNotification, sendGlobalNotification } from "@/lib/services/notifications";
 
 // Initialize clients
@@ -196,9 +198,28 @@ async function runBackup(settings: any) {
     }
 
     // Generate Excel buffer
-    const buffer = await workbook.xlsx.writeBuffer();
-    const base64Data = Buffer.from(buffer).toString("base64");
-    const size = formatBytes(buffer.byteLength);
+    const excelBuffer = await workbook.xlsx.writeBuffer();
+    const base64Data: string = Buffer.from(excelBuffer).toString("base64");
+
+    // Generate ZIP file containing both Excel and additional data
+    const zip = new JSZip();
+    zip.file(`backup-${timestamp.toISOString().split('T')[0]}.xlsx`, excelBuffer);
+    
+    // Add metadata file to ZIP
+    const metadata = {
+      backupId: backupId.toString(),
+      timestamp: timestamp.toISOString(),
+      recordsCount: totalRecords,
+      tables: settings.includeTables,
+      frequency: settings.frequency,
+      generatedAt: new Date().toISOString(),
+    };
+    zip.file("backup-metadata.json", JSON.stringify(metadata, null, 2));
+
+    // Generate ZIP buffer
+    const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+    const zipDataBase64: string = Buffer.from(zipBuffer).toString("base64");
+    const size = formatBytes(zipBuffer.byteLength);
 
     // Update history record
     await historyCollection.updateOne(
@@ -210,6 +231,7 @@ async function runBackup(settings: any) {
           size,
           completedAt: new Date(),
           data: base64Data,
+          zipData: zipDataBase64,
         },
       }
     );
@@ -272,8 +294,8 @@ async function getDownloadUrl(backupId: string) {
       return NextResponse.json({ success: false, error: "Backup not found" });
     }
 
-    // Create a data URL for download
-    const dataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${backup.data}`;
+    // Create a data URL for download (ZIP)
+    const dataUrl = `data:application/zip;base64,${backup.zipData || backup.data}`;
 
     return NextResponse.json({ success: true, downloadUrl: dataUrl });
   } catch (error) {
