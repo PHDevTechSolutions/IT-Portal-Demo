@@ -16,7 +16,7 @@ import { NavMain } from "../components/nav-main";
 import { NavProjects } from "../components/nav-projects";
 import { NavSecondary } from "../components/nav-secondary";
 import { NavUser } from "../components/nav-user";
-import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Activity, Boxes, TicketCheck, CalendarCheck, FileText, } from "lucide-react";
+import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Activity, Boxes, TicketCheck, CalendarCheck, FileText, Database, } from "lucide-react";
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
@@ -125,8 +125,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         title: "Settings",
         url: "#",
         icon: Settings2,
-        isActive: pathname?.startsWith("/settings"),
-        items: [{ title: "General", url: "/settings/general" }],
+        isActive: pathname?.startsWith("/settings") || pathname?.startsWith("/admin/backup-database"),
+        items: [
+          { title: "General", url: "/settings/general" },
+          { title: "Database Backup", url: "/admin/backup-database" },
+        ],
       },
     ],
     navSecondary: [

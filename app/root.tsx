@@ -6,8 +6,18 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Analytics } from "@vercel/analytics/next";
 
-// Popups
+// Contexts
 import { UserProvider, useUser } from "@/contexts/UserContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
+
+// Hooks
+import { useGlobalNotifications } from "@/lib/hooks/useNotifications";
+
+function NotificationInitializer() {
+  // Initialize global notifications monitoring
+  useGlobalNotifications();
+  return null;
+}
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const { userId } = useUser();
@@ -15,14 +25,17 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <Suspense fallback={null}>
-          {userId && (
-            <>
-            </>
-          )}
-        </Suspense>
-        <Analytics />
-        {children}
+        <NotificationProvider>
+          <Suspense fallback={null}>
+            {userId && (
+              <>
+                <NotificationInitializer />
+              </>
+            )}
+          </Suspense>
+          <Analytics />
+          {children}
+        </NotificationProvider>
       </ThemeProvider>
       <Toaster />
     </>
