@@ -31,6 +31,7 @@ interface Customer {
   status: string;
   remarks: string;
   date_created: string;
+  industry: string;
   date_updated: string;
   next_available_date?: string;
 }

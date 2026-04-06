@@ -43,6 +43,7 @@ interface Customer {
     manager: string
     status: string
     remarks: string
+    industry: string;
     date_created: string
     date_updated: string
     next_available_date?: string
@@ -523,6 +524,12 @@ export default function AccountPage() {
         )
     }
 
+    const nullIndustryCount = useMemo(() => {
+        return customers.filter(
+            (c) => !c.industry || !c.industry.toString().trim()
+        ).length;
+    }, [customers]);
+
     return (
         <ProtectedPageWrapper>
             <SidebarProvider>
@@ -745,6 +752,7 @@ export default function AccountPage() {
                                             <TableHead>Email</TableHead>
                                             <TableHead>Type</TableHead>
                                             <TableHead>Status</TableHead>
+                                            <TableHead>Industry {`Missing Industry: ${nullIndustryCount}`}</TableHead>
                                             <TableHead>Area</TableHead>
                                             <TableHead>TSA</TableHead>
                                             <TableHead>TSM</TableHead>
@@ -912,6 +920,7 @@ export default function AccountPage() {
                                                             </Badge>
                                                         )}
                                                     </TableCell>
+                                                    <TableCell>{c.industry}</TableCell>
                                                     <TableCell>{c.region}</TableCell>
                                                     <TableCell className="capitalize">
                                                         {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-"}

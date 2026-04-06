@@ -15,18 +15,7 @@ import { NavMain } from "../components/nav-main";
 import { NavProjects } from "../components/nav-projects";
 import { NavSecondary } from "../components/nav-secondary";
 import { NavUser } from "../components/nav-user";
-import {
-  BookOpen,
-  Bot,
-  SquareTerminal,
-  Settings2,
-  LifeBuoy,
-  Send,
-  Activity,
-  Boxes,
-  TicketCheck,
-  CalendarCheck,
-} from "lucide-react";
+import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Activity, Boxes, TicketCheck, CalendarCheck, } from "lucide-react";
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
