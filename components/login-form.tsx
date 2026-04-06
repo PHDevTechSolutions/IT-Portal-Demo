@@ -344,7 +344,7 @@ export function LoginForm({
                         </span>
                       </Button>
                       <p className="text-xs text-cyan-400/40 text-center mt-2">
-                        Use fingerprint or face recognition
+                        Use fingerprint
                       </p>
                     </>
                   )}
