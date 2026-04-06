@@ -2,6 +2,20 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { connectToDatabase } from "@/lib/MongoDB";
 import { ObjectId } from "mongodb";
 import bcrypt from "bcrypt";
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
+
+// Helper to get actor from session/request
+function getActorFromRequest(req: NextApiRequest): AuditActor {
+  const userEmail = req.headers["x-user-email"] as string || "system";
+  const userRole = req.headers["x-user-role"] as string || "unknown";
+  const userId = req.headers["x-user-id"] as string || null;
+  
+  return {
+    uid: userId,
+    email: userEmail,
+    role: userRole,
+  };
+}
 
 export default async function editAccount(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "PUT") {
@@ -36,6 +50,26 @@ export default async function editAccount(req: NextApiRequest, res: NextApiRespo
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    // Log audit
+    const actor = getActorFromRequest(req);
+    await logSystemAudit({
+      action: "update",
+      module: "UserManagement",
+      page: "/admin/roles",
+      resourceType: "user",
+      resourceId: UserId || id,
+      resourceName: `${Firstname} ${Lastname}`,
+      actor,
+      source: "EditUserAPI",
+      metadata: {
+        email: Email,
+        role: Role,
+        department: Department,
+        position: Position,
+        changedFields: Object.keys(updatedUser).filter(k => !['updatedAt'].includes(k)),
+      },
+    });
 
     res.status(200).json({ success: true, message: "Account updated successfully" });
   } catch (error) {

@@ -4,6 +4,7 @@ import { validateUser, connectToDatabase } from "@/lib/MongoDB";
 import { serialize } from "cookie";
 import nodemailer from "nodemailer";
 import { UAParser } from "ua-parser-js";
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -148,6 +149,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   );
 
   const userId = result.user._id.toString();
+
+  // Log successful login audit
+  const actor: AuditActor = {
+    uid: userId,
+    email: user.Email,
+    role: user.Role,
+    department: user.Department,
+  };
+  
+  // Use existing userAgent, parser, deviceType from earlier in the function
+  await logSystemAudit({
+    action: "login",
+    module: "Authentication",
+    page: "/login",
+    resourceType: "session",
+    resourceId: userId,
+    resourceName: user.Email,
+    actor,
+    ipAddress: req.headers["x-forwarded-for"]?.toString().split(",")[0] || req.socket.remoteAddress || null,
+    userAgent,
+    source: "LoginAPI",
+    metadata: {
+      deviceId,
+      deviceType,
+      browser: parser.getBrowser().name || "Unknown",
+      os: parser.getOS().name || "Unknown",
+    },
+  });
 
   res.setHeader(
     "Set-Cookie",

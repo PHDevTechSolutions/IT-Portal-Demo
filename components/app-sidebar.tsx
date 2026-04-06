@@ -16,7 +16,7 @@ import { NavMain } from "../components/nav-main";
 import { NavProjects } from "../components/nav-projects";
 import { NavSecondary } from "../components/nav-secondary";
 import { NavUser } from "../components/nav-user";
-import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Activity, Boxes, TicketCheck, CalendarCheck, } from "lucide-react";
+import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Activity, Boxes, TicketCheck, CalendarCheck, FileText, } from "lucide-react";
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
@@ -50,6 +50,16 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const sidebarData = {
     navMain: [
       {
+        title: "Audit Logs",
+        url: "#",
+        icon: FileText,
+        isActive: pathname?.startsWith("/audit-logs") || pathname?.startsWith("/admin/audit-settings"),
+        items: [
+          { title: "View Logs", url: "/audit-logs" },
+          { title: "Settings", url: "/admin/audit-settings" },
+        ],
+      },
+      {
         title: "Applications",
         url: "#",
         icon: SquareTerminal,
@@ -65,7 +75,6 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           { title: "Customer Database", url: "/taskflow/customer-database" },
           { title: "Removal Accounts", url: "/taskflow/removal-accounts" },
           { title: "Customer Audits", url: "/taskflow/customer-audits" },
-          { title: "Audit Logs", url: "/taskflow/audit-logs" },
           { title: "Approval of Accounts", url: "/taskflow/customer-approval" },
           { title: "Activity Logs", url: "/taskflow/activity-logs" },
           { title: "Progress Logs", url: "/taskflow/progress-logs" },

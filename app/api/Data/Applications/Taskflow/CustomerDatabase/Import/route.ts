@@ -1,5 +1,17 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
+
+// Helper to get actor from request headers
+function getActorFromRequest(req: Request): AuditActor {
+  const headers = req.headers;
+  return {
+    uid: headers.get("x-user-id") || null,
+    email: headers.get("x-user-email") || "system",
+    role: headers.get("x-user-role") || "unknown",
+    name: headers.get("x-user-name") || null,
+  };
+}
 
 const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
 if (!Xchire_databaseUrl) {
@@ -169,6 +181,8 @@ export async function POST(req: Request) {
       }
     }
 
+    await logImportAudit(req, insertedCount, data.length);
+
     return NextResponse.json({
       success: insertedCount === data.length,
       insertedCount,
@@ -182,4 +196,24 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+// Helper function to log import audit
+export async function logImportAudit(req: Request, insertedCount: number, totalCount: number) {
+  const actor = getActorFromRequest(req);
+  await logSystemAudit({
+    action: "import",
+    module: "CustomerDatabase",
+    page: "/taskflow/customer-database",
+    resourceType: "customer",
+    resourceId: null,
+    resourceName: `${insertedCount} customers imported`,
+    actor,
+    affectedCount: insertedCount,
+    source: "CustomerDatabaseImportAPI",
+    metadata: {
+      totalRecords: totalCount,
+      successfulImports: insertedCount,
+    },
+  });
 }

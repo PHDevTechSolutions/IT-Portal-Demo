@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/MongoDB";
 import { ObjectId } from "mongodb";
 import { requireSuperAdmin } from "@/lib/auth/session";
+import { logSystemAudit } from "@/lib/audit/system-audit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Log the permission change for audit purposes
+    // Log the permission change for audit purposes (MongoDB internal log)
     await db.collection("permission_logs").insertOne({
       userId: userId,
       action: "update_permissions",
@@ -45,6 +46,26 @@ export async function POST(req: NextRequest) {
       performedBy: session.userId,
       performedByRole: session.role,
       timestamp: new Date(),
+    });
+
+    // Also log to Firebase system audits for centralized tracking
+    await logSystemAudit({
+      action: "update",
+      module: "ITPermissions",
+      page: "/admin/it-permissions",
+      resourceType: "permissions",
+      resourceId: userId,
+      resourceName: `User ${userId}`,
+      actor: {
+        uid: session.userId,
+        email: session.email,
+        role: session.role,
+      },
+      source: "UpdatePermissionsAPI",
+      metadata: {
+        updatedPermissions: permissions,
+        targetUserId: userId,
+      },
     });
 
     return NextResponse.json({

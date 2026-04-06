@@ -2,6 +2,30 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { connectToDatabase } from "@/lib/MongoDB";
 import { ObjectId } from "mongodb";
 import bcrypt from "bcrypt";
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
+
+// Helper to get actor from request
+function getActorFromRequest(req: NextApiRequest): AuditActor {
+  return {
+    uid: req.headers["x-user-id"] as string || null,
+    email: req.headers["x-user-email"] as string || "system",
+    role: req.headers["x-user-role"] as string || "unknown",
+    name: req.headers["x-user-name"] as string || null,
+  };
+}
+
+// Helper to extract IP and User Agent from request
+function getRequestContext(req: NextApiRequest) {
+  const forwarded = req.headers["x-forwarded-for"]
+  const ip = typeof forwarded === "string" 
+    ? forwarded.split(",")[0].trim() 
+    : req.socket.remoteAddress || "unknown"
+  
+  return {
+    ipAddress: ip,
+    userAgent: req.headers["user-agent"] || null,
+  }
+}
 
 /**
  * PUT /api/UserManagement/UserUpdate
@@ -61,6 +85,14 @@ export default async function updateAccount(
     const db = await connectToDatabase();
     const userCollection = db.collection("users");
 
+    // Get existing user data first to track changes
+    const existingUser = await userCollection.findOne({ _id: new ObjectId(id) });
+    if (!existingUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: `User not found for ID: ${id}` });
+    }
+
     // Build $set payload selectively — only include fields present in the body.
     // This prevents overwriting existing DB values with undefined/null.
     const setPayload: Record<string, unknown> = {
@@ -99,6 +131,44 @@ export default async function updateAccount(
         .status(404)
         .json({ success: false, message: `User not found for ID: ${id}` });
     }
+
+    // Build changes object with before/after values
+    const changes: Record<string, { before: unknown; after: unknown }> = {};
+    for (const [key, afterValue] of Object.entries(setPayload)) {
+      if (key === 'updatedAt') continue; // Skip timestamp
+      const beforeValue = existingUser[key];
+      if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
+        changes[key] = { before: beforeValue, after: afterValue };
+      }
+    }
+
+    // Log audit after successful update
+    const actor = getActorFromRequest(req);
+    const { ipAddress, userAgent } = getRequestContext(req);
+    const targetUserName = `${Firstname || existingUser.Firstname || ''} ${Lastname || existingUser.Lastname || ''}`.trim() || 'Unknown';
+    const actorName = actor.name || actor.email || 'Unknown';
+    await logSystemAudit({
+      action: "update",
+      module: "UserManagement",
+      page: "/admin/roles",
+      resourceType: "user",
+      resourceId: id,
+      resourceName: `${targetUserName} (updated by: ${actorName})`,
+      actor,
+      ipAddress,
+      userAgent,
+      changes: Object.keys(changes).length > 0 ? changes : undefined,
+      source: "UserUpdateAPI",
+      metadata: {
+        targetUser: targetUserName,
+        targetEmail: Email || existingUser.Email,
+        targetRole: Role || existingUser.Role,
+        targetDepartment: Department || existingUser.Department,
+        targetStatus: Status || existingUser.Status,
+        changedFields: Object.keys(changes),
+        updateLocation: "/admin/roles",
+      },
+    });
 
     return res.status(200).json({
       success: true,

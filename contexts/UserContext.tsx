@@ -19,6 +19,11 @@ import React, {
 interface UserContextType {
   userId: string | null;
   referenceId: string | null;
+  email: string | null;
+  firstname: string | null;
+  lastname: string | null;
+  role: string | null;
+  name: string | null;
   setUserId: (id: string) => void;
 }
 
@@ -27,6 +32,10 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export function UserProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [referenceId, setReferenceId] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [firstname, setFirstname] = useState<string | null>(null);
+  const [lastname, setLastname] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
 
   // Hydrate from session on mount
   useEffect(() => {
@@ -36,14 +45,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (!data) return;
         if (data.userId) setUserId(data.userId);
         if (data.referenceId) setReferenceId(data.referenceId);
+        if (data.email) setEmail(data.email);
+        if (data.firstname) setFirstname(data.firstname);
+        if (data.lastname) setLastname(data.lastname);
+        if (data.role) setRole(data.role);
       })
       .catch(() => {
         // Silently ignore — unauthenticated pages will redirect via middleware
       });
   }, []);
 
+  const name = firstname && lastname ? `${firstname} ${lastname}` : null;
+
   return (
-    <UserContext.Provider value={{ userId, referenceId, setUserId }}>
+    <UserContext.Provider value={{ userId, referenceId, email, firstname, lastname, role, name, setUserId }}>
       {children}
     </UserContext.Provider>
   );

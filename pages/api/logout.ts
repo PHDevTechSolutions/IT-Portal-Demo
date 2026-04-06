@@ -7,6 +7,20 @@
 
 import { NextApiRequest, NextApiResponse } from "next";
 import { serialize } from "cookie";
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
+
+// Helper to get actor from session/request
+function getActorFromRequest(req: NextApiRequest): AuditActor {
+  const userEmail = req.headers["x-user-email"] as string || null;
+  const userRole = req.headers["x-user-role"] as string || null;
+  const userId = req.headers["x-user-id"] as string || null;
+  
+  return {
+    uid: userId,
+    email: userEmail,
+    role: userRole,
+  };
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -28,6 +42,23 @@ export default async function handler(
       maxAge: -1, // instruct browser to delete
     }),
   );
+
+  // Log logout audit
+  const actor = getActorFromRequest(req);
+  if (actor.uid || actor.email) {
+    await logSystemAudit({
+      action: "logout",
+      module: "Authentication",
+      page: "/login",
+      resourceType: "session",
+      resourceId: actor.uid,
+      resourceName: actor.email ?? "Unknown",
+      actor,
+      ipAddress: req.headers["x-forwarded-for"]?.toString().split(",")[0] || req.socket.remoteAddress || null,
+      userAgent: req.headers["user-agent"] || null,
+      source: "LogoutAPI",
+    });
+  }
 
   return res.status(200).json({ message: "Logout successful" });
 }

@@ -1,6 +1,21 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { connectToDatabase } from "@/lib/MongoDB";
 import bcrypt from "bcrypt";
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
+
+// Helper to get actor from session/request
+function getActorFromRequest(req: NextApiRequest): AuditActor {
+  // Extract user info from session cookie or headers
+  const userEmail = req.headers["x-user-email"] as string || "system";
+  const userRole = req.headers["x-user-role"] as string || "unknown";
+  const userId = req.headers["x-user-id"] as string || null;
+  
+  return {
+    uid: userId,
+    email: userEmail,
+    role: userRole,
+  };
+}
 
 async function AddUser({ ReferenceID, UserId, Firstname, Lastname, Email, userName, Password, Role, Position, Department, Location, Company, Status, LoginAttempts, LockUntil,
 }: {
@@ -56,7 +71,7 @@ async function AddUser({ ReferenceID, UserId, Firstname, Lastname, Email, userNa
   // Insert new user into the database
   await userCollection.insertOne(newUser);
 
-  return { success: true, message: "User created successfully" };
+  return { success: true, message: "User created successfully", user: { UserId, Firstname, Lastname, Email, Role, Department, Position } };
 }
 
 export default async function handler(
@@ -93,6 +108,26 @@ export default async function handler(
         LoginAttempts,
         LockUntil,
       });
+      
+      // Log audit
+      const actor = getActorFromRequest(req);
+      await logSystemAudit({
+        action: "create",
+        module: "UserManagement",
+        page: "/admin/roles",
+        resourceType: "user",
+        resourceId: UserId,
+        resourceName: `${Firstname} ${Lastname}`,
+        actor,
+        source: "CreateUserAPI",
+        metadata: {
+          email: Email,
+          role: Role,
+          department: Department,
+          position: Position,
+        },
+      });
+      
       res.status(201).json(result);
     } catch (error: any) {
       console.error("Error:", error.message);

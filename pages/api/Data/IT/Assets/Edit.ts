@@ -2,6 +2,20 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { connectToDatabase } from "@/lib/MongoDB";
 import { ObjectId } from "mongodb";
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
+
+// Helper to get actor from session/request
+function getActorFromRequest(req: NextApiRequest): AuditActor {
+  const userEmail = req.headers["x-user-email"] as string || "system";
+  const userRole = req.headers["x-user-role"] as string || "unknown";
+  const userId = req.headers["x-user-id"] as string || null;
+  
+  return {
+    uid: userId,
+    email: userEmail,
+    role: userRole,
+  };
+}
 
 export default async function updateAsset(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "PUT") {
@@ -81,6 +95,25 @@ export default async function updateAsset(req: NextApiRequest, res: NextApiRespo
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: "Asset not found" });
     }
+
+    // Log audit
+    const actor = getActorFromRequest(req);
+    await logSystemAudit({
+      action: "update",
+      module: "ITAssets",
+      page: "/stash/inventory",
+      resourceType: "asset",
+      resourceId: _id,
+      resourceName: brand || model || serialNumber || "Unknown Asset",
+      actor,
+      source: "EditAssetAPI",
+      metadata: {
+        type,
+        serialNumber,
+        designation,
+        changedFields: Object.keys(updatedAsset).filter(k => !['updatedAt'].includes(k)),
+      },
+    });
 
     res.status(200).json({ success: true, message: "Asset updated successfully" });
   } catch (error) {

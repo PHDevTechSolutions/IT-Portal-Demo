@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import {
@@ -74,7 +74,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { exportAuditLogsToPDF } from "@/lib/utils/audit-pdf-export";
-import { FileDown } from "lucide-react";
+import { exportAuditLogsToCSV } from "@/lib/utils/audit-csv-export";
+import { FileDown, FileSpreadsheet, Calendar as CalendarIcon, Users, Layers } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,10 +90,43 @@ type CustomerAuditAction =
   | "delete"
   | "autoid";
 
+/** Action types from system audits */
+type SystemAuditAction =
+  | "assign"
+  | "approve"
+  | "reject"
+  | "lock"
+  | "unlock"
+  | "reset_password"
+  | "change_role"
+  | "change_status"
+  | "bulk_create"
+  | "bulk_update"
+  | "bulk_delete"
+  | "export"
+  | "import"
+  | "view";
+
 /** Action types from the activity_logs collection */
 type ActivityLogAction = "transfer" | "login" | "logout" | "other";
 
-type AnyAction = CustomerAuditAction | ActivityLogAction;
+/** Action types from audit_trails collection */
+type AuditTrailAction =
+  | "create"
+  | "update"
+  | "delete"
+  | "login"
+  | "logout"
+  | "view"
+  | "export"
+  | "import"
+  | "assign"
+  | "transfer"
+  | "approve"
+  | "reject"
+  | "other";
+
+type AnyAction = CustomerAuditAction | ActivityLogAction | SystemAuditAction | AuditTrailAction;
 
 interface AuditActor {
   uid?: string | null;
@@ -114,11 +151,16 @@ interface TransferDetail {
 interface UnifiedLog {
   id: string;
   /** Which Firestore collection this came from */
-  source: "customer_audit" | "activity_logs";
+  source: "customer_audit" | "activity_logs" | "system_audit" | "audit_trails";
   action: AnyAction;
   affectedCount?: number;
   customerId?: string | null;
   customerName?: string | null;
+  resourceId?: string | null;
+  resourceName?: string | null;
+  resourceType?: string | null;
+  module?: string | null;
+  page?: string | null;
   transfer?: TransferDetail | null;
   changes?: Record<string, { before: unknown; after: unknown }> | null;
   actor?: AuditActor | null;
@@ -134,6 +176,17 @@ interface UnifiedLog {
   Manager?: string | null;
   previousTSM?: string | null;
   previousManager?: string | null;
+  // system audit fields
+  metadata?: Record<string, unknown> | null;
+  // audit_trails-specific fields
+  details?: string | null;
+  message?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  entityName?: string | null;
+  entityId?: string | null;
+  entityType?: string | null;
+  department?: string | null;
 }
 
 const PAGE_SIZE = 20;
@@ -376,6 +429,26 @@ function SourceBadge({ source }: { source: UnifiedLog["source"] }) {
       </Badge>
     );
   }
+  if (source === "system_audit") {
+    return (
+      <Badge
+        variant="outline"
+        className="text-[9px] px-1 py-0 border-amber-300 text-amber-600 font-mono"
+      >
+        system_audit
+      </Badge>
+    );
+  }
+  if (source === "audit_trails") {
+    return (
+      <Badge
+        variant="outline"
+        className="text-[9px] px-1 py-0 border-pink-300 text-pink-600 font-mono"
+      >
+        audit_trails
+      </Badge>
+    );
+  }
   return (
     <Badge
       variant="outline"
@@ -394,13 +467,27 @@ export default function CustomerAuditLogsPage() {
 
   const [customerAuditLogs, setCustomerAuditLogs] = useState<UnifiedLog[]>([]);
   const [activityLogs, setActivityLogs] = useState<UnifiedLog[]>([]);
+  const [systemAuditLogs, setSystemAuditLogs] = useState<UnifiedLog[]>([]);
+  const [auditTrailLogs, setAuditTrailLogs] = useState<UnifiedLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterAction, setFilterAction] = useState<string>("all");
   const [filterSource, setFilterSource] = useState<string>("all");
   const [filterDate, setFilterDate] = useState<string>("all");
+  const [filterActor, setFilterActor] = useState<string>("all");
+  const [filterModule, setFilterModule] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedLog, setSelectedLog] = useState<UnifiedLog | null>(null);
+  const [activeView, setActiveView] = useState<"logs" | "analytics">("logs");
+  
+  // ── Bulk Selection ───────────────────────────────────────────────────────
+  const [selectedLogs, setSelectedLogs] = useState<Set<string>>(new Set());
+  const [newLogsCount, setNewLogsCount] = useState(0);
+  const lastViewedTimestamp = useRef<number>(Date.now());
 
   // ── Live Firestore: taskflow_customer_audit_logs ──────────────────────────
   useEffect(() => {
@@ -415,6 +502,15 @@ export default function CustomerAuditLogsPage() {
         source: "customer_audit" as const,
         ...(d.data() as Omit<UnifiedLog, "id" | "source">),
       }));
+      
+      // Count new logs since last view
+      const newCount = items.filter(
+        (item) => (item.timestamp?.toMillis?.() || 0) > lastViewedTimestamp.current
+      ).length;
+      if (newCount > 0) {
+        setNewLogsCount((prev) => prev + newCount);
+      }
+      
       setCustomerAuditLogs(items);
       setLoading(false);
     });
@@ -490,15 +586,138 @@ export default function CustomerAuditLogsPage() {
     return () => unsub();
   }, []);
 
-  // ── Merge + sort both collections ─────────────────────────────────────────
+  // ── Live Firestore: audit_trails ─────────────────────────────────────────
+  useEffect(() => {
+    const q = query(
+      collection(db, "audit_trails"),
+      orderBy("timestamp", "desc"),
+      limit(500),
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const items: UnifiedLog[] = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            source: "audit_trails" as const,
+            action: (data.action ?? "other") as AnyAction,
+            actor: {
+              name: data.fullName ?? `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim() ?? null,
+              email: data.email ?? null,
+              referenceId: data.referenceId ?? null,
+              role: data.role ?? null,
+              uid: null,
+            },
+            timestamp: data.timestamp ?? data.createdAt ?? null,
+            changes: data.changes ?? null,
+            details: data.details ?? null,
+            message: data.message ?? null,
+            ipAddress: data.ipAddress ?? null,
+            userAgent: data.userAgent ?? null,
+            entityName: data.entityname ?? data.entityName ?? null,
+            entityId: data.entityId ?? null,
+            entityType: data.entityType ?? null,
+            department: data.department ?? null,
+          } satisfies UnifiedLog;
+        });
+        setAuditTrailLogs(items);
+      },
+      (err) => {
+        if (err.code !== "not-found") {
+          console.warn("[audit_trails] Firestore listener error:", err.message);
+        }
+      },
+    );
+    return () => unsub();
+  }, []);
+
+  // ── Live Firestore: systemAudits ─────────────────────────────────────────
+  useEffect(() => {
+    const q = query(
+      collection(db, "systemAudits"),
+      orderBy("timestamp", "desc"),
+      limit(500),
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const items: UnifiedLog[] = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            source: "system_audit" as const,
+            action: (data.action ?? "other") as AnyAction,
+            resourceId: data.resourceId ?? null,
+            resourceName: data.resourceName ?? null,
+            resourceType: data.resourceType ?? null,
+            module: data.module ?? null,
+            page: data.page ?? null,
+            actor: {
+              uid: data.actorUid ?? null,
+              name: data.actorName ?? null,
+              email: data.actorEmail ?? null,
+              role: data.actorRole ?? null,
+              referenceId: data.actorReferenceId ?? null,
+            },
+            timestamp: data.timestamp ?? null,
+            affectedCount: data.affectedCount ?? 1,
+            changes: data.changes ?? null,
+            transfer: data.transfer ?? null,
+            metadata: data.metadata ?? null,
+            context: {
+              source: data.source ?? null,
+              page: data.page ?? null,
+            },
+          } satisfies UnifiedLog;
+        });
+        setSystemAuditLogs(items);
+      },
+      (err) => {
+        // systemAudits collection may not exist yet — that's fine
+        if (err.code !== "not-found") {
+          console.warn(
+            "[systemAudits] Firestore listener error:",
+            err.message,
+          );
+        }
+      },
+    );
+    return () => unsub();
+  }, []);
+
+  // ── Merge + sort all collections ─────────────────────────────────────────
   const allLogs = useMemo<UnifiedLog[]>(() => {
-    const merged = [...customerAuditLogs, ...activityLogs];
+    const merged = [...customerAuditLogs, ...activityLogs, ...systemAuditLogs, ...auditTrailLogs];
     return merged.sort((a, b) => {
       const ta = a.timestamp?.toMillis?.() ?? 0;
       const tb = b.timestamp?.toMillis?.() ?? 0;
       return tb - ta;
     });
-  }, [customerAuditLogs, activityLogs]);
+  }, [customerAuditLogs, activityLogs, systemAuditLogs, auditTrailLogs]);
+
+  // ── Unique actors and modules for filter dropdowns ───────────────────────
+  const uniqueActors = useMemo(() => {
+    const actors = new Map<string, { name: string; email: string }>();
+    allLogs.forEach((log) => {
+      const key = log.actor?.email || log.actor?.name || "unknown";
+      if (key !== "unknown" && !actors.has(key)) {
+        actors.set(key, {
+          name: log.actor?.name || "Unknown",
+          email: log.actor?.email || "",
+        });
+      }
+    });
+    return Array.from(actors.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  }, [allLogs]);
+
+  const uniqueModules = useMemo(() => {
+    const modules = new Set<string>();
+    allLogs.forEach((log) => {
+      if (log.module) modules.add(log.module);
+    });
+    return Array.from(modules).sort();
+  }, [allLogs]);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -525,8 +744,21 @@ export default function CustomerAuditLogsPage() {
   // ── Date filter ────────────────────────────────────────────────────────────
   const isWithinDateRange = useCallback(
     (ts: Timestamp | null | undefined) => {
-      if (filterDate === "all" || !ts) return true;
+      if (!ts) return true;
       const date = ts.toDate();
+
+      // Custom date range picker takes priority
+      if (dateRange.from || dateRange.to) {
+        const from = dateRange.from ? new Date(dateRange.from.setHours(0, 0, 0, 0)) : null;
+        const to = dateRange.to ? new Date(dateRange.to.setHours(23, 59, 59, 999)) : null;
+
+        if (from && date < from) return false;
+        if (to && date > to) return false;
+        return true;
+      }
+
+      // Preset filters
+      if (filterDate === "all") return true;
       const now = new Date();
       if (filterDate === "today")
         return date.toDateString() === now.toDateString();
@@ -536,7 +768,7 @@ export default function CustomerAuditLogsPage() {
         return date >= new Date(now.getTime() - 30 * 86400000);
       return true;
     },
-    [filterDate],
+    [filterDate, dateRange],
   );
 
   // ── Filtered list ──────────────────────────────────────────────────────────
@@ -544,15 +776,23 @@ export default function CustomerAuditLogsPage() {
     return allLogs.filter((log) => {
       if (filterAction !== "all" && log.action !== filterAction) return false;
       if (filterSource !== "all" && log.source !== filterSource) return false;
+      if (filterActor !== "all") {
+        const actorKey = log.actor?.email || log.actor?.name || "unknown";
+        if (actorKey !== filterActor) return false;
+      }
+      if (filterModule !== "all" && log.module !== filterModule) return false;
       if (!isWithinDateRange(log.timestamp)) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
         return (
           log.customerName?.toLowerCase().includes(q) ||
+          log.resourceName?.toLowerCase().includes(q) ||
           log.customerId?.toLowerCase().includes(q) ||
+          log.resourceId?.toLowerCase().includes(q) ||
           log.actor?.name?.toLowerCase().includes(q) ||
           log.actor?.email?.toLowerCase().includes(q) ||
           log.actor?.referenceId?.toLowerCase().includes(q) ||
+          log.module?.toLowerCase().includes(q) ||
           log.ReferenceID?.toLowerCase().includes(q) ||
           log.TSM?.toLowerCase().includes(q) ||
           log.Manager?.toLowerCase().includes(q) ||
@@ -568,7 +808,10 @@ export default function CustomerAuditLogsPage() {
     allLogs,
     filterAction,
     filterSource,
+    filterActor,
+    filterModule,
     filterDate,
+    dateRange,
     search,
     isWithinDateRange,
   ]);
@@ -581,21 +824,151 @@ export default function CustomerAuditLogsPage() {
 
   useEffect(
     () => setCurrentPage(1),
-    [search, filterAction, filterSource, filterDate],
+    [search, filterAction, filterSource, filterDate, filterActor, filterModule, dateRange],
   );
+
+  // ── Bulk Selection Handlers ──────────────────────────────────────────────
+  const toggleLogSelection = (logId: string) => {
+    setSelectedLogs((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(logId)) {
+        newSet.delete(logId);
+      } else {
+        newSet.add(logId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllVisible = () => {
+    const visibleIds = paginated.map((log) => `${log.source}-${log.id}`);
+    setSelectedLogs((prev) => {
+      const newSet = new Set(prev);
+      visibleIds.forEach((id) => newSet.add(id));
+      return newSet;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedLogs(new Set());
+  };
+
+  const exportSelectedLogs = () => {
+    const selected = filtered.filter((log) =>
+      selectedLogs.has(`${log.source}-${log.id}`)
+    );
+    exportAuditLogsToCSV(selected);
+  };
+
+  const clearNewLogsBadge = () => {
+    setNewLogsCount(0);
+    lastViewedTimestamp.current = Date.now();
+  };
 
   const clearFilters = () => {
     setSearch("");
     setFilterAction("all");
     setFilterSource("all");
     setFilterDate("all");
+    setFilterActor("all");
+    setFilterModule("all");
+    setDateRange({ from: undefined, to: undefined });
+    setSelectedLogs(new Set());
   };
+
+  // ── Analytics Data ────────────────────────────────────────────────────────
+  const analyticsData = useMemo(() => {
+    // Actions per day (last 30 days)
+    const actionsPerDay: Record<string, number> = {};
+    const today = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split("T")[0];
+      actionsPerDay[dateStr] = 0;
+    }
+
+    // Top actors
+    const actorCounts: Record<string, { name: string; count: number }> = {};
+
+    // Action distribution
+    const actionCounts: Record<string, number> = {};
+
+    // Hourly activity (0-23)
+    const hourlyActivity: number[] = new Array(24).fill(0);
+
+    filtered.forEach((log) => {
+      // Actions per day
+      if (log.timestamp?.toDate) {
+        const dateStr = log.timestamp.toDate().toISOString().split("T")[0];
+        if (actionsPerDay[dateStr] !== undefined) {
+          actionsPerDay[dateStr]++;
+        }
+
+        // Hourly activity
+        const hour = log.timestamp.toDate().getHours();
+        hourlyActivity[hour]++;
+      }
+
+      // Actor counts
+      const actorKey = log.actor?.email || log.actor?.name || "Unknown";
+      if (!actorCounts[actorKey]) {
+        actorCounts[actorKey] = { name: log.actor?.name || actorKey, count: 0 };
+      }
+      actorCounts[actorKey].count++;
+
+      // Action counts
+      const action = log.action || "other";
+      actionCounts[action] = (actionCounts[action] || 0) + 1;
+    });
+
+    // Convert to arrays for charts
+    const actionsPerDayArray = Object.entries(actionsPerDay).map(([date, count]) => ({
+      date: format(new Date(date), "MMM dd"),
+      fullDate: date,
+      count,
+    }));
+
+    const topActorsArray = Object.entries(actorCounts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 10)
+      .map(([key, data]) => ({
+        name: data.name,
+        count: data.count,
+      }));
+
+    const actionDistributionArray = Object.entries(actionCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([action, count]) => ({
+        action,
+        label: ACTION_CONFIG[action]?.label || action,
+        count,
+        color: ACTION_CONFIG[action]?.color || "text-gray-500",
+      }));
+
+    const hourlyActivityArray = hourlyActivity.map((count, hour) => ({
+      hour: `${hour}:00`,
+      hour12: hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`,
+      count,
+    }));
+
+    return {
+      actionsPerDay: actionsPerDayArray,
+      topActors: topActorsArray,
+      actionDistribution: actionDistributionArray,
+      hourlyActivity: hourlyActivityArray,
+    };
+  }, [filtered]);
 
   const hasFilters =
     !!search ||
     filterAction !== "all" ||
     filterSource !== "all" ||
-    filterDate !== "all";
+    filterDate !== "all" ||
+    filterActor !== "all" ||
+    filterModule !== "all" ||
+    dateRange.from ||
+    dateRange.to;
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -618,11 +991,7 @@ export default function CustomerAuditLogsPage() {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    <BreadcrumbLink href="#">Customer Database</BreadcrumbLink>
+                    <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
                   </BreadcrumbItem>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
@@ -647,6 +1016,14 @@ export default function CustomerAuditLogsPage() {
                     +{" "}
                     <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
                       activity_logs
+                    </span>{" "}
+                    +{" "}
+                    <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
+                      systemAudits
+                    </span>{" "}
+                    +{" "}
+                    <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
+                      audit_trails
                     </span>
                     {!loading && (
                       <>
@@ -669,25 +1046,52 @@ export default function CustomerAuditLogsPage() {
                     )}
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 text-xs"
-                  onClick={() => window.location.reload()}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Refresh
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 text-xs"
-                  onClick={() => exportAuditLogsToPDF(filtered)}
-                  disabled={filtered.length === 0}
-                >
-                  <FileDown className="h-3.5 w-3.5" />
-                  Export PDF
-                </Button>
+                <div className="flex items-center gap-2">
+                  {/* New Logs Badge */}
+                  {newLogsCount > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 text-xs bg-primary/10 border-primary/30"
+                      onClick={clearNewLogsBadge}
+                    >
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                      </span>
+                      {newLogsCount} new
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-xs"
+                    onClick={() => window.location.reload()}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Refresh
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-xs"
+                    onClick={() => exportAuditLogsToCSV(filtered)}
+                    disabled={filtered.length === 0}
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                    Export CSV
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-xs"
+                    onClick={() => exportAuditLogsToPDF(filtered)}
+                    disabled={filtered.length === 0}
+                  >
+                    <FileDown className="h-3.5 w-3.5" />
+                    Export PDF
+                  </Button>
+                </div>
               </div>
 
               {/* Stats row */}
@@ -764,8 +1168,76 @@ export default function CustomerAuditLogsPage() {
                 ))}
               </div>
 
-              {/* Filter bar */}
-              <Card>
+              {/* View Tabs */}
+              <div className="flex items-center gap-2 border-b">
+                <button
+                  onClick={() => setActiveView("logs")}
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                    activeView === "logs"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <DatabaseBackup className="inline-block mr-2 h-4 w-4" />
+                  Logs
+                </button>
+                <button
+                  onClick={() => setActiveView("analytics")}
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                    activeView === "analytics"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Activity className="inline-block mr-2 h-4 w-4" />
+                  Analytics
+                </button>
+              </div>
+
+              {/* Bulk Selection Bar */}
+              {activeView === "logs" && selectedLogs.size > 0 && (
+                <div className="flex items-center justify-between p-3 bg-primary/5 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium">
+                      {selectedLogs.size} log{selectedLogs.size > 1 ? "s" : ""} selected
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={selectAllVisible}
+                    >
+                      Select all visible
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={clearSelection}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={exportSelectedLogs}
+                    >
+                      <FileSpreadsheet className="h-3 w-3" />
+                      Export Selected
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {activeView === "logs" ? (
+                <>
+                  {/* Filter bar */}
+                  <Card>
                 <CardContent className="p-4">
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="relative flex-1 min-w-[220px]">
@@ -801,6 +1273,9 @@ export default function CustomerAuditLogsPage() {
                         </SelectItem>
                         <SelectItem value="activity_logs">
                           activity_logs
+                        </SelectItem>
+                        <SelectItem value="system_audit">
+                          system_audit
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -838,6 +1313,97 @@ export default function CustomerAuditLogsPage() {
                       </SelectContent>
                     </Select>
 
+                    {/* Date Range Picker */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            "h-9 w-[240px] justify-start text-left font-normal text-xs",
+                            !dateRange.from && !dateRange.to && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                          {dateRange.from ? (
+                            dateRange.to ? (
+                              <>
+                                {format(dateRange.from, "LLL dd, y")} -{" "}
+                                {format(dateRange.to, "LLL dd, y")}
+                              </>
+                            ) : (
+                              format(dateRange.from, "LLL dd, y")
+                            )
+                          ) : (
+                            <span>Pick a date range</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          initialFocus
+                          mode="range"
+                          defaultMonth={dateRange.from}
+                          selected={{
+                            from: dateRange.from,
+                            to: dateRange.to,
+                          }}
+                          onSelect={(range) => {
+                            setDateRange({
+                              from: range?.from,
+                              to: range?.to,
+                            });
+                          }}
+                          numberOfMonths={2}
+                        />
+                      </PopoverContent>
+                    </Popover>
+
+                    {/* Actor filter */}
+                    {uniqueActors.length > 0 && (
+                      <Select
+                        value={filterActor}
+                        onValueChange={setFilterActor}
+                      >
+                        <SelectTrigger className="h-9 w-[180px] text-xs">
+                          <Users className="mr-2 h-3 w-3" />
+                          <SelectValue placeholder="Actor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Actors</SelectItem>
+                          {uniqueActors.map(([key, actor]) => (
+                            <SelectItem key={key} value={key}>
+                              {actor.name}
+                              {actor.email && actor.email !== actor.name && (
+                                <span className="ml-1 text-muted-foreground">({actor.email})</span>
+                              )}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {/* Module filter */}
+                    {uniqueModules.length > 0 && (
+                      <Select
+                        value={filterModule}
+                        onValueChange={setFilterModule}
+                      >
+                        <SelectTrigger className="h-9 w-[180px] text-xs">
+                          <Layers className="mr-2 h-3 w-3" />
+                          <SelectValue placeholder="Module" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Modules</SelectItem>
+                          {uniqueModules.map((module) => (
+                            <SelectItem key={module} value={module}>
+                              {module}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+
                     {hasFilters && (
                       <Button
                         variant="ghost"
@@ -864,6 +1430,25 @@ export default function CustomerAuditLogsPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b bg-muted/30">
+                          <th className="px-4 py-3 w-[40px]">
+                            <input
+                              type="checkbox"
+                              checked={paginated.length > 0 && paginated.every(log => selectedLogs.has(`${log.source}-${log.id}`))}
+                              onChange={() => {
+                                if (paginated.every(log => selectedLogs.has(`${log.source}-${log.id}`))) {
+                                  // Deselect all visible
+                                  setSelectedLogs(prev => {
+                                    const newSet = new Set(prev);
+                                    paginated.forEach(log => newSet.delete(`${log.source}-${log.id}`));
+                                    return newSet;
+                                  });
+                                } else {
+                                  selectAllVisible();
+                                }
+                              }}
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                          </th>
                           <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[200px]">
                             Actor
                           </th>
@@ -895,7 +1480,7 @@ export default function CustomerAuditLogsPage() {
                           ))
                         ) : paginated.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="text-center py-16">
+                            <td colSpan={6} className="text-center py-16">
                               <div className="flex flex-col items-center gap-3 text-muted-foreground">
                                 <DatabaseBackup className="h-10 w-10 opacity-20" />
                                 <p className="text-sm font-medium">
@@ -928,8 +1513,20 @@ export default function CustomerAuditLogsPage() {
                             return (
                               <tr
                                 key={`${log.source}-${log.id}`}
-                                className="hover:bg-muted/30 transition-colors"
+                                className={cn(
+                                  "hover:bg-muted/30 transition-colors",
+                                  selectedLogs.has(`${log.source}-${log.id}`) && "bg-primary/5"
+                                )}
                               >
+                                {/* Checkbox */}
+                                <td className="px-4 py-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedLogs.has(`${log.source}-${log.id}`)}
+                                    onChange={() => toggleLogSelection(`${log.source}-${log.id}`)}
+                                    className="h-4 w-4 rounded border-gray-300"
+                                  />
+                                </td>
                                 {/* Actor */}
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2.5">
@@ -989,15 +1586,44 @@ export default function CustomerAuditLogsPage() {
                                     <TransferPill log={log} />
                                   ) : log.action === "update" && log.changes ? (
                                     <div className="min-w-0">
-                                      {log.customerName && (
+                                      {(log.customerName || log.resourceName) && (
                                         <p className="text-xs font-medium truncate uppercase mb-0.5">
-                                          {log.customerName}
+                                          {log.customerName || log.resourceName}
                                         </p>
                                       )}
                                       <p className="text-[10px] text-muted-foreground">
                                         {Object.keys(log.changes).join(", ")}{" "}
                                         changed
                                       </p>
+                                    </div>
+                                  ) : log.source === "system_audit" && log.resourceName ? (
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-medium truncate uppercase mb-0.5">
+                                        {log.resourceName}
+                                      </p>
+                                      {log.module && (
+                                        <p className="text-[10px] text-muted-foreground">
+                                          Module: {log.module}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : log.source === "audit_trails" && (log.message || log.details) ? (
+                                    <div className="min-w-0">
+                                      {log.message && (
+                                        <p className="text-xs truncate max-w-[250px]">
+                                          {log.message}
+                                        </p>
+                                      )}
+                                      {log.details && (
+                                        <p className="text-[10px] text-muted-foreground truncate max-w-[250px]">
+                                          {log.details}
+                                        </p>
+                                      )}
+                                      {log.entityName && (
+                                        <p className="text-[10px] text-pink-600 truncate">
+                                          {log.entityName}
+                                        </p>
+                                      )}
                                     </div>
                                   ) : log.customerName ? (
                                     <p className="text-xs font-medium uppercase truncate max-w-[200px]">
@@ -1113,6 +1739,166 @@ export default function CustomerAuditLogsPage() {
                   )}
                 </CardContent>
               </Card>
+                </>
+              ) : (
+                /* Analytics Dashboard */
+                <div className="space-y-6">
+                  {/* Actions per Day Chart */}
+                  <Card>
+                    <CardContent className="p-6">
+                      <h3 className="text-lg font-semibold mb-4">Activity Timeline (Last 30 Days)</h3>
+                      <div className="h-[250px] w-full">
+                        {analyticsData.actionsPerDay.length > 0 ? (
+                          <div className="flex items-end justify-between h-full gap-1">
+                            {analyticsData.actionsPerDay.map((day, idx) => {
+                              const maxCount = Math.max(...analyticsData.actionsPerDay.map(d => d.count), 1);
+                              const height = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
+                              return (
+                                <div key={day.fullDate} className="flex-1 flex flex-col items-center gap-1">
+                                  <div
+                                    className="w-full bg-primary/80 rounded-t hover:bg-primary transition-colors relative group"
+                                    style={{ height: `${height}%`, minHeight: day.count > 0 ? '4px' : '0' }}
+                                  >
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-popover text-popover-foreground text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
+                                      {day.date}: {day.count} actions
+                                    </div>
+                                  </div>
+                                  {idx % 5 === 0 && (
+                                    <span className="text-[10px] text-muted-foreground rotate-45 origin-left translate-y-2">
+                                      {day.date}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-muted-foreground">
+                            No data available
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Top Actors */}
+                    <Card>
+                      <CardContent className="p-6">
+                        <h3 className="text-lg font-semibold mb-4">Top 10 Most Active Users</h3>
+                        <div className="space-y-3">
+                          {analyticsData.topActors.length > 0 ? (
+                            analyticsData.topActors.map((actor, idx) => {
+                              const maxCount = analyticsData.topActors[0]?.count || 1;
+                              const width = (actor.count / maxCount) * 100;
+                              return (
+                                <div key={actor.name} className="flex items-center gap-3">
+                                  <span className="text-sm font-medium w-6 text-muted-foreground">{idx + 1}</span>
+                                  <div className="flex-1">
+                                    <div className="flex justify-between text-sm mb-1">
+                                      <span className="font-medium truncate">{actor.name}</span>
+                                      <span className="text-muted-foreground">{actor.count}</span>
+                                    </div>
+                                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-primary rounded-full"
+                                        style={{ width: `${width}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-center text-muted-foreground py-8">
+                              No data available
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Action Distribution */}
+                    <Card>
+                      <CardContent className="p-6">
+                        <h3 className="text-lg font-semibold mb-4">Action Distribution</h3>
+                        <div className="space-y-3">
+                          {analyticsData.actionDistribution.length > 0 ? (
+                            analyticsData.actionDistribution.map((item) => {
+                              const maxCount = analyticsData.actionDistribution[0]?.count || 1;
+                              const width = (item.count / maxCount) * 100;
+                              return (
+                                <div key={item.action} className="flex items-center gap-3">
+                                  <div className="flex-1">
+                                    <div className="flex justify-between text-sm mb-1">
+                                      <span className="font-medium flex items-center gap-2">
+                                        <span className={item.color}>●</span>
+                                        {item.label}
+                                      </span>
+                                      <span className="text-muted-foreground">{item.count}</span>
+                                    </div>
+                                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                      <div
+                                        className={cn("h-full rounded-full", item.color.replace("text-", "bg-").replace("700", "500").replace("400", "500"))}
+                                        style={{ width: `${width}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-center text-muted-foreground py-8">
+                              No data available
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Hourly Activity Heatmap */}
+                  <Card>
+                    <CardContent className="p-6">
+                      <h3 className="text-lg font-semibold mb-4">Activity by Hour of Day</h3>
+                      <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-24 gap-1">
+                        {analyticsData.hourlyActivity.map((hour) => {
+                          const maxCount = Math.max(...analyticsData.hourlyActivity.map(h => h.count), 1);
+                          const intensity = maxCount > 0 ? hour.count / maxCount : 0;
+                          const bgOpacity = Math.max(0.1, intensity);
+                          return (
+                            <div
+                              key={hour.hour}
+                              className="aspect-square rounded flex items-center justify-center text-xs relative group cursor-pointer"
+                              style={{ backgroundColor: `rgba(59, 130, 246, ${bgOpacity})` }}
+                            >
+                              <span className={intensity > 0.5 ? "text-white" : "text-foreground"}>
+                                {hour.hour12}
+                              </span>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-popover text-popover-foreground text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
+                                {hour.hour12}: {hour.count} actions
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
+                        <span>Less active</span>
+                        <div className="flex gap-1">
+                          {[0.1, 0.3, 0.5, 0.7, 0.9].map((opacity) => (
+                            <div
+                              key={opacity}
+                              className="w-4 h-4 rounded"
+                              style={{ backgroundColor: `rgba(59, 130, 246, ${opacity})` }}
+                            />
+                          ))}
+                        </div>
+                        <span>More active</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </main>
           </SidebarInset>
         </SidebarProvider>
@@ -1290,6 +2076,125 @@ export default function CustomerAuditLogsPage() {
                       </div>
                     </div>
                   )}
+
+                {/* System Audit Details */}
+                {selectedLog.source === "system_audit" && (
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      System Audit Details
+                    </p>
+                    <div className="space-y-1 text-xs">
+                      {selectedLog.module && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Module:</span>
+                          <span className="font-medium">{selectedLog.module}</span>
+                        </div>
+                      )}
+                      {selectedLog.page && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Page:</span>
+                          <span className="font-medium">{selectedLog.page}</span>
+                        </div>
+                      )}
+                      {selectedLog.resourceType && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Resource Type:</span>
+                          <span className="font-medium">{selectedLog.resourceType}</span>
+                        </div>
+                      )}
+                      {selectedLog.resourceId && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Resource ID:</span>
+                          <span className="font-mono">{selectedLog.resourceId}</span>
+                        </div>
+                      )}
+                      {selectedLog.affectedCount && selectedLog.affectedCount > 1 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Affected Count:</span>
+                          <span className="font-medium">{selectedLog.affectedCount}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Audit Trails Details */}
+                {selectedLog.source === "audit_trails" && (
+                  <div className="p-3 rounded-lg bg-pink-50 dark:bg-pink-950/30 border border-pink-200 dark:border-pink-800 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-pink-600 dark:text-pink-400">
+                      Audit Trail Details
+                    </p>
+                    <div className="space-y-1 text-xs">
+                      {selectedLog.department && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Department:</span>
+                          <span className="font-medium">{selectedLog.department}</span>
+                        </div>
+                      )}
+                      {selectedLog.entityName && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Entity Name:</span>
+                          <span className="font-medium">{selectedLog.entityName}</span>
+                        </div>
+                      )}
+                      {selectedLog.entityId && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Entity ID:</span>
+                          <span className="font-mono">{selectedLog.entityId}</span>
+                        </div>
+                      )}
+                      {selectedLog.entityType && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Entity Type:</span>
+                          <span className="font-medium">{selectedLog.entityType}</span>
+                        </div>
+                      )}
+                      {selectedLog.details && (
+                        <div className="pt-1 border-t border-pink-200 dark:border-pink-800">
+                          <span className="text-muted-foreground block mb-1">Details:</span>
+                          <span className="text-xs">{selectedLog.details}</span>
+                        </div>
+                      )}
+                      {selectedLog.message && (
+                        <div className="pt-1 border-t border-pink-200 dark:border-pink-800">
+                          <span className="text-muted-foreground block mb-1">Message:</span>
+                          <span className="text-xs">{selectedLog.message}</span>
+                        </div>
+                      )}
+                      {selectedLog.ipAddress && (
+                        <div className="flex justify-between pt-1 border-t border-pink-200 dark:border-pink-800">
+                          <span className="text-muted-foreground">IP Address:</span>
+                          <span className="font-mono text-[10px]">{selectedLog.ipAddress}</span>
+                        </div>
+                      )}
+                      {selectedLog.userAgent && (
+                        <div className="pt-1">
+                          <span className="text-muted-foreground block mb-1">User Agent:</span>
+                          <span className="text-[10px] text-muted-foreground break-all">{selectedLog.userAgent}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Metadata for system_audit */}
+                {selectedLog.source === "system_audit" && selectedLog.metadata && Object.keys(selectedLog.metadata).length > 0 && (
+                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                      Metadata
+                    </p>
+                    <div className="space-y-1 text-xs">
+                      {Object.entries(selectedLog.metadata).map(([key, value]) => (
+                        <div key={key} className="flex justify-between">
+                          <span className="text-muted-foreground capitalize">{key}:</span>
+                          <span className="font-mono truncate max-w-[200px]">
+                            {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Timestamp */}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">

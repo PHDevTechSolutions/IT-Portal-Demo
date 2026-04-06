@@ -1,5 +1,17 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
+
+// Helper to get actor from request headers
+function getActorFromRequest(req: Request): AuditActor {
+  const headers = req.headers;
+  return {
+    uid: headers.get("x-user-id") || null,
+    email: headers.get("x-user-email") || "system",
+    role: headers.get("x-user-role") || "unknown",
+    name: headers.get("x-user-name") || null,
+  };
+}
 
 const TASKFLOW_DB_URL = process.env.TASKFLOW_DB_URL;
 if (!TASKFLOW_DB_URL) {
@@ -83,6 +95,26 @@ export async function PUT(req: Request) {
     }
 
     const updatedRows = await bulkTransfer(userIds, type, targetId);
+
+    // Log audit after successful bulk transfer
+    const actor = getActorFromRequest(req);
+    await logSystemAudit({
+      action: "transfer",
+      module: "CustomerDatabase",
+      page: "/taskflow/customer-database",
+      resourceType: "customer",
+      resourceId: null,
+      resourceName: `${updatedRows.length} customers transferred`,
+      actor,
+      affectedCount: updatedRows.length,
+      source: "CustomerDatabaseBulkTransferAPI",
+      metadata: {
+        transferType: type,
+        targetId,
+        userIds,
+      },
+    });
+
     return NextResponse.json({ success: true, data: updatedRows });
   } catch (error: any) {
     console.error("Error in PUT /api/Data/Applications/CustomerDatabase/BulkTransfer:", error);

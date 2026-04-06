@@ -1,8 +1,32 @@
 import { NextApiRequest, NextApiResponse } from "next"
 import { connectToDatabase } from "@/lib/MongoDB"
 import bcrypt from "bcrypt"
+import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit"
 
-// 🧩 Helper to generate ReferenceID
+// Helper to get actor from request
+function getActorFromRequest(req: NextApiRequest): AuditActor {
+  return {
+    uid: req.headers["x-user-id"] as string || null,
+    email: req.headers["x-user-email"] as string || "system",
+    role: req.headers["x-user-role"] as string || "unknown",
+    name: req.headers["x-user-name"] as string || null,
+  }
+}
+
+// Helper to extract IP and User Agent from request
+function getRequestContext(req: NextApiRequest) {
+  const forwarded = req.headers["x-forwarded-for"]
+  const ip = typeof forwarded === "string" 
+    ? forwarded.split(",")[0].trim() 
+    : req.socket.remoteAddress || "unknown"
+  
+  return {
+    ipAddress: ip,
+    userAgent: req.headers["user-agent"] || null,
+  }
+}
+
+// Helper to generate ReferenceID
 function generateReferenceID(firstname: string, lastname: string, location: string) {
     if (!firstname || !lastname || !location) return ""
     const initials = firstname[0].toUpperCase() + lastname[0].toUpperCase()
@@ -41,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             Directories, // <- dito natin idadagdag
         } = req.body
 
-        // 🧾 Validate required fields
+        // Validate required fields
         if (!Firstname || !Lastname || !Email || !Password || !Location) {
             return res.status(400).json({
                 success: false,
@@ -49,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             })
         }
 
-        // 🚫 Check for existing email
+        // Check for existing email
         const existing = await users.findOne({ Email })
         if (existing) {
             return res.status(400).json({
@@ -58,13 +82,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             })
         }
 
-        // 🔒 Hash password
+        // Hash password
         const hashed = await bcrypt.hash(Password, 10)
 
-        // 🆔 Generate ReferenceID
+        // Generate ReferenceID
         const finalReferenceID = generateReferenceID(Firstname, Lastname, Location)
 
-        // 🧍 Build new user object
+        // Build new user object
         const newUser: any = {
             Firstname,
             Lastname,
@@ -83,14 +107,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             Directories: Array.isArray(Directories) ? Directories : [], // ensure array
         }
 
-        // 🧩 Include Manager + TSM if department is Sales
+        // Include Manager + TSM if department is Sales
         if (Department === "Sales") {
             newUser.Manager = Manager || null
             newUser.TSM = TSM || null
         }
 
-        // 💾 Save to database
+        // Save to database
         const result = await users.insertOne(newUser)
+
+        // Log audit after successful creation
+        const actor = getActorFromRequest(req)
+        const { ipAddress, userAgent } = getRequestContext(req)
+        const targetUserName = `${Firstname} ${Lastname}`
+        const actorName = actor.name || actor.email || 'Unknown'
+        await logSystemAudit({
+          action: "create",
+          module: "UserManagement",
+          page: "/admin/roles",
+          resourceType: "user",
+          resourceId: finalReferenceID,
+          resourceName: `${targetUserName} (created by: ${actorName})`,
+          actor,
+          ipAddress,
+          userAgent,
+          source: "UserCreateAPI",
+          metadata: {
+            targetUser: targetUserName,
+            targetEmail: Email,
+            targetRole: Role,
+            targetDepartment: Department,
+            targetPosition: Position,
+          },
+        })
 
         // Huwag isama password sa response
         const userToReturn = { ...newUser }

@@ -79,7 +79,7 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 
-import { UserProvider } from "@/contexts/UserContext";
+import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
@@ -234,6 +234,16 @@ export default function AccountPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
+  const { userId: currentUserId, email, role, name } = useUser();
+
+  // Helper to get audit headers for API calls
+  const getAuditHeaders = () => ({
+    "Content-Type": "application/json",
+    "x-user-id": currentUserId || "",
+    "x-user-email": email || "",
+    "x-user-role": role || "",
+    "x-user-name": name || "",
+  });
 
   // ── Table data ──────────────────────────────────────────────────────────────
   const [accounts, setAccounts] = useState<UserAccount[]>([]);
@@ -450,7 +460,7 @@ export default function AccountPage() {
     try {
       const res = await fetch("/api/UserManagement/UserCreate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuditHeaders(),
         body: JSON.stringify(newUser),
       });
       const result = await res.json();
@@ -579,7 +589,7 @@ export default function AccountPage() {
     try {
       const res = await fetch("/api/UserManagement/UserDelete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuditHeaders(),
         body: JSON.stringify({ ids: Array.from(selectedIds) }),
       });
       const result = await res.json();
@@ -647,7 +657,7 @@ export default function AccountPage() {
 
       const res = await fetch("/api/UserManagement/UserUpdate", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuditHeaders(),
         body: JSON.stringify({ id: newUser._id, ...payload }),
       });
       const result = await res.json();
