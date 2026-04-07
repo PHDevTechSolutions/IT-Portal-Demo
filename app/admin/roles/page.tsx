@@ -502,14 +502,9 @@ export default function AccountPage() {
   );
 
   // ─── Filtered + sorted list ───────────────────────────────────────────────────
+  // Filtered + sorted list - REMOVED STATUS FILTERING TO SHOW ALL USERS
   const filtered = useMemo(() => {
     const list = accounts
-      .filter(
-        (a) =>
-          !["resigned", "terminated"].includes(
-            (a.Status || "").trim().toLowerCase(),
-          ),
-      )
       .filter((a) =>
         [
           a.Firstname,

@@ -72,6 +72,7 @@ const categoryIcons: Record<string, React.ReactNode> = {
   taskflow: <History className="h-4 w-4" />,
   system: <Info className="h-4 w-4" />,
   task: <ListTodo className="h-4 w-4" />,
+  transfer: <AlertTriangle className="h-4 w-4" />,
 };
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -94,6 +95,7 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [taskNotifications, setTaskNotifications] = useState<TaskNotification[]>([]);
   const [customerNotifications, setCustomerNotifications] = useState<any[]>([]);
+  const [transferNotifications, setTransferNotifications] = useState<any[]>([]);
   const [userId, setUserId] = useState<string>("");
 
   // Get userId from localStorage or context
@@ -207,9 +209,80 @@ export function NotificationBell() {
     return () => unsubscribe();
   }, [userId]);
 
-  // Combine all notifications: regular, task, and customer
-  const allNotifications = [...customerNotifications, ...taskNotifications, ...notifications];
-  const totalUnreadCount = unreadCount + taskNotifications.length + customerNotifications.length;
+  // Check for pending transfer approvals
+  useEffect(() => {
+    if (!userId) return;
+
+    const checkTransferApprovals = async () => {
+      try {
+        // Get all users to check for transfer requests
+        const userResponse = await fetch("/api/UserManagement/Fetch");
+        const users = await userResponse.json();
+        
+        if (!users || !Array.isArray(users)) return;
+        
+        // Find current user and check if they have approval rights
+        const currentUser = users.find((user: any) => user._id === userId || user.userId === userId);
+        if (!currentUser) return;
+        
+        const hasApprovalRights = currentUser.roles?.some((role: any) => 
+          role.permissions?.includes("approve_transfer") || 
+          role.name === "Admin" || 
+          role.name === "Manager"
+        );
+        
+        if (!hasApprovalRights) return;
+        
+        // Check for users with pending transfer requests
+        const usersWithPendingTransfers = users.filter((user: any) => {
+          // Check if user has transfer requests in their data
+          return user.transferRequests && 
+                 Array.isArray(user.transferRequests) && 
+                 user.transferRequests.some((request: any) => 
+                   request.status === "pending" || 
+                   request.approvalStatus === "pending" ||
+                   !request.status
+                 );
+        });
+        
+        // Create notifications for pending transfers
+        const transferNotifs = usersWithPendingTransfers.flatMap((user: any) => 
+          user.transferRequests
+            .filter((request: any) => 
+              request.status === "pending" || 
+              request.approvalStatus === "pending" ||
+              !request.status
+            )
+            .map((transfer: any, index: number) => ({
+              id: `transfer-${user._id}-${index}`,
+              title: "Transfer Approval Required",
+              message: `${user.userName || user.Email} requests transfer to ${transfer.targetType || transfer.target}`,
+              type: "warning" as const,
+              category: "taskflow" as const,
+              createdAt: transfer.createdAt || new Date().toISOString(),
+              read: false,
+              isTransferNotification: true,
+              transferId: transfer.id || `${user._id}-${index}`,
+              fromUserId: user._id,
+              toUserId: transfer.targetId,
+            }))
+        );
+
+        setTransferNotifications(transferNotifs);
+      } catch (error) {
+        console.error("Error checking transfer approvals:", error);
+      }
+    };
+
+    checkTransferApprovals();
+    // Check every 2 minutes for new transfer approvals
+    const interval = setInterval(checkTransferApprovals, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [userId]);
+
+  // Combine all notifications: regular, task, customer, and transfer
+  const allNotifications = [...transferNotifications, ...customerNotifications, ...taskNotifications, ...notifications];
+  const totalUnreadCount = unreadCount + taskNotifications.length + customerNotifications.length + transferNotifications.length;
 
   const handleMarkAllRead = async () => {
     await markAllAsRead();
@@ -229,6 +302,10 @@ export function NotificationBell() {
     taskId?: string;
     isCustomerNotification?: boolean;
     customerId?: string;
+    isTransferNotification?: boolean;
+    transferId?: string;
+    fromUserId?: string;
+    toUserId?: string;
   }) => {
     // Handle task reminders - navigate to tasks page
     if (notification.category === "task" || notification.isTaskReminder) {
@@ -240,6 +317,13 @@ export function NotificationBell() {
     // Handle customer notifications - navigate to customer database
     if (notification.category === "customer" || notification.isCustomerNotification) {
       window.location.href = "/taskflow/customer-database";
+      setOpen(false);
+      return;
+    }
+
+    // Handle transfer notifications - navigate to user management
+    if (notification.isTransferNotification) {
+      window.location.href = "/user-management";
       setOpen(false);
       return;
     }

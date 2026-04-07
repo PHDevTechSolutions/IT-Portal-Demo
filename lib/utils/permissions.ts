@@ -29,7 +29,6 @@ export const PERMISSION_MAP: Record<string, string> = {
   'cloudflare/analytics': 'cloudflare:Analytics',
   'cloudflare/firewall': 'cloudflare:FirewallRules',
   'admin/roles': 'user-accounts:Roles',
-  'admin/users': 'user-accounts:Resigned and Terminated',
   'admin/sessions': 'user-accounts:Sessions',
   'admin/it-permissions': 'user-accounts:IT Permissions',
   'settings/general': 'settings:General',

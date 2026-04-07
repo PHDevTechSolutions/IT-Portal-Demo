@@ -11,10 +11,13 @@ export default async function fetchAccounts(req: NextApiRequest, res: NextApiRes
   try {
     const db = await connectToDatabase();
     const UserCollection = db.collection("users");
+    
+    // ✅ Fetch ALL users including resigned ones - no status filter
     const users = await UserCollection.find({}).toArray();
 
     // ✅ Normalize all reference IDs and quotas
     const normalized = users.map((u: any) => ({
+      ...u, // Include all user data including roles and permissions
       referenceid:
         (u.ReferenceID || u.referenceid || "").toString().trim().toLowerCase(),
       targetquota: u.targetquota || "",

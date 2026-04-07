@@ -148,10 +148,9 @@ const DEFAULT_SIDEBAR_MODULES = [
     key: "user-accounts",
     title: "User Accounts",
     icon: "BookOpen",
-    description: "User and role management",
+    description: "Role and permission management",
     items: [
       { title: "Roles & Permissions", url: "/admin/roles" },
-      { title: "User Management", url: "/admin/users" },
       { title: "Sessions", url: "/admin/sessions" },
       { title: "IT Permissions", url: "/admin/it-permissions" },
     ],
