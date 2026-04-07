@@ -43,6 +43,7 @@ export default function AccountPage() {
     const [userId, setUserId] = useState<string | null>(queryUserId ?? null)
     const [user, setUser] = useState<UserDetails | null>(null)
     const [loading, setLoading] = useState(false)
+    const [loadError, setLoadError] = useState<string | null>(null)
     const [uploading, setUploading] = useState(false)
     const [passwordStrength, setPasswordStrength] = useState<"weak" | "medium" | "strong" | "">("")
     const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -52,16 +53,28 @@ export default function AccountPage() {
     useEffect(() => {
         if (!userId) {
             const storedUserId = localStorage.getItem("userId")
-            setUserId(storedUserId)
+            if (storedUserId) {
+                setUserId(storedUserId)
+            } else {
+                setLoadError("No user ID found. Please log in again.")
+            }
         }
     }, [userId])
 
     // fetch user data
     useEffect(() => {
         if (!userId) return
+        
+        setLoading(true)
         fetch(`/api/user?id=${encodeURIComponent(userId)}`)
-            .then((res) => res.json())
+            .then((res) => {
+                if (!res.ok) throw new Error("Failed to fetch user")
+                return res.json()
+            })
             .then((data) => {
+                if (!data || !data._id) {
+                    throw new Error("User not found")
+                }
                 setUser({
                     id: data._id,
                     Firstname: data.Firstname || "",
@@ -72,7 +85,14 @@ export default function AccountPage() {
                     profilePicture: data.profilePicture || "/avatars/default.jpg",
                 })
             })
-            .catch(() => toast.error("Failed to load user data"))
+            .catch((err) => {
+                console.error("Error loading user:", err)
+                setLoadError("Failed to load user data. Please try again.")
+                toast.error("Failed to load user data")
+            })
+            .finally(() => {
+                setLoading(false)
+            })
     }, [userId])
 
     const handleImageUpload = async (file: File) => {
@@ -165,7 +185,29 @@ export default function AccountPage() {
         }
     }
 
-    if (!user) return <p className="p-8">Loading user data...</p>
+    if (loadError) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-8">
+                <div className="text-center max-w-md">
+                    <h2 className="text-xl font-semibold text-red-600 mb-4">Error Loading Account</h2>
+                    <p className="text-gray-600 mb-6">{loadError}</p>
+                    <div className="flex gap-4 justify-center">
+                        <Button onClick={() => router.push("/login")}>Go to Login</Button>
+                        <Button variant="outline" onClick={() => window.location.reload()}>Retry</Button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    if (loading || !user) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                <p className="text-gray-600">Loading user data...</p>
+            </div>
+        )
+    }
 
     return (
         <SidebarProvider>
