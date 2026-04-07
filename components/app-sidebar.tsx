@@ -21,7 +21,7 @@ import {
   Activity, Boxes, TicketCheck, CalendarCheck, FileText, Database,
   LucideIcon, LayoutDashboard, Users, FolderKanban, Package, 
   DollarSign, Wallet, UserCircle, UserPlus, BarChart3, PieChart, 
-  FileStack
+  FileStack, ListTodo
 } from "lucide-react";
 import { getUserPermissions, hasPermission } from "@/lib/utils/permissions";
 
@@ -163,6 +163,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     return {
       navMain,
       navSecondary: [
+        { 
+          title: "My Tasks", 
+          url: "/dashboard/tasks", 
+          icon: ListTodo,
+          hasAccess: true
+        },
         { 
           title: "Support", 
           url: "/support", 
