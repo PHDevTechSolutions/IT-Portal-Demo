@@ -17,6 +17,7 @@ import { NavProjects } from "../components/nav-projects";
 import { NavSecondary } from "../components/nav-secondary";
 import { NavUser } from "../components/nav-user";
 import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Activity, Boxes, TicketCheck, CalendarCheck, FileText, Database, } from "lucide-react";
+import { getUserPermissions, hasPermission } from "@/lib/utils/permissions";
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
@@ -30,21 +31,37 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     Role: "",
   });
 
+  const [userPermissions, setUserPermissions] = React.useState({
+    modules: [] as string[],
+    submodules: [] as string[],
+  });
+
   React.useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data) return;
-        setUserDetails({
-          UserId: data.userId ?? "",
-          Firstname: data.firstname ?? "",
-          Lastname: data.lastname ?? "",
-          Email: data.email ?? "",
-          profilePicture: data.profilePicture ?? "/avatars/default.jpg",
-          Role: data.role ?? "",
-        });
-      })
-      .catch(console.error);
+    const fetchUserData = async () => {
+      try {
+        const res = await fetch("/api/me", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          setUserDetails({
+            UserId: data.userId ?? "",
+            Firstname: data.firstname ?? "",
+            Lastname: data.lastname ?? "",
+            Email: data.email ?? "",
+            profilePicture: data.profilePicture ?? "/avatars/default.jpg",
+            Role: data.role ?? "",
+          });
+
+          // Fetch user permissions
+          if (data.email) {
+            const permissions = await getUserPermissions(data.email);
+            setUserPermissions(permissions);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+    fetchUserData();
   }, []);
 
   const sidebarData = {
@@ -55,8 +72,16 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: FileText,
         isActive: pathname?.startsWith("/audit-logs") || pathname?.startsWith("/admin/audit-settings"),
         items: [
-          { title: "View Logs", url: "/audit-logs" },
-          { title: "Settings", url: "/admin/audit-settings" },
+          { 
+            title: "View Logs", 
+            url: "/audit-logs",
+            hasAccess: hasPermission(userPermissions, "audit-logs")
+          },
+          { 
+            title: "Settings", 
+            url: "/admin/audit-settings",
+            hasAccess: hasPermission(userPermissions, "admin/audit-settings")
+          },
         ],
       },
       {
@@ -64,7 +89,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         url: "#",
         icon: SquareTerminal,
         isActive: pathname?.startsWith("/application"),
-        items: [{ title: "Modules", url: "/application/modules" }],
+        items: [{ 
+          title: "Modules", 
+          url: "/application/modules",
+          hasAccess: hasPermission(userPermissions, "application/modules")
+        }],
       },
       {
         title: "Taskflow",
@@ -72,13 +101,41 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: Activity,
         isActive: pathname?.startsWith("/taskflow"),
         items: [
-          { title: "Customer Database", url: "/taskflow/customer-database" },
-          { title: "Removal Accounts", url: "/taskflow/removal-accounts" },
-          { title: "Customer Audits", url: "/taskflow/customer-audits" },
-          { title: "Approval of Accounts", url: "/taskflow/customer-approval" },
-          { title: "Activity Logs", url: "/taskflow/activity-logs" },
-          { title: "Progress Logs", url: "/taskflow/progress-logs" },
-          { title: "Endorsed Tickets", url: "/taskflow/csr-inquiries" },
+          { 
+            title: "Customer Database", 
+            url: "/taskflow/customer-database",
+            hasAccess: hasPermission(userPermissions, "taskflow/customer-database")
+          },
+          { 
+            title: "Removal Accounts", 
+            url: "/taskflow/removal-accounts",
+            hasAccess: hasPermission(userPermissions, "taskflow/removal-accounts")
+          },
+          { 
+            title: "Customer Audits", 
+            url: "/taskflow/customer-audits",
+            hasAccess: hasPermission(userPermissions, "taskflow/customer-audits")
+          },
+          { 
+            title: "Approval of Accounts", 
+            url: "/taskflow/customer-approval",
+            hasAccess: hasPermission(userPermissions, "taskflow/customer-approval")
+          },
+          { 
+            title: "Activity Logs", 
+            url: "/taskflow/activity-logs",
+            hasAccess: hasPermission(userPermissions, "taskflow/activity-logs")
+          },
+          { 
+            title: "Progress Logs", 
+            url: "/taskflow/progress-logs",
+            hasAccess: hasPermission(userPermissions, "taskflow/progress-logs")
+          },
+          { 
+            title: "Endorsed Tickets", 
+            url: "/taskflow/csr-inquiries",
+            hasAccess: hasPermission(userPermissions, "taskflow/csr-inquiries")
+          },
         ],
       },
       {
@@ -87,9 +144,21 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: Boxes,
         isActive: pathname?.startsWith("/stash"),
         items: [
-          { title: "Inventory", url: "/stash/inventory" },
-          { title: "Assigned Assets", url: "/stash/assigned-assets" },
-          { title: "License", url: "/stash/license" },
+          { 
+            title: "Inventory", 
+            url: "/stash/inventory",
+            hasAccess: hasPermission(userPermissions, "stash/inventory")
+          },
+          { 
+            title: "Assigned Assets", 
+            url: "/stash/assigned-assets",
+            hasAccess: hasPermission(userPermissions, "stash/assigned-assets")
+          },
+          { 
+            title: "License", 
+            url: "/stash/license",
+            hasAccess: hasPermission(userPermissions, "stash/license")
+          },
         ],
       },
       {
@@ -98,8 +167,16 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: TicketCheck,
         isActive: pathname?.startsWith("/ticketing"),
         items: [
-          { title: "Tickets", url: "/ticketing/tickets" },
-          { title: "Service Catalogue", url: "/ticketing/service-catalogue" },
+          { 
+            title: "Tickets", 
+            url: "/ticketing",
+            hasAccess: hasPermission(userPermissions, "ticketing")
+          },
+          { 
+            title: "Service Catalogue", 
+            url: "/ticketing/service-catalogue",
+            hasAccess: hasPermission(userPermissions, "ticketing/service-catalogue")
+          },
         ],
       },
       {
@@ -107,7 +184,13 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         url: "#",
         icon: Bot,
         isActive: pathname?.startsWith("/cloudflare"),
-        items: [{ title: "DNS", url: "/cloudflare/dns" }],
+        items: [
+          { 
+            title: "DNS", 
+            url: "/cloudflare/dns",
+            hasAccess: hasPermission(userPermissions, "cloudflare/dns")
+          }
+        ],
       },
       {
         title: "User Accounts",
@@ -115,10 +198,25 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: BookOpen,
         isActive: pathname?.startsWith("/admin"),
         items: [
-          { title: "Roles", url: "/admin/roles" },
-          { title: "Resigned and Terminated", url: "/admin/roles-status" },
-          { title: "Sessions", url: "/admin/sessions" },
-          ...(userDetails.Role === "SuperAdmin" ? [{ title: "IT Permissions", url: "/admin/it-permissions" }] : []),
+          { 
+            title: "Roles", 
+            url: "/admin/roles",
+            hasAccess: hasPermission(userPermissions, "admin/roles")
+          },
+          { 
+            title: "Resigned and Terminated", 
+            url: "/admin/roles-status",
+            hasAccess: hasPermission(userPermissions, "admin/users")
+          },
+          { 
+            title: "Sessions", 
+            url: "/admin/sessions",
+            hasAccess: hasPermission(userPermissions, "admin/sessions")
+          },
+          ...(hasPermission(userPermissions, "admin/it-permissions") ? [{ 
+            title: "IT Permissions", 
+            url: "/admin/it-permissions" 
+          }] : []),
         ],
       },
       {
@@ -127,17 +225,40 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         icon: Settings2,
         isActive: pathname?.startsWith("/settings") || pathname?.startsWith("/admin/backup-database"),
         items: [
-          { title: "General", url: "/settings/general" },
-          { title: "Database Backup", url: "/admin/backup-database" },
+          { 
+            title: "General", 
+            url: "/settings/general",
+            hasAccess: hasPermission(userPermissions, "settings/general")
+          },
+          { 
+            title: "Database Backup", 
+            url: "/admin/backup-database",
+            hasAccess: hasPermission(userPermissions, "admin/backup-database")
+          },
         ],
       },
     ],
     navSecondary: [
-      { title: "Support", url: "/support", icon: LifeBuoy },
-      { title: "Feedback", url: "/feedback", icon: Send },
+      { 
+        title: "Support", 
+        url: "/support", 
+        icon: LifeBuoy,
+        hasAccess: true // Support is always available
+      },
+      { 
+        title: "Feedback", 
+        url: "/feedback", 
+        icon: Send,
+        hasAccess: true // Feedback is always available
+      },
     ],
     projects: [
-      { name: "Acculog", url: "/acculog/activity-logs", icon: CalendarCheck },
+      { 
+        name: "Acculog", 
+        url: "/acculog/activity-logs", 
+        icon: CalendarCheck,
+        hasAccess: hasPermission(userPermissions, "acculog")
+      },
     ],
   };
 
