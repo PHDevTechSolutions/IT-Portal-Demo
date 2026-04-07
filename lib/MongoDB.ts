@@ -38,6 +38,9 @@ export async function connectToDatabase(): Promise<Db> {
 // 🔹 Export clientPromise for direct use
 export { clientPromise };
 
+// 🔹 Default export for compatibility
+export default clientPromise;
+
 
 // 🔹 Register a new user
 export async function registerUser({
