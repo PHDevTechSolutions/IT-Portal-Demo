@@ -3,15 +3,19 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   collection,
-  addDoc,
+  doc,
   query,
   where,
   onSnapshot,
-  serverTimestamp,
-  doc,
   updateDoc,
+  addDoc,
   deleteDoc,
+  serverTimestamp,
+  getDocs,
+  getDoc,
   writeBatch,
+  QuerySnapshot,
+  DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,6 +83,7 @@ import {
   Users,
   UserPlus,
   UserMinus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
@@ -109,6 +114,9 @@ interface Collaborator {
   addedAt: any;
   addedBy: string;
   status?: "pending" | "accepted" | "rejected";
+  profilePicture?: string;
+  department?: string;
+  position?: string;
 }
 
 interface CollaborationRequest {
@@ -117,7 +125,8 @@ interface CollaborationRequest {
   taskTitle: string;
   requesterId: string;
   requesterName: string;
-  requesterEmail: string;
+  collaboratorId: string; // Changed from email to userId
+  collaboratorName: string;
   collaboratorEmail: string;
   role: string;
   status: "pending" | "accepted" | "rejected";
@@ -212,13 +221,19 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
 
-  // Collaboration state
+  // State for enhanced collaborator data
+  const [enhancedCollaborators, setEnhancedCollaborators] = useState<Map<string, Collaborator>>(new Map());
+  const [viewTaskEnhancedCollaborators, setViewTaskEnhancedCollaborators] = useState<Collaborator[]>([]);
   const [isCollaborationDialogOpen, setIsCollaborationDialogOpen] = useState(false);
   const [collaboratorEmail, setCollaboratorEmail] = useState("");
   const [collaboratorRole, setCollaboratorRole] = useState("viewer");
   const [collaboratingTask, setCollaboratingTask] = useState<Task | null>(null);
   const [collaborationMessage, setCollaborationMessage] = useState("");
   const [pendingRequests, setPendingRequests] = useState<CollaborationRequest[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -245,19 +260,259 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
           completedAt: data.completedAt?.toDate?.(),
         } as Task);
       });
-      tasksData.sort((a, b) => {
-        const priorityWeight = { high: 3, medium: 2, low: 1 };
-        const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
-        if (priorityDiff !== 0) return priorityDiff;
-        const dateA = a.dueDate || new Date(9999, 0, 1);
-        const dateB = b.dueDate || new Date(9999, 0, 1);
-        return dateA.getTime() - dateB.getTime();
-      });
-      setTasks(tasksData);
+      
+      // For non-Super Admin, also fetch collaborative tasks
+      if (userRole !== "SuperAdmin") {
+        // Use fallback method as primary since array-contains with objects is unreliable
+        const allTasksRef = collection(db, "user_tasks");
+        getDocs(allTasksRef).then((allSnapshot: QuerySnapshot<DocumentData>) => {
+          const collaborativeTasks: Task[] = [];
+          allSnapshot.forEach((doc: any) => {
+            const data = doc.data();
+            if (data.collaborators && Array.isArray(data.collaborators)) {
+              const userIsCollaborator = data.collaborators.some((collab: any) => 
+                collab.id === userId || collab.id === userId.toString()
+              );
+              if (userIsCollaborator) {
+                collaborativeTasks.push({
+                  id: doc.id,
+                  ...data,
+                  dueDate: data.dueDate?.toDate?.(),
+                  createdAt: data.createdAt?.toDate?.(),
+                  updatedAt: data.updatedAt?.toDate?.(),
+                  completedAt: data.completedAt?.toDate?.(),
+                } as Task);
+              }
+            }
+          });
+          mergeAndSetTasks(tasksData, collaborativeTasks);
+        }).catch(error => {
+          console.error("Error fetching collaborative tasks:", error);
+        });
+      } else {
+        // Super Admin: just sort the tasks
+        tasksData.sort((a, b) => {
+          const priorityWeight = { high: 3, medium: 2, low: 1 };
+          const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
+          if (priorityDiff !== 0) return priorityDiff;
+          const dateA = a.dueDate || new Date(9999, 0, 1);
+          const dateB = b.dueDate || new Date(9999, 0, 1);
+          return dateA.getTime() - dateB.getTime();
+        });
+        setTasks(tasksData);
+      }
     });
 
     return () => unsubscribe();
   }, [userId, userRole]);
+
+  // Function to fetch enhanced collaborator data
+  const fetchEnhancedCollaboratorData = async (collaborator: Collaborator): Promise<Collaborator> => {
+    // Check if we already have enhanced data
+    if (enhancedCollaborators.has(collaborator.id)) {
+      return enhancedCollaborators.get(collaborator.id)!;
+    }
+
+    try {
+      const response = await fetch(`/api/users/${collaborator.id}`);
+      if (response.ok) {
+        const userData = await response.json();
+        
+        const enhancedCollab: Collaborator = {
+          ...collaborator,
+          profilePicture: userData.profilePicture || `/avatars/${userData.firstName?.toLowerCase()}-${userData.lastName?.toLowerCase()}.jpg`,
+          department: userData.department,
+          position: userData.position,
+          email: userData.email || collaborator.email,
+          name: userData.fullName || `${userData.firstName} ${userData.lastName}` || collaborator.name,
+        };
+        
+        // Cache the enhanced data
+        setEnhancedCollaborators(prev => new Map(prev.set(collaborator.id, enhancedCollab)));
+        
+        return enhancedCollab;
+      }
+    } catch (error) {
+      console.warn("Could not fetch enhanced data for collaborator:", collaborator.id, error);
+    }
+    
+    return collaborator;
+  };
+
+  // Helper function to merge and set tasks
+  const mergeAndSetTasks = (ownTasks: Task[], collaborativeTasks: Task[]) => {
+    // Combine own tasks and collaborative tasks, remove duplicates
+    const allTasks = [...ownTasks, ...collaborativeTasks];
+    const uniqueTasks = allTasks.filter((task, index, self) => 
+      index === self.findIndex(t => t.id === task.id)
+    );
+    
+    uniqueTasks.sort((a, b) => {
+      const priorityWeight = { high: 3, medium: 2, low: 1 };
+      const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
+      if (priorityDiff !== 0) return priorityDiff;
+      const dateA = a.dueDate || new Date(9999, 0, 1);
+      const dateB = b.dueDate || new Date(9999, 0, 1);
+      return dateA.getTime() - dateB.getTime();
+    });
+    
+    setTasks(uniqueTasks);
+  };
+
+  // Listen for collaboration requests
+  useEffect(() => {
+    if (!userId) return;
+
+    const requestsRef = collection(db, "collaboration_requests");
+    const q = query(requestsRef, where("collaboratorId", "==", userId), where("status", "==", "pending"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const requestsData: CollaborationRequest[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        requestsData.push({
+          id: doc.id, // Use Firestore document ID
+          taskId: data.taskId,
+          taskTitle: data.taskTitle,
+          requesterId: data.requesterId,
+          requesterName: data.requesterName,
+          collaboratorId: data.collaboratorId,
+          collaboratorName: data.collaboratorName,
+          collaboratorEmail: data.collaboratorEmail,
+          role: data.role,
+          status: data.status,
+          createdAt: data.createdAt?.toDate?.(),
+          message: data.message,
+        } as CollaborationRequest);
+      });
+      
+      // Sort by creation date (newest first)
+      requestsData.sort((a, b) => {
+        const dateA = a.createdAt || new Date(0);
+        const dateB = b.createdAt || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      // Check for new requests and show notification
+      const previousRequestIds = pendingRequests.map(r => r.id);
+      const newRequests = requestsData.filter(r => !previousRequestIds.includes(r.id));
+      
+      if (newRequests.length > 0) {
+        newRequests.forEach(request => {
+          toast.info(`New collaboration request from ${request.requesterName} for "${request.taskTitle}"`, {
+            duration: 5000,
+            action: {
+              label: "View",
+              onClick: () => {
+                // Scroll to notification section
+                const element = document.querySelector('[data-collaboration-notifications]');
+                element?.scrollIntoView({ behavior: 'smooth' });
+              }
+            }
+          });
+        });
+      }
+      
+      setPendingRequests(requestsData);
+    });
+
+    return () => unsubscribe();
+  }, [userId, pendingRequests]);
+
+  // Mock available users (in production, fetch from users collection)
+  useEffect(() => {
+    const fetchUsers = async (searchQuery = "") => {
+      console.log("Fetching users with searchQuery:", searchQuery);
+      console.log("Current userId:", userId);
+      
+      try {
+        setIsSearchingUsers(true);
+        const response = await fetch(`/api/users?currentUserId=${userId}&search=${encodeURIComponent(searchQuery)}`);
+        console.log("API response status:", response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log("API data:", data);
+          setAvailableUsers(data.users || []);
+        } else {
+          console.log("API failed, using fallback");
+          // Fallback to mock users if API fails
+          const mockUsers = [
+            { id: "user1", referenceId: "EMP001", firstName: "John", lastName: "Doe", fullName: "John Doe", email: "john.doe@company.com", role: "user", department: "IT", position: "Developer" },
+            { id: "user2", referenceId: "EMP002", firstName: "Jane", lastName: "Smith", fullName: "Jane Smith", email: "jane.smith@company.com", role: "user", department: "HR", position: "Manager" },
+            { id: "user3", referenceId: "EMP003", firstName: "Mike", lastName: "Johnson", fullName: "Mike Johnson", email: "mike.johnson@company.com", role: "admin", department: "IT", position: "Team Lead" },
+            { id: "user4", referenceId: "EMP004", firstName: "Sarah", lastName: "Wilson", fullName: "Sarah Wilson", email: "sarah.wilson@company.com", role: "user", department: "Finance", position: "Accountant" },
+            { id: "user5", referenceId: "EMP005", firstName: "Alex", lastName: "Turner", fullName: "Alex Turner", email: "alex.turner@company.com", role: "user", department: "IT", position: "Senior Developer" },
+            { id: "user6", referenceId: "EMP006", firstName: "Lisa", lastName: "Anderson", fullName: "Lisa Anderson", email: "lisa.anderson@company.com", role: "user", department: "IT", position: "DevOps Engineer" },
+          ];
+          
+          // Filter out current user and apply search (only by department)
+          const filteredUsers = mockUsers.filter(user => {
+            console.log("Checking user:", user.id, "vs userId:", userId);
+            if (user.id === userId) return false;
+            
+            if (searchQuery.trim()) {
+              const query = searchQuery.toLowerCase();
+              console.log("Search query:", query, "user department:", user.department);
+              return user.department && user.department.toLowerCase().includes(query);
+            }
+            return true;
+          });
+          
+          console.log("Filtered users:", filteredUsers);
+          setAvailableUsers(filteredUsers);
+        }
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        // Fallback to mock users
+        const mockUsers = [
+          { id: "user1", referenceId: "EMP001", firstName: "John", lastName: "Doe", fullName: "John Doe", email: "john.doe@company.com", role: "user", department: "IT", position: "Developer" },
+          { id: "user2", referenceId: "EMP002", firstName: "Jane", lastName: "Smith", fullName: "Jane Smith", email: "jane.smith@company.com", role: "user", department: "HR", position: "Manager" },
+          { id: "user3", referenceId: "EMP003", firstName: "Mike", lastName: "Johnson", fullName: "Mike Johnson", email: "mike.johnson@company.com", role: "admin", department: "IT", position: "Team Lead" },
+          { id: "user4", referenceId: "EMP004", firstName: "Sarah", lastName: "Wilson", fullName: "Sarah Wilson", email: "sarah.wilson@company.com", role: "user", department: "Finance", position: "Accountant" },
+          { id: "user5", referenceId: "EMP005", firstName: "Alex", lastName: "Turner", fullName: "Alex Turner", email: "alex.turner@company.com", role: "user", department: "IT", position: "Senior Developer" },
+          { id: "user6", referenceId: "EMP006", firstName: "Lisa", lastName: "Anderson", fullName: "Lisa Anderson", email: "lisa.anderson@company.com", role: "user", department: "IT", position: "DevOps Engineer" },
+        ];
+        
+        // Filter out current user and apply search (only by department)
+        const filteredUsers = mockUsers.filter(user => {
+          if (user.id === userId) return false;
+          
+          if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            return user.department && user.department.toLowerCase().includes(query);
+          }
+          return true;
+        });
+        
+        console.log("Error fallback users:", filteredUsers);
+        setAvailableUsers(filteredUsers);
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    };
+
+    if (userId) {
+      fetchUsers(userSearchQuery);
+    }
+  }, [userId, userSearchQuery]);
+
+  // Fetch enhanced collaborator data when viewing a task
+  useEffect(() => {
+    if (!viewingTask?.collaborators || viewingTask.collaborators.length === 0) {
+      setViewTaskEnhancedCollaborators([]);
+      return;
+    }
+
+    const fetchEnhancedData = async () => {
+      const enhancedCollabs = await Promise.all(
+        viewingTask.collaborators!.map(collab => fetchEnhancedCollaboratorData(collab))
+      );
+      setViewTaskEnhancedCollaborators(enhancedCollabs);
+    };
+
+    fetchEnhancedData();
+  }, [viewingTask?.collaborators]);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -628,35 +883,47 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
     setCollaboratingTask(task);
     setCollaboratorEmail("");
     setCollaboratorRole("viewer");
+    setUserSearchQuery("");
+    setSelectedUser(null);
+    setCollaborationMessage("");
     setIsCollaborationDialogOpen(true);
   };
 
   // Add collaborator
   const addCollaborator = async () => {
-    if (!collaboratingTask || !collaboratorEmail.trim()) {
-      toast.error("Please enter collaborator email");
+    if (!collaboratingTask || !selectedUser) {
+      toast.error("Please select a collaborator");
       return;
     }
 
     setIsLoading(true);
     try {
-      // Create collaboration request instead of directly adding
+      // Create collaboration request for specific user
       const requestRef = collection(db, "collaboration_requests");
-      const newRequest: CollaborationRequest = {
-        id: crypto.randomUUID(),
+      const requestData = {
         taskId: collaboratingTask.id,
         taskTitle: collaboratingTask.title,
         requesterId: userId,
         requesterName: userName,
-        requesterEmail: `${userName}@company.com`, // Placeholder
-        collaboratorEmail: collaboratorEmail.trim(),
+        collaboratorId: selectedUser.id,
+        collaboratorName: selectedUser.fullName,
+        collaboratorEmail: selectedUser.email,
         role: collaboratorRole,
         status: "pending",
         createdAt: serverTimestamp(),
         message: collaborationMessage.trim() || undefined,
       };
 
-      await addDoc(requestRef, newRequest);
+      // Add document to Firestore and get the actual document reference
+      const docRef = await addDoc(requestRef, requestData);
+      const actualRequestId = docRef.id;
+
+      console.log("Collaboration request created with ID:", actualRequestId);
+
+      // Notify the selected user
+      toast.success(`Collaboration request sent to ${selectedUser.fullName} (${selectedUser.referenceId})`, {
+        description: "They will receive a notification about your collaboration request"
+      });
 
       // Add to task history
       const historyEntry: HistoryEntry = {
@@ -664,7 +931,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
         action: "updated",
         field: "collaboration_request",
         oldValue: "No pending requests",
-        newValue: `Request sent to ${collaboratorEmail}`,
+        newValue: `Request sent to ${selectedUser.fullName} (${selectedUser.referenceId})`,
         performedBy: userName,
         timestamp: new Date().toISOString(),
       };
@@ -675,10 +942,11 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
         history: [historyEntry, ...existingHistory],
       });
 
-      toast.success(`Collaboration request sent to ${collaboratorEmail}`);
+      toast.success(`Collaboration request sent to ${selectedUser.fullName}`);
       setIsCollaborationDialogOpen(false);
       setCollaboratingTask(null);
-      setCollaboratorEmail("");
+      setSelectedUser(null);
+      setUserSearchQuery("");
       setCollaboratorRole("viewer");
       setCollaborationMessage("");
     } catch (error) {
@@ -715,42 +983,165 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
   // Accept collaboration request
   const acceptCollaborationRequest = async (requestId: string) => {
     try {
+      console.log("=== ACCEPTING COLLABORATION REQUEST ===");
+      console.log("Request ID:", requestId);
+      console.log("Current User ID:", userId);
+      console.log("Current User Name:", userName);
+      
       const requestRef = doc(db, "collaboration_requests", requestId);
-      const taskRef = doc(db, "user_tasks", requestId); // This should be taskId
+      const requestDoc = await getDoc(requestRef);
+      
+      if (!requestDoc.exists()) {
+        console.error("Collaboration request not found:", requestId);
+        toast.error("Collaboration request not found");
+        return;
+      }
+      
+      const requestData = requestDoc.data();
+      console.log("Request data:", requestData);
       
       // Update request status
-      await updateDoc(requestRef, {
-        status: "accepted",
-      });
+      await updateDoc(requestRef, { status: "accepted" });
+      console.log("Request status updated to 'accepted'");
 
       // Add collaborator to task
       const request = pendingRequests.find(r => r.id === requestId);
+      console.log("Found request in pendingRequests:", !!request);
+      
       if (request) {
+        console.log("Request details:", request);
+        const taskRef = doc(db, "user_tasks", request.taskId);
+        const taskDoc = await getDoc(taskRef);
+        
+        if (!taskDoc.exists()) {
+          console.error("Task not found:", request.taskId);
+          toast.error("Task not found");
+          return;
+        }
+        
+        const taskData = taskDoc.data();
+        console.log("Current task data from Firestore:", taskData);
+        
         const newCollaborator: Collaborator = {
-          id: crypto.randomUUID(),
-          name: request.collaboratorEmail.split("@")[0],
-          email: request.collaboratorEmail,
+          id: userId,
+          name: userName,
+          email: `${userName}@company.com`,
           role: request.role,
           addedAt: new Date().toISOString(),
           addedBy: request.requesterName,
           status: "accepted",
         };
+        
+        console.log("New collaborator to add:", newCollaborator);
 
-        const task = tasks.find(t => t.id === request.taskId);
-        if (task) {
-          const existingCollaborators = task.collaborators || [];
-          const updatedCollaborators = [...existingCollaborators, newCollaborator];
-          
-          await updateDoc(taskRef, {
-            collaborators: updatedCollaborators,
-            isCollaborative: true,
-            updatedAt: serverTimestamp(),
-          });
+        // Get user profile information for the collaborator
+        try {
+          const userResponse = await fetch(`/api/users/${userId}`);
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            console.log("User profile data:", userData);
+            
+            // Update collaborator with real profile information
+            newCollaborator.profilePicture = userData.profilePicture || `/avatars/${userData.firstName?.toLowerCase()}-${userData.lastName?.toLowerCase()}.jpg`;
+            newCollaborator.department = userData.department;
+            newCollaborator.position = userData.position;
+            newCollaborator.email = userData.email || `${userName}@company.com`;
+            
+            // Use the real name from user data if available
+            if (userData.fullName || (userData.firstName && userData.lastName)) {
+              newCollaborator.name = userData.fullName || `${userData.firstName} ${userData.lastName}`;
+            }
+          }
+        } catch (profileError) {
+          console.warn("Could not fetch user profile, using defaults:", profileError);
         }
+
+        console.log("Final collaborator data:", newCollaborator);
+
+        // Get task data directly from Firestore instead of local state
+        const existingCollaborators = taskData.collaborators || [];
+        console.log("Existing collaborators from Firestore:", existingCollaborators);
+        
+        // Check if user is already a collaborator
+        const isAlreadyCollaborator = existingCollaborators.some((collab: Collaborator) => collab.id === userId);
+        if (isAlreadyCollaborator) {
+          console.log("User is already a collaborator");
+          toast.info("You are already a collaborator on this task");
+          return;
+        }
+        
+        const updatedCollaborators = [...existingCollaborators, newCollaborator];
+        console.log("Updated collaborators array:", updatedCollaborators);
+        
+        const updateData = {
+          collaborators: updatedCollaborators,
+          isCollaborative: true,
+          updatedAt: serverTimestamp(),
+        };
+        
+        console.log("Updating task with data:", updateData);
+        
+        try {
+          await updateDoc(taskRef, updateData);
+          console.log("Task updated successfully in Firestore");
+          
+          // Verify the update
+          const updatedTaskDoc = await getDoc(taskRef);
+          const updatedTaskData = updatedTaskDoc.data();
+          console.log("Verified updated task data:", updatedTaskData);
+          
+          if (updatedTaskData) {
+            // Show success message with option to view task
+            toast.success(`You can now access "${request.taskTitle}"`, {
+              description: `You have been added as ${request.role}`,
+              duration: 5000,
+              action: {
+                label: "View Task",
+                onClick: () => {
+                  // Create task object for viewing from Firestore data
+                  const taskForView: Task = {
+                    id: request.taskId,
+                    userId: updatedTaskData.userId,
+                    userName: updatedTaskData.userName,
+                    title: updatedTaskData.title,
+                    status: updatedTaskData.status,
+                    priority: updatedTaskData.priority,
+                    description: updatedTaskData.description,
+                    dueDate: updatedTaskData.dueDate?.toDate?.(),
+                    createdAt: updatedTaskData.createdAt?.toDate?.(),
+                    updatedAt: updatedTaskData.updatedAt?.toDate?.(),
+                    completedAt: updatedTaskData.completedAt?.toDate?.(),
+                    category: updatedTaskData.category,
+                    tags: updatedTaskData.tags,
+                    notes: updatedTaskData.notes,
+                    subtasks: updatedTaskData.subtasks,
+                    history: updatedTaskData.history,
+                    pinned: updatedTaskData.pinned,
+                    collaborators: updatedTaskData.collaborators,
+                    isCollaborative: updatedTaskData.isCollaborative,
+                  };
+                  setViewingTask(taskForView);
+                  setIsViewDialogOpen(true);
+                }
+              }
+            });
+          }
+          
+        } catch (updateError) {
+          console.error("Error updating task:", updateError);
+          toast.error("Failed to update task with collaborator");
+          return;
+        }
+      } else {
+        console.error("Request not found in pendingRequests:", requestId);
       }
 
       toast.success("Collaboration request accepted");
       setPendingRequests(pendingRequests.filter(r => r.id !== requestId));
+      
+      // Don't auto-refresh - let user see the result and debug
+      console.log("Acceptance process completed. Check console for any errors.");
+      
     } catch (error) {
       console.error("Error accepting collaboration request:", error);
       toast.error("Failed to accept collaboration request");
@@ -995,7 +1386,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
     <div className="space-y-6">
       {/* Collaboration Notifications */}
       {pendingRequests.length > 0 && (
-        <Card className="border-blue-200 bg-blue-50/30">
+        <Card className="border-blue-200 bg-blue-50/30" data-collaboration-notifications>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <Users className="h-5 w-5 text-blue-500" />
@@ -1216,14 +1607,147 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
         </div>
       </div>
 
+      {/* Collaborative Tasks Section */}
+      {sortedTasks.some(task => task.isCollaborative) && (
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-500" />
+              Collaborative Tasks ({sortedTasks.filter(task => task.isCollaborative).length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {sortedTasks.filter(task => task.isCollaborative).map((task) => {
+                const statusConfigItem = statusConfig[task.status];
+                const StatusIcon = statusConfigItem.icon;
+                const priorityConfigItem = priorityConfig[task.priority];
+                const PriorityIcon = priorityConfigItem.icon;
+                const dueStatus = getDueDateStatus(task.dueDate, task.status);
+                const isSelected = selectedTasks.has(task.id);
+
+                return (
+                  <div
+                    key={task.id}
+                    onClick={() => openViewDialog(task)}
+                    className={cn(
+                      "group flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer bg-white",
+                      isSelected && "border-primary bg-primary/5",
+                      task.pinned && "border-yellow-400 bg-yellow-50/30",
+                      task.priority === "high" && task.status !== "completed" && "border-l-4 border-l-red-500"
+                    )}
+                  >
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTaskSelection(task.id);
+                      }}
+                      className="mt-1"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="h-5 w-5 text-primary" />
+                      ) : (
+                        <Square className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            {task.pinned && <Pin className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
+                            <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+                              <Users className="h-3 w-3" />
+                              Collaborative
+                            </div>
+                            <p className="font-medium leading-tight">{task.title}</p>
+                          </div>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                              {task.description}
+                            </p>
+                          )}
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              openViewDialog(task);
+                            }}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            {isOwner(task) && (
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                openCollaborationDialog(task);
+                              }}>
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Add Collaborator
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <StatusIcon className="h-3 w-3" />
+                          {statusConfigItem.label}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <PriorityIcon className="h-3 w-3" />
+                          {priorityConfigItem.label}
+                        </div>
+                        {task.userName && (
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              <div className="h-5 w-5 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-semibold text-[8px]">
+                                {task.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                              </div>
+                              <span className="text-xs">Owner: {task.userName}</span>
+                            </div>
+                          </div>
+                        )}
+                        {task.collaborators && task.collaborators.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3 w-3 text-blue-500" />
+                            <span className="text-xs">{task.collaborators.length} collaborator{task.collaborators.length > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
+                        {dueStatus && (
+                          <div className={dueStatus.color}>
+                            {dueStatus.label}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Task List */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-semibold">
-              Tasks ({filteredTasks.length})
+              My Tasks ({filteredTasks.filter(task => !task.isCollaborative).length})
             </CardTitle>
-            {filteredTasks.length > 0 && (
+            {filteredTasks.filter(task => !task.isCollaborative).length > 0 && (
               <div className="flex items-center gap-2">
                 <Checkbox
                   checked={selectAll}
@@ -1239,7 +1763,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[400px] pr-4">
-            {sortedTasks.length === 0 ? (
+            {sortedTasks.filter(task => !task.isCollaborative).length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
                 <ListTodo className="h-8 w-8 mb-2 opacity-50" />
                 <p className="text-sm">No tasks found</p>
@@ -1247,7 +1771,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
               </div>
             ) : (
               <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-2"}>
-                {sortedTasks.map((task) => {
+                {sortedTasks.filter(task => !task.isCollaborative).map((task) => {
                   const statusConfigItem = statusConfig[task.status];
                   const StatusIcon = statusConfigItem.icon;
                   const priorityConfigItem = priorityConfig[task.priority];
@@ -1285,7 +1809,12 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               {task.pinned && <Pin className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
-                              {task.isCollaborative && <Users className="h-4 w-4 text-blue-500" />}
+                              {task.isCollaborative && (
+                                <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+                                  <Users className="h-3 w-3" />
+                                  Collaborative
+                                </div>
+                              )}
                               <p className="font-medium leading-tight">{task.title}</p>
                             </div>
                             {task.description && (
@@ -1715,19 +2244,56 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                     Collaborators ({viewingTask.collaborators.length})
                   </Label>
                   <div className="space-y-2">
-                    {viewingTask.collaborators.map((collaborator) => (
-                      <div key={collaborator.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-blue-500" />
-                          <div>
-                            <p className="text-sm font-medium">{collaborator.name}</p>
-                            <p className="text-xs text-muted-foreground">{collaborator.email}</p>
+                    {viewTaskEnhancedCollaborators.map((collaborator) => (
+                      <div key={collaborator.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <img
+                              src={collaborator.profilePicture || `/avatars/default.jpg`}
+                              alt={collaborator.name}
+                              className="h-10 w-10 rounded-full object-cover border-2 border-background"
+                              onError={(e) => {
+                                // Fallback to initials if image fails
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const fallback = target.nextElementSibling as HTMLDivElement;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm hidden">
+                              {collaborator.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                            </div>
+                            {collaborator.status === 'accepted' && (
+                              <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-background"></div>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">{collaborator.name}</p>
+                              <Badge variant="outline" className="text-xs">
+                                {collaborator.role}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {collaborator.department && (
+                                <span>{collaborator.department}</span>
+                              )}
+                              {collaborator.position && (
+                                <>
+                                  {collaborator.department && <span>·</span>}
+                                  <span>{collaborator.position}</span>
+                                </>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">{collaborator.email}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {collaborator.role}
-                          </Badge>
+                          {collaborator.addedBy && (
+                            <div className="text-xs text-muted-foreground text-right">
+                              Added by {collaborator.addedBy}
+                            </div>
+                          )}
                           {isOwner(viewingTask) && (
                             <Button
                               variant="ghost"
@@ -1793,6 +2359,18 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                     Edit
                   </Button>
                 )}
+                {isOwner(viewingTask) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsViewDialogOpen(false);
+                      openCollaborationDialog(viewingTask);
+                    }}
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Add Collaborator
+                  </Button>
+                )}
                 {canEditTask(viewingTask) && (
                   <Button
                     variant="outline"
@@ -1833,14 +2411,166 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
           <div className="space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="collaborator-email">Email Address</Label>
-              <Input
-                id="collaborator-email"
-                type="email"
-                placeholder="Enter collaborator's email"
-                value={collaboratorEmail}
-                onChange={(e) => setCollaboratorEmail(e.target.value)}
-              />
+              <Label htmlFor="collaborator-select">Select IT Department Collaborator</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                <Input
+                  id="collaborator-search"
+                  placeholder="Search IT Department..."
+                  value={userSearchQuery}
+                  onChange={(e) => {
+                    setUserSearchQuery(e.target.value);
+                    setSelectedUser(null); // Reset selection when searching
+                  }}
+                  className="pl-10"
+                />
+                {isSearchingUsers && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Show search results */}
+              {userSearchQuery && availableUsers.length > 0 && (
+                <div className="border rounded-lg max-h-60 overflow-y-auto">
+                  {availableUsers.map((user) => (
+                    <div
+                      key={user.id}
+                      className="flex items-center gap-3 p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setUserSearchQuery(user.fullName); // Set search to selected user name
+                      }}
+                    >
+                      {user.avatar ? (
+                        <img 
+                          src={user.avatar} 
+                          alt={user.fullName} 
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                          <span className="text-white text-sm font-medium">
+                            {user.firstName?.charAt(0).toUpperCase()}{user.lastName?.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="font-medium">{user.fullName}</div>
+                        <div className="text-xs text-blue-600 font-semibold">ID: {user.referenceId}</div>
+                        <div className="text-xs text-muted-foreground">{user.email}</div>
+                        {user.department && user.position && (
+                          <div className="text-xs text-blue-600">
+                            {user.department} - {user.position}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <Badge variant="outline" className="text-xs">
+                          {user.role}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Show all users when no search query */}
+              {!userSearchQuery && availableUsers.length > 0 && (
+                <div className="border rounded-lg max-h-60 overflow-y-auto">
+                  {availableUsers.map((user) => (
+                    <div
+                      key={user.id}
+                      className="flex items-center gap-3 p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setUserSearchQuery(user.fullName); // Set search to selected user name
+                      }}
+                    >
+                      {user.avatar ? (
+                        <img 
+                          src={user.avatar} 
+                          alt={user.fullName} 
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                          <span className="text-white text-sm font-medium">
+                            {user.firstName?.charAt(0).toUpperCase()}{user.lastName?.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="font-medium">{user.fullName}</div>
+                        <div className="text-xs text-blue-600 font-semibold">ID: {user.referenceId}</div>
+                        <div className="text-xs text-muted-foreground">{user.email}</div>
+                        {user.department && user.position && (
+                          <div className="text-xs text-blue-600">
+                            {user.department} - {user.position}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <Badge variant="outline" className="text-xs">
+                          {user.role}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Show selected user */}
+              {selectedUser && !userSearchQuery && (
+                <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                  {selectedUser.avatar ? (
+                    <img 
+                      src={selectedUser.avatar} 
+                      alt={selectedUser.fullName} 
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-medium">
+                        {selectedUser.firstName?.charAt(0).toUpperCase()}{selectedUser.lastName?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="font-medium">{selectedUser.fullName}</div>
+                    <div className="text-xs text-blue-600 font-semibold">ID: {selectedUser.referenceId}</div>
+                    <div className="text-xs text-muted-foreground">{selectedUser.email}</div>
+                    {selectedUser.department && selectedUser.position && (
+                      <div className="text-xs text-blue-600">
+                        {selectedUser.department} - {selectedUser.position}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedUser(null);
+                      setUserSearchQuery("");
+                    }}
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              
+              {/* No results message */}
+              {userSearchQuery && availableUsers.length === 0 && !isSearchingUsers && (
+                <div className="p-3 text-center text-muted-foreground border rounded-lg">
+                  No IT Department users found
+                  <div className="text-xs mt-1">
+                    Type "IT" to see IT Department collaborators
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid gap-2">
@@ -1874,7 +2604,8 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
               onClick={() => {
                 setIsCollaborationDialogOpen(false);
                 setCollaboratingTask(null);
-                setCollaboratorEmail("");
+                setSelectedUser(null);
+                setUserSearchQuery("");
                 setCollaboratorRole("viewer");
                 setCollaborationMessage("");
               }}
@@ -1884,7 +2615,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
             </Button>
             <Button
               onClick={addCollaborator}
-              disabled={isLoading || !collaboratorEmail.trim()}
+              disabled={isLoading || !selectedUser}
             >
               {isLoading ? "Sending..." : "Send Request"}
             </Button>
