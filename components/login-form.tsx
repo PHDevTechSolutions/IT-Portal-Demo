@@ -116,6 +116,8 @@ export function LoginForm({
         // reference it during this transition — but do NOT put it in the URL.
         if (result.userId) {
           setUserId(result.userId);
+          // Also save to localStorage for account page
+          localStorage.setItem("userId", result.userId);
         }
 
         setShowLocationDialog(true);
@@ -167,6 +169,8 @@ export function LoginForm({
         toast.success("Biometric authentication successful");
         if (result.userId) {
           setUserId(result.userId);
+          // Also save to localStorage for account page
+          localStorage.setItem("userId", result.userId);
         }
         setShowLocationDialog(true);
       } else {
