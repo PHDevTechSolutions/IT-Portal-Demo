@@ -76,6 +76,9 @@ import {
   Circle,
   Pin,
   Download,
+  Users,
+  UserPlus,
+  UserMinus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
@@ -98,6 +101,30 @@ interface HistoryEntry {
   timestamp: any;
 }
 
+interface Collaborator {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  addedAt: any;
+  addedBy: string;
+  status?: "pending" | "accepted" | "rejected";
+}
+
+interface CollaborationRequest {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  requesterId: string;
+  requesterName: string;
+  requesterEmail: string;
+  collaboratorEmail: string;
+  role: string;
+  status: "pending" | "accepted" | "rejected";
+  createdAt: any;
+  message?: string;
+}
+
 interface Task {
   id: string;
   userId: string;
@@ -116,6 +143,8 @@ interface Task {
   createdAt: any;
   updatedAt: any;
   completedAt?: any;
+  collaborators?: Collaborator[];
+  isCollaborative?: boolean;
 }
 
 const statusConfig = {
@@ -183,15 +212,25 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
 
+  // Collaboration state
+  const [isCollaborationDialogOpen, setIsCollaborationDialogOpen] = useState(false);
+  const [collaboratorEmail, setCollaboratorEmail] = useState("");
+  const [collaboratorRole, setCollaboratorRole] = useState("viewer");
+  const [collaboratingTask, setCollaboratingTask] = useState<Task | null>(null);
+  const [collaborationMessage, setCollaborationMessage] = useState("");
+  const [pendingRequests, setPendingRequests] = useState<CollaborationRequest[]>([]);
+
   useEffect(() => {
     if (!userId) return;
 
     const tasksRef = collection(db, "user_tasks");
     
-    // Super Admin can see all tasks, regular users only see their own
+    // Super Admin can see all tasks, regular users see their own + collaborative tasks
     const q = userRole === "SuperAdmin" 
       ? query(tasksRef) // No where clause for Super Admin
-      : query(tasksRef, where("userId", "==", userId)); // Regular users only see their tasks
+      : query(tasksRef, 
+          where("userId", "==", userId) // User's own tasks
+        ); // We'll filter collaborative tasks client-side for now
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tasksData: Task[] = [];
@@ -567,12 +606,172 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
   // Check if user can edit/delete task
   const canEditTask = (task: Task) => {
-    return userRole === "SuperAdmin" || task.userId === userId;
+    return userRole === "SuperAdmin" || 
+           task.userId === userId || 
+           (task.collaborators && task.collaborators.some(collab => collab.id === userId));
   };
 
   // Check if user can view task
   const canViewTask = (task: Task) => {
-    return userRole === "SuperAdmin" || task.userId === userId;
+    return userRole === "SuperAdmin" || 
+           task.userId === userId || 
+           (task.collaborators && task.collaborators.some(collab => collab.id === userId));
+  };
+
+  // Check if user is owner
+  const isOwner = (task: Task) => {
+    return task.userId === userId || userRole === "SuperAdmin";
+  };
+
+  // Open collaboration dialog
+  const openCollaborationDialog = (task: Task) => {
+    setCollaboratingTask(task);
+    setCollaboratorEmail("");
+    setCollaboratorRole("viewer");
+    setIsCollaborationDialogOpen(true);
+  };
+
+  // Add collaborator
+  const addCollaborator = async () => {
+    if (!collaboratingTask || !collaboratorEmail.trim()) {
+      toast.error("Please enter collaborator email");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Create collaboration request instead of directly adding
+      const requestRef = collection(db, "collaboration_requests");
+      const newRequest: CollaborationRequest = {
+        id: crypto.randomUUID(),
+        taskId: collaboratingTask.id,
+        taskTitle: collaboratingTask.title,
+        requesterId: userId,
+        requesterName: userName,
+        requesterEmail: `${userName}@company.com`, // Placeholder
+        collaboratorEmail: collaboratorEmail.trim(),
+        role: collaboratorRole,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        message: collaborationMessage.trim() || undefined,
+      };
+
+      await addDoc(requestRef, newRequest);
+
+      // Add to task history
+      const historyEntry: HistoryEntry = {
+        id: crypto.randomUUID(),
+        action: "updated",
+        field: "collaboration_request",
+        oldValue: "No pending requests",
+        newValue: `Request sent to ${collaboratorEmail}`,
+        performedBy: userName,
+        timestamp: new Date().toISOString(),
+      };
+
+      const taskRef = doc(db, "user_tasks", collaboratingTask.id);
+      const existingHistory = collaboratingTask.history || [];
+      await updateDoc(taskRef, {
+        history: [historyEntry, ...existingHistory],
+      });
+
+      toast.success(`Collaboration request sent to ${collaboratorEmail}`);
+      setIsCollaborationDialogOpen(false);
+      setCollaboratingTask(null);
+      setCollaboratorEmail("");
+      setCollaboratorRole("viewer");
+      setCollaborationMessage("");
+    } catch (error) {
+      console.error("Error sending collaboration request:", error);
+      toast.error("Failed to send collaboration request");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Remove collaborator
+  const removeCollaborator = async (taskId: string, collaboratorId: string) => {
+    try {
+      const taskRef = doc(db, "user_tasks", taskId);
+      const task = tasks.find(t => t.id === taskId);
+      
+      if (!task) return;
+
+      const updatedCollaborators = task.collaborators?.filter(c => c.id !== collaboratorId) || [];
+      
+      await updateDoc(taskRef, {
+        collaborators: updatedCollaborators,
+        isCollaborative: updatedCollaborators.length > 0,
+        updatedAt: serverTimestamp(),
+      });
+
+      toast.success("Collaborator removed successfully");
+    } catch (error) {
+      console.error("Error removing collaborator:", error);
+      toast.error("Failed to remove collaborator");
+    }
+  };
+
+  // Accept collaboration request
+  const acceptCollaborationRequest = async (requestId: string) => {
+    try {
+      const requestRef = doc(db, "collaboration_requests", requestId);
+      const taskRef = doc(db, "user_tasks", requestId); // This should be taskId
+      
+      // Update request status
+      await updateDoc(requestRef, {
+        status: "accepted",
+      });
+
+      // Add collaborator to task
+      const request = pendingRequests.find(r => r.id === requestId);
+      if (request) {
+        const newCollaborator: Collaborator = {
+          id: crypto.randomUUID(),
+          name: request.collaboratorEmail.split("@")[0],
+          email: request.collaboratorEmail,
+          role: request.role,
+          addedAt: new Date().toISOString(),
+          addedBy: request.requesterName,
+          status: "accepted",
+        };
+
+        const task = tasks.find(t => t.id === request.taskId);
+        if (task) {
+          const existingCollaborators = task.collaborators || [];
+          const updatedCollaborators = [...existingCollaborators, newCollaborator];
+          
+          await updateDoc(taskRef, {
+            collaborators: updatedCollaborators,
+            isCollaborative: true,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
+      toast.success("Collaboration request accepted");
+      setPendingRequests(pendingRequests.filter(r => r.id !== requestId));
+    } catch (error) {
+      console.error("Error accepting collaboration request:", error);
+      toast.error("Failed to accept collaboration request");
+    }
+  };
+
+  // Reject collaboration request
+  const rejectCollaborationRequest = async (requestId: string) => {
+    try {
+      const requestRef = doc(db, "collaboration_requests", requestId);
+      
+      await updateDoc(requestRef, {
+        status: "rejected",
+      });
+
+      toast.success("Collaboration request rejected");
+      setPendingRequests(pendingRequests.filter(r => r.id !== requestId));
+    } catch (error) {
+      console.error("Error rejecting collaboration request:", error);
+      toast.error("Failed to reject collaboration request");
+    }
   };
 
   // Toggle pin status for a task
@@ -794,6 +993,51 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
   return (
     <div className="space-y-6">
+      {/* Collaboration Notifications */}
+      {pendingRequests.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-500" />
+              Collaboration Requests ({pendingRequests.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingRequests.map((request) => (
+                <div key={request.id} className="flex items-center justify-between p-3 bg-white rounded-lg border">
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{request.requesterName} wants to collaborate</p>
+                    <p className="text-xs text-muted-foreground">Task: {request.taskTitle}</p>
+                    <p className="text-xs text-muted-foreground">Role: {request.role}</p>
+                    {request.message && (
+                      <p className="text-xs text-muted-foreground mt-1 italic">"{request.message}"</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => acceptCollaborationRequest(request.id)}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => rejectCollaborationRequest(request.id)}
+                      className="text-red-600 border-red-200 hover:bg-red-50"
+                    >
+                      Decline
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="p-4">
@@ -1041,6 +1285,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               {task.pinned && <Pin className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
+                              {task.isCollaborative && <Users className="h-4 w-4 text-blue-500" />}
                               <p className="font-medium leading-tight">{task.title}</p>
                             </div>
                             {task.description && (
@@ -1068,6 +1313,15 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                                 }}>
                                   <Edit className="h-4 w-4 mr-2" />
                                   Edit
+                                </DropdownMenuItem>
+                              )}
+                              {isOwner(task) && (
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  openCollaborationDialog(task);
+                                }}>
+                                  <UserPlus className="h-4 w-4 mr-2" />
+                                  Add Collaborator
                                 </DropdownMenuItem>
                               )}
                               {canEditTask(task) && (
@@ -1454,6 +1708,43 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                 </div>
               )}
 
+              {/* Collaborators Section */}
+              {viewingTask.collaborators && viewingTask.collaborators.length > 0 && (
+                <div className="border rounded-lg p-3">
+                  <Label className="text-xs text-muted-foreground mb-2 block">
+                    Collaborators ({viewingTask.collaborators.length})
+                  </Label>
+                  <div className="space-y-2">
+                    {viewingTask.collaborators.map((collaborator) => (
+                      <div key={collaborator.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-blue-500" />
+                          <div>
+                            <p className="text-sm font-medium">{collaborator.name}</p>
+                            <p className="text-xs text-muted-foreground">{collaborator.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {collaborator.role}
+                          </Badge>
+                          {isOwner(viewingTask) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => removeCollaborator(viewingTask.id, collaborator.id)}
+                            >
+                              <UserMinus className="h-3 w-3 text-red-500" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* History/Timeline Section */}
               {viewingTask.history && viewingTask.history.length > 0 && (
                 <div className="border rounded-lg p-3">
@@ -1527,6 +1818,77 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Collaboration Dialog */}
+      <Dialog open={isCollaborationDialogOpen} onOpenChange={setIsCollaborationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Collaboration Request</DialogTitle>
+            <DialogDescription>
+              Send a collaboration request to "{collaboratingTask?.title}". The collaborator will receive a notification and can accept or decline.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="collaborator-email">Email Address</Label>
+              <Input
+                id="collaborator-email"
+                type="email"
+                placeholder="Enter collaborator's email"
+                value={collaboratorEmail}
+                onChange={(e) => setCollaboratorEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="collaborator-role">Role</Label>
+              <Select value={collaboratorRole} onValueChange={setCollaboratorRole}>
+                <SelectTrigger id="collaborator-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Viewer (Can view only)</SelectItem>
+                  <SelectItem value="editor">Editor (Can view and edit)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="collaboration-message">Message (Optional)</Label>
+              <Textarea
+                id="collaboration-message"
+                placeholder="Add a message to the collaborator..."
+                value={collaborationMessage}
+                onChange={(e) => setCollaborationMessage(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCollaborationDialogOpen(false);
+                setCollaboratingTask(null);
+                setCollaboratorEmail("");
+                setCollaboratorRole("viewer");
+                setCollaborationMessage("");
+              }}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={addCollaborator}
+              disabled={isLoading || !collaboratorEmail.trim()}
+            >
+              {isLoading ? "Sending..." : "Send Request"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
