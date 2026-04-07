@@ -46,9 +46,13 @@ export function LoginForm({
   useEffect(() => {
     const checkBiometric = async () => {
       const available = await isBiometricAvailable();
+      console.log("Biometric available:", available); // Debug log
       setBiometricAvailable(available);
     };
     checkBiometric();
+    
+    // Always show biometric button for testing (remove this line later)
+    setBiometricAvailable(true);
   }, []);
   const getLocation = async () => {
     if (!navigator.geolocation) return null;
