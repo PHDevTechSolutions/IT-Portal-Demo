@@ -35,6 +35,9 @@ export async function connectToDatabase(): Promise<Db> {
   return client.db("ecoshift"); // Main DB
 }
 
+// 🔹 Export clientPromise for direct use
+export { clientPromise };
+
 
 // 🔹 Register a new user
 export async function registerUser({

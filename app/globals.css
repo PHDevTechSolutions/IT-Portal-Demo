@@ -196,7 +196,112 @@
   animation: spin 2s linear infinite;
 }
 
+/* Mobile Responsive Utilities */
+@layer utilities {
+  .responsive-table-wrapper {
+    @apply w-full overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .responsive-table {
+    @apply min-w-full;
+  }
+  
+  .mobile-card-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
+  }
+  
+  .mobile-flex-col {
+    @apply flex flex-col md:flex-row;
+  }
+  
+  .mobile-full-width {
+    @apply w-full;
+  }
+  
+  .mobile-p-2 {
+    @apply p-2 md:p-4;
+  }
+  
+  .mobile-text-sm {
+    @apply text-xs md:text-sm;
+  }
+  
+  .mobile-stack {
+    @apply flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2;
+  }
+  
+  .mobile-hide {
+    @apply hidden md:table-cell;
+  }
+  
+  .mobile-show {
+    @apply block md:hidden;
+  }
+}
 
+/* Mobile-first table styling */
+@media (max-width: 768px) {
+  .sci-fi-table {
+    @apply block w-full;
+  }
+  
+  .sci-fi-table thead {
+    @apply hidden;
+  }
+  
+  .sci-fi-table tbody {
+    @apply block w-full;
+  }
+  
+  .sci-fi-table tr {
+    @apply block mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700;
+  }
+  
+  .sci-fi-table td {
+    @apply block py-2 px-0 border-b-0;
+    @apply before:content-[attr(data-label)] before:font-semibold before:text-cyan-400 before:mr-2;
+  }
+  
+  .sci-fi-table td:first-child {
+    @apply font-semibold text-cyan-400 text-base mb-2 border-b border-slate-700 pb-2;
+  }
+  
+  .mobile-action-buttons {
+    @apply flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-700;
+  }
+}
+
+/* Touch-friendly button sizes on mobile */
+@media (max-width: 768px) {
+  .touch-button {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  .mobile-header {
+    @apply h-auto py-2 px-3;
+  }
+  
+  .mobile-sidebar-trigger {
+    @apply p-3;
+  }
+}
+
+/* Sidebar mobile adjustments */
+@media (max-width: 768px) {
+  [data-sidebar="content"] {
+    @apply overflow-x-hidden;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
 
 @layer base {
   :root {

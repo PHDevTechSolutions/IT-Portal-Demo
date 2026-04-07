@@ -65,14 +65,14 @@ function SettingsContent() {
         <AppSidebar />
         <SidebarInset>
           {/* Header */}
-          <header className="bg-background sticky top-0 flex h-14 shrink-0 items-center gap-2 border-b">
-            <div className="flex flex-1 items-center gap-2 px-3">
-              <SidebarTrigger />
+          <header className="bg-background sticky top-0 flex h-auto min-h-[56px] shrink-0 items-center gap-2 border-b px-2 md:px-4 py-2 flex-wrap">
+            <div className="flex flex-1 items-center gap-2">
+              <SidebarTrigger className="touch-button" />
               <Separator
                 orientation="vertical"
-                className="mr-2 data-[orientation=vertical]:h-4"
+                className="mr-2 data-[orientation=vertical]:h-4 hidden sm:block"
               />
-              <Breadcrumb>
+              <Breadcrumb className="hidden sm:flex">
                 <BreadcrumbList>
                   <BreadcrumbItem>
                     <BreadcrumbPage className="text-base font-semibold">

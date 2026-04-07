@@ -24,6 +24,7 @@ import {
   Loader2,
   Scan,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   isWebAuthnSupported,
   isBiometricAvailable,
@@ -45,6 +46,12 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [showRegisterDialog, setShowRegisterDialog] = useState(false);
+  
+  // QR Code registration states
+  const [showQRDialog, setShowQRDialog] = useState(false);
+  const [qrData, setQrData] = useState<string | null>(null);
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [isGeneratingQR, setIsGeneratingQR] = useState(false);
 
   useEffect(() => {
     checkBiometricSupport();
@@ -94,6 +101,74 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
       setIsRegistering(false);
       setShowRegisterDialog(false);
     }
+  };
+
+  // QR Code registration
+  const handleQRRegister = async () => {
+    setIsGeneratingQR(true);
+    setShowQRDialog(true);
+    try {
+      const response = await fetch("/api/auth/qr/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          userName,
+          userDisplayName,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setQrData(result.qrData);
+        setQrSessionId(result.sessionId);
+        toast.success("QR Code generated! Scan with your mobile app.");
+        
+        // Start polling for status
+        pollQRStatus(result.sessionId);
+      } else {
+        toast.error(result.error || "Failed to generate QR code");
+        setShowQRDialog(false);
+      }
+    } catch (error) {
+      toast.error("Failed to generate QR code");
+      console.error(error);
+      setShowQRDialog(false);
+    } finally {
+      setIsGeneratingQR(false);
+    }
+  };
+
+  // Poll QR status
+  const pollQRStatus = async (sessionId: string) => {
+    const maxAttempts = 60; // 5 minutes (5s intervals)
+    let attempts = 0;
+    
+    const interval = setInterval(async () => {
+      attempts++;
+      
+      if (attempts > maxAttempts) {
+        clearInterval(interval);
+        toast.error("QR code expired. Please try again.");
+        setShowQRDialog(false);
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/auth/qr/register?sessionId=${sessionId}`);
+        const result = await response.json();
+        
+        if (result.status === "completed") {
+          clearInterval(interval);
+          toast.success("Biometric registered via mobile app!");
+          setShowQRDialog(false);
+          loadCredentials();
+        }
+      } catch (error) {
+        console.error("Error polling QR status:", error);
+      }
+    }, 5000);
   };
 
   const handleRemove = async (credentialId: string) => {
@@ -231,14 +306,15 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
           )}
         </div>
 
-        {/* Register Button */}
-        {isAvailable && (
-          <>
-            <Separator />
+        {/* Register Buttons */}
+        <Separator />
+        <div className="space-y-3">
+          {isAvailable && (
             <Button
               onClick={handleRegister}
               disabled={isRegistering}
               className="w-full"
+              variant="default"
             >
               {isRegistering ? (
                 <>
@@ -247,19 +323,38 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
                 </>
               ) : (
                 <>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Register New Biometric
+                  <Fingerprint className="mr-2 h-4 w-4" />
+                  Register with This Device
                 </>
               )}
             </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              You&apos;ll be prompted to verify with your fingerprint or face recognition
-            </p>
-          </>
-        )}
+          )}
+          
+          <Button
+            onClick={handleQRRegister}
+            disabled={isGeneratingQR}
+            className="w-full"
+            variant="outline"
+          >
+            {isGeneratingQR ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating QR...
+              </>
+            ) : (
+              <>
+                <Smartphone className="mr-2 h-4 w-4" />
+                Register with Mobile App
+              </>
+            )}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground text-center">
+          Use device biometrics or scan QR with mobile app
+        </p>
       </CardContent>
 
-      {/* Registration Dialog */}
+      {/* WebAuthn Registration Dialog */}
       <Dialog open={showRegisterDialog} onOpenChange={setShowRegisterDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -284,6 +379,45 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
             {isRegistering && (
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5" />
+              Scan with Mobile App
+            </DialogTitle>
+            <DialogDescription>
+              Open the mobile app and scan this QR code to register your fingerprint.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center py-6 space-y-4">
+            {isGeneratingQR ? (
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            ) : qrData ? (
+              <div className="bg-white p-4 rounded-lg">
+                <QRCodeSVG 
+                  value={qrData} 
+                  size={200}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+            ) : (
+              <AlertCircle className="h-12 w-12 text-yellow-500" />
+            )}
+            <p className="text-sm text-muted-foreground text-center">
+              {isGeneratingQR 
+                ? "Generating QR code..." 
+                : "Waiting for mobile app to scan..."}
+            </p>
+            <p className="text-xs text-muted-foreground text-center">
+              QR code expires in 5 minutes
+            </p>
           </div>
         </DialogContent>
       </Dialog>

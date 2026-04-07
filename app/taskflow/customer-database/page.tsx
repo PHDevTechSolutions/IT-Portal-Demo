@@ -546,7 +546,7 @@ function EditCustomerDialog({
         <DialogHeader>
           <DialogTitle>Edit Customer</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-3 gap-3 text-sm max-h-[60vh] overflow-y-auto p-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm max-h-[60vh] overflow-y-auto p-1">
           <Input
             placeholder="Account Reference Number"
             value={form.account_reference_number ?? ""}

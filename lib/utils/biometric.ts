@@ -99,10 +99,10 @@ export async function registerBiometric(
 
     // Create credential
     const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
-      challenge: base64urlToBuffer(options.challenge),
+      challenge: base64urlToBuffer(options.challenge) as BufferSource,
       rp: options.rp,
       user: {
-        id: base64urlToBuffer(options.user.id),
+        id: base64urlToBuffer(options.user.id) as BufferSource,
         name: options.user.name,
         displayName: options.user.displayName,
       },
@@ -180,9 +180,9 @@ export async function authenticateWithBiometric(
 
     // Get credential
     const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
-      challenge: base64urlToBuffer(options.challenge),
+      challenge: base64urlToBuffer(options.challenge) as BufferSource,
       allowCredentials: options.allowCredentials.map((cred: any) => ({
-        id: base64urlToBuffer(cred.id),
+        id: base64urlToBuffer(cred.id) as BufferSource,
         type: "public-key",
       })),
       userVerification: "required",

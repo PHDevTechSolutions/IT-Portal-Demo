@@ -1427,8 +1427,8 @@ export default function CustomerAuditsPage() {
         <AppSidebar />
         <SidebarInset>
           {/* Header */}
-          <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b">
-            <SidebarTrigger className="-ml-1" />
+          <header className="flex h-auto min-h-[56px] shrink-0 items-center gap-2 px-2 md:px-4 py-2 flex-wrap border-b">
+            <SidebarTrigger className="-ml-1 touch-button" />
             <Button
               variant="outline"
               size="sm"
@@ -1436,8 +1436,8 @@ export default function CustomerAuditsPage() {
             >
               Home
             </Button>
-            <Separator orientation="vertical" className="h-4" />
-            <Breadcrumb>
+            <Separator orientation="vertical" className="h-4 hidden sm:block" />
+            <Breadcrumb className="hidden sm:flex">
               <BreadcrumbList>
                 <BreadcrumbItem>
                   <BreadcrumbLink href="/taskflow/customer-database">
