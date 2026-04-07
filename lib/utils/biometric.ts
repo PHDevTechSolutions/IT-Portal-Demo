@@ -16,7 +16,14 @@ export async function isBiometricAvailable(): Promise<boolean> {
   if (!isWebAuthnSupported()) return false;
   
   try {
-    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    // Add timeout to prevent infinite loading
+    const timeoutPromise = new Promise<boolean>((_, reject) => {
+      setTimeout(() => reject(new Error("Timeout")), 3000);
+    });
+    
+    const checkPromise = PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    
+    const available = await Promise.race([checkPromise, timeoutPromise]);
     return available;
   } catch {
     return false;

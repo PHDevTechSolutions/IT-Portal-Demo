@@ -7,6 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Fingerprint,
   Shield,
   Smartphone,
@@ -15,6 +22,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Scan,
 } from "lucide-react";
 import {
   isWebAuthnSupported,
@@ -36,6 +44,7 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
   const [credentials, setCredentials] = useState<Array<{ id: string; createdAt: string; deviceInfo?: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [showRegisterDialog, setShowRegisterDialog] = useState(false);
 
   useEffect(() => {
     checkBiometricSupport();
@@ -67,6 +76,7 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
   };
 
   const handleRegister = async () => {
+    setShowRegisterDialog(true);
     setIsRegistering(true);
     try {
       const result = await registerBiometric(userId, userName, userDisplayName);
@@ -82,6 +92,7 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
       console.error(error);
     } finally {
       setIsRegistering(false);
+      setShowRegisterDialog(false);
     }
   };
 
@@ -247,6 +258,35 @@ export function BiometricSettings({ userId, userName, userDisplayName }: Biometr
           </>
         )}
       </CardContent>
+
+      {/* Registration Dialog */}
+      <Dialog open={showRegisterDialog} onOpenChange={setShowRegisterDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scan className="h-5 w-5" />
+              Register Biometric
+            </DialogTitle>
+            <DialogDescription>
+              Please follow your device&apos;s instructions to scan your fingerprint or use face recognition.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping rounded-full bg-primary/20 h-16 w-16" />
+              <Fingerprint className="h-16 w-16 text-primary relative z-10" />
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              {isRegistering 
+                ? "Scanning... Please touch your fingerprint sensor or look at your camera." 
+                : "Registration complete!"}
+            </p>
+            {isRegistering && (
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
