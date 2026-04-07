@@ -40,7 +40,7 @@ export const PERMISSION_MAP: Record<string, string> = {
 };
 
 /**
- * Check if user has permission for a specific route
+ * Check if user has permission for a specific route or permission key
  */
 export function hasPermission(userPermissions: UserPermissions, route: string): boolean {
   // Super Admin with wildcard can access everything
@@ -48,11 +48,26 @@ export function hasPermission(userPermissions: UserPermissions, route: string): 
     return true;
   }
   
+  // Check if the route itself is a permission key (format: "module:item")
+  if (route.includes(':')) {
+    // Direct permission key check - MUST have explicit submodule permission
+    if (userPermissions.submodules.includes(route)) {
+      return true;
+    }
+    // User must have explicit submodule permission
+    return false;
+  }
+  
   const permission = PERMISSION_MAP[route];
   
   // Dashboard and profile are always accessible
-  if (!permission || permission === 'dashboard-access' || permission === 'profile-access') {
+  if (permission === 'dashboard-access' || permission === 'profile-access') {
     return true;
+  }
+  
+  // If no permission mapping found, deny access
+  if (!permission) {
+    return false;
   }
   
   // Check module access

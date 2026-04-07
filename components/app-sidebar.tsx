@@ -125,44 +125,39 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
   // Build dynamic sidebar data from fetched modules
   const sidebarData = React.useMemo(() => {
-    const navMain = sidebarModules.map((module) => {
+    const navMain: {
+      title: string;
+      url: string;
+      icon: LucideIcon;
+      isActive?: boolean;
+      items: { title: string; url: string; hasAccess: boolean }[];
+    }[] = [];
+    
+    sidebarModules.forEach((module) => {
       const IconComponent = ICON_MAP[module.icon] || SquareTerminal;
       
-      return {
-        title: module.title,
-        url: "#",
-        icon: IconComponent,
-        isActive: pathname?.startsWith(`/${module.key}`),
-        items: module.items.map((item) => {
-          // Determine permission key based on module and item
-          let permissionKey = "";
-          if (module.key === "audit-logs") {
-            permissionKey = `acculog:${item.title}`;
-          } else if (module.key === "applications") {
-            permissionKey = "applications:Modules";
-          } else if (module.key === "taskflow") {
-            permissionKey = `taskflow:${item.title}`;
-          } else if (module.key === "stash") {
-            permissionKey = `stash:${item.title}`;
-          } else if (module.key === "help-desk") {
-            permissionKey = `help-desk:${item.title}`;
-          } else if (module.key === "cloudflare") {
-            permissionKey = `cloudflare:${item.title}`;
-          } else if (module.key === "user-accounts") {
-            permissionKey = `user-accounts:${item.title}`;
-          } else if (module.key === "settings") {
-            permissionKey = `settings:${item.title}`;
-          } else if (module.key === "acculog") {
-            permissionKey = `acculog:${item.title}`;
-          }
-          
+      // Filter items to only those with access
+      const accessibleItems = module.items
+        .map((item) => {
+          const permissionKey = `${module.key}:${item.title}`;
           return {
             title: item.title,
             url: item.url,
             hasAccess: hasPermission(userPermissions, permissionKey)
           };
-        }),
-      };
+        })
+        .filter((item) => item.hasAccess); // Only keep accessible items
+      
+      // Only add module if it has accessible items
+      if (accessibleItems.length > 0) {
+        navMain.push({
+          title: module.title,
+          url: "#",
+          icon: IconComponent,
+          isActive: pathname?.startsWith(`/${module.key}`),
+          items: accessibleItems,
+        });
+      }
     });
 
     return {
