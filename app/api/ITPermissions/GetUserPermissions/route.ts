@@ -33,12 +33,14 @@ export async function POST(req: NextRequest) {
     const db = await connectToDatabase();
     
     // Get user's custom permissions from database
-    let userPermissions = await db
+    const dbUserPermissions = await db
       .collection("user_permissions")
       .findOne({ email: email });
 
+    let userPermissions: { modules: string[]; submodules: string[] };
+
     // If no custom permissions, get role-based permissions
-    if (!userPermissions) {
+    if (!dbUserPermissions) {
       const rolePermissions = await db
         .collection("role_permissions")
         .findOne({ 
@@ -46,18 +48,26 @@ export async function POST(req: NextRequest) {
           department: session.department 
         });
 
-      if (rolePermissions) {
+      if (rolePermissions && typeof rolePermissions === 'object' && 'modules' in rolePermissions && 'submodules' in rolePermissions) {
         userPermissions = {
           modules: rolePermissions.modules || [],
           submodules: rolePermissions.submodules || []
         };
       } else {
-        userPermissions = { modules: [], submodules: [] };
+        userPermissions = { 
+          modules: [], 
+          submodules: []
+        };
       }
-    } else {
+    } else if (dbUserPermissions && typeof dbUserPermissions === 'object' && 'modules' in dbUserPermissions && 'submodules' in dbUserPermissions) {
       userPermissions = {
-        modules: userPermissions.modules || [],
-        submodules: userPermissions.submodules || []
+        modules: dbUserPermissions.modules || [],
+        submodules: dbUserPermissions.submodules || []
+      };
+    } else {
+      userPermissions = { 
+        modules: [], 
+        submodules: []
       };
     }
 

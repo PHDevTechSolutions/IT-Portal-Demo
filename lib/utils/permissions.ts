@@ -24,20 +24,30 @@ export const PERMISSION_MAP: Record<string, string> = {
   'stash/assigned-assets': 'stash:Assigned Assets',
   'stash/license': 'stash:License',
   'ticketing': 'help-desk',
+  'ticketing/service-catalogue': 'help-desk:Service Catalogue',
   'cloudflare/dns': 'cloudflare:DNS',
+  'cloudflare/analytics': 'cloudflare:Analytics',
+  'cloudflare/firewall': 'cloudflare:FirewallRules',
   'admin/roles': 'user-accounts:Roles',
   'admin/users': 'user-accounts:Resigned and Terminated',
   'admin/sessions': 'user-accounts:Sessions',
   'admin/it-permissions': 'user-accounts:IT Permissions',
   'settings/general': 'settings:General',
+  'admin/backup-database': 'settings:Database Backup',
   'dashboard': 'dashboard-access', // Dashboard is always visible
   'profile': 'profile-access', // Profile is always visible
+  'acculog/activity-logs': 'acculog:Activity Logs',
 };
 
 /**
  * Check if user has permission for a specific route
  */
 export function hasPermission(userPermissions: UserPermissions, route: string): boolean {
+  // Super Admin with wildcard can access everything
+  if (userPermissions.submodules.includes("*")) {
+    return true;
+  }
+  
   const permission = PERMISSION_MAP[route];
   
   // Dashboard and profile are always accessible

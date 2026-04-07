@@ -23,15 +23,6 @@ import {
   UserCog,
   Lock,
   Unlock,
-  SquareTerminal,
-  Activity,
-  Boxes,
-  Bot,
-  BookOpen,
-  Settings2,
-  CalendarCheck,
-  TicketCheck,
-  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,88 +101,6 @@ interface RolePermission {
   submodules: string[];
 }
 
-// ─── Sidebar Modules Configuration ───────────────────────────────────────────
-
-const SIDEBAR_MODULES: SidebarModule[] = [
-  {
-    key: "applications",
-    title: "Applications",
-    icon: "SquareTerminal",
-    description: "Module access and applications",
-    items: [{ title: "Modules", url: "/application/modules" }],
-  },
-  {
-    key: "taskflow",
-    title: "Taskflow",
-    icon: "Activity",
-    description: "Sales tracking and customer management",
-    items: [
-      { title: "Customer Database", url: "/taskflow/customer-database" },
-      { title: "Removal Accounts", url: "/taskflow/removal-accounts" },
-      { title: "Customer Audits", url: "/taskflow/customer-audits" },
-      { title: "Audit Logs", url: "/taskflow/audit-logs" },
-      { title: "Approval of Accounts", url: "/taskflow/customer-approval" },
-      { title: "Activity Logs", url: "/taskflow/activity-logs" },
-      { title: "Progress Logs", url: "/taskflow/progress-logs" },
-      { title: "Endorsed Tickets", url: "/taskflow/csr-inquiries" },
-    ],
-  },
-  {
-    key: "stash",
-    title: "Stash",
-    icon: "Boxes",
-    description: "IT inventory management",
-    items: [
-      { title: "Inventory", url: "/stash/inventory" },
-      { title: "Assigned Assets", url: "/stash/assigned-assets" },
-      { title: "License", url: "/stash/license" },
-    ],
-  },
-  {
-    key: "help-desk",
-    title: "Help Desk",
-    icon: "TicketCheck",
-    description: "IT ticketing system",
-    items: [
-      { title: "Tickets", url: "/ticketing/tickets" },
-      { title: "Service Catalogue", url: "/ticketing/service-catalogue" },
-    ],
-  },
-  {
-    key: "cloudflare",
-    title: "CloudFlare",
-    icon: "Bot",
-    description: "DNS management",
-    items: [{ title: "DNS", url: "/cloudflare/dns" }],
-  },
-  {
-    key: "user-accounts",
-    title: "User Accounts",
-    icon: "BookOpen",
-    description: "User and role management",
-    items: [
-      { title: "Roles", url: "/admin/roles" },
-      { title: "Resigned and Terminated", url: "/admin/roles-status" },
-      { title: "Sessions", url: "/admin/sessions" },
-      { title: "IT Permissions", url: "/admin/it-permissions" },
-    ],
-  },
-  {
-    key: "settings",
-    title: "Settings",
-    icon: "Settings2",
-    description: "System settings",
-    items: [{ title: "General", url: "/settings/general" }],
-  },
-  {
-    key: "acculog",
-    title: "Acculog",
-    icon: "CalendarCheck",
-    description: "HRIS module for attendance and logs",
-    items: [{ title: "Activity Logs", url: "/acculog/activity-logs" }],
-  },
-];
-
 const IT_ROLES = ["IT Staff", "IT Admin", "IT Manager", "IT Support", "Developer"];
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
@@ -238,6 +147,30 @@ export default function ITPermissionsPage() {
   const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
   const [isLoadingRole, setIsLoadingRole] = useState(true);
+  const [sidebarModules, setSidebarModules] = useState<SidebarModule[]>([]);
+  const [isLoadingModules, setIsLoadingModules] = useState(true);
+
+  // ── Fetch Sidebar Modules ─────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchSidebarModules = async () => {
+      setIsLoadingModules(true);
+      try {
+        const res = await fetch("/api/SidebarModules");
+        const data = await res.json();
+        if (data.success) {
+          setSidebarModules(data.modules);
+        } else {
+          toast.error("Failed to fetch sidebar modules");
+        }
+      } catch (err) {
+        console.error("Error fetching sidebar modules:", err);
+        toast.error("Failed to fetch sidebar modules");
+      } finally {
+        setIsLoadingModules(false);
+      }
+    };
+    fetchSidebarModules();
+  }, []);
 
   // ── Check Super Admin Access ────────────────────────────────────────────────
   useEffect(() => {
@@ -335,7 +268,7 @@ export default function ITPermissionsPage() {
       const hasModule = prev.includes(moduleKey);
       if (hasModule) {
         // Remove module and all its submodules
-        const module = SIDEBAR_MODULES.find((m) => m.key === moduleKey);
+        const module = sidebarModules.find((m) => m.key === moduleKey);
         const submodules = module?.items.map((item) => `${moduleKey}:${item.title}`) || [];
         return prev.filter((p) => p !== moduleKey && !submodules.includes(p));
       } else {
@@ -363,7 +296,7 @@ export default function ITPermissionsPage() {
     userPermissions.includes(`${moduleKey}:${submoduleTitle}`);
 
   const getModuleGrantCount = (moduleKey: string) => {
-    const module = SIDEBAR_MODULES.find((m) => m.key === moduleKey);
+    const module = sidebarModules.find((m) => m.key === moduleKey);
     if (!module) return "0/0";
     const granted = module.items.filter((item) =>
       userPermissions.includes(`${moduleKey}:${item.title}`)
@@ -414,7 +347,7 @@ export default function ITPermissionsPage() {
   };
 
   const grantAllModules = () => {
-    const allPerms = SIDEBAR_MODULES.flatMap((m) => [
+    const allPerms = sidebarModules.flatMap((m) => [
       m.key,
       ...m.items.map((item) => `${m.key}:${item.title}`),
     ]);
@@ -517,7 +450,7 @@ export default function ITPermissionsPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm text-muted-foreground">Modules</p>
-                        <p className="text-2xl font-bold">{SIDEBAR_MODULES.length}</p>
+                        <p className="text-2xl font-bold">{isLoadingModules ? "..." : sidebarModules.length}</p>
                       </div>
                       <LayoutGrid className="w-8 h-8 text-purple-500" />
                     </div>
@@ -694,7 +627,7 @@ export default function ITPermissionsPage() {
 
                     {/* Modules List */}
                     <div className="space-y-2">
-                      {SIDEBAR_MODULES.map((module) => {
+                      {sidebarModules.map((module) => {
                         const isExpanded = expandedModules.includes(module.key);
                         const isGranted = isModuleGranted(module.key);
                         const grantCount = getModuleGrantCount(module.key);

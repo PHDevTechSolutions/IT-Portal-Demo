@@ -16,8 +16,48 @@ import { NavMain } from "../components/nav-main";
 import { NavProjects } from "../components/nav-projects";
 import { NavSecondary } from "../components/nav-secondary";
 import { NavUser } from "../components/nav-user";
-import { BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, Activity, Boxes, TicketCheck, CalendarCheck, FileText, Database, } from "lucide-react";
+import { 
+  BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, 
+  Activity, Boxes, TicketCheck, CalendarCheck, FileText, Database,
+  LucideIcon, LayoutDashboard, Users, FolderKanban, Package, 
+  DollarSign, Wallet, UserCircle, UserPlus, BarChart3, PieChart, 
+  FileStack
+} from "lucide-react";
 import { getUserPermissions, hasPermission } from "@/lib/utils/permissions";
+
+// Icon mapping
+const ICON_MAP: Record<string, LucideIcon> = {
+  LayoutDashboard,
+  SquareTerminal,
+  Activity,
+  Boxes,
+  TicketCheck,
+  FolderKanban,
+  Users,
+  Package,
+  DollarSign,
+  Wallet,
+  UserCircle,
+  UserPlus,
+  Bot,
+  BookOpen,
+  Settings2,
+  BarChart3,
+  PieChart,
+  FileStack,
+  CalendarCheck,
+  FileText,
+  Database,
+  LifeBuoy,
+  Send,
+};
+
+interface SidebarModule {
+  key: string;
+  title: string;
+  icon: string;
+  items: { title: string; url: string }[];
+}
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
@@ -36,12 +76,25 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     submodules: [] as string[],
   });
 
+  const [sidebarModules, setSidebarModules] = React.useState<SidebarModule[]>([]);
+
+  // Fetch sidebar modules and user data
   React.useEffect(() => {
-    const fetchUserData = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch("/api/me", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
+        // Fetch sidebar modules
+        const modulesRes = await fetch("/api/SidebarModules");
+        if (modulesRes.ok) {
+          const modulesData = await modulesRes.json();
+          if (modulesData.success) {
+            setSidebarModules(modulesData.modules);
+          }
+        }
+
+        // Fetch user data
+        const userRes = await fetch("/api/me", { cache: "no-store" });
+        if (userRes.ok) {
+          const data = await userRes.json();
           setUserDetails({
             UserId: data.userId ?? "",
             Firstname: data.firstname ?? "",
@@ -51,216 +104,93 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
             Role: data.role ?? "",
           });
 
-          // Fetch user permissions
-          if (data.email) {
+          // Fetch user permissions (skip for Super Admin)
+          if (data.email && data.role !== "SuperAdmin") {
             const permissions = await getUserPermissions(data.email);
             setUserPermissions(permissions);
+          } else if (data.role === "SuperAdmin") {
+            // Super Admin gets all permissions
+            setUserPermissions({
+              modules: ["applications", "taskflow", "stash", "help-desk", "cloudflare", "user-accounts", "settings", "acculog"],
+              submodules: ["*"]
+            });
           }
         }
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.error("Error fetching data:", error);
       }
     };
-    fetchUserData();
+    fetchData();
   }, []);
 
-  const sidebarData = {
-    navMain: [
-      {
-        title: "Audit Logs",
+  // Build dynamic sidebar data from fetched modules
+  const sidebarData = React.useMemo(() => {
+    const navMain = sidebarModules.map((module) => {
+      const IconComponent = ICON_MAP[module.icon] || SquareTerminal;
+      
+      return {
+        title: module.title,
         url: "#",
-        icon: FileText,
-        isActive: pathname?.startsWith("/audit-logs") || pathname?.startsWith("/admin/audit-settings"),
-        items: [
-          { 
-            title: "View Logs", 
-            url: "/audit-logs",
-            hasAccess: hasPermission(userPermissions, "audit-logs")
-          },
-          { 
-            title: "Settings", 
-            url: "/admin/audit-settings",
-            hasAccess: hasPermission(userPermissions, "admin/audit-settings")
-          },
-        ],
-      },
-      {
-        title: "Applications",
-        url: "#",
-        icon: SquareTerminal,
-        isActive: pathname?.startsWith("/application"),
-        items: [{ 
-          title: "Modules", 
-          url: "/application/modules",
-          hasAccess: hasPermission(userPermissions, "application/modules")
-        }],
-      },
-      {
-        title: "Taskflow",
-        url: "#",
-        icon: Activity,
-        isActive: pathname?.startsWith("/taskflow"),
-        items: [
-          { 
-            title: "Customer Database", 
-            url: "/taskflow/customer-database",
-            hasAccess: hasPermission(userPermissions, "taskflow/customer-database")
-          },
-          { 
-            title: "Removal Accounts", 
-            url: "/taskflow/removal-accounts",
-            hasAccess: hasPermission(userPermissions, "taskflow/removal-accounts")
-          },
-          { 
-            title: "Customer Audits", 
-            url: "/taskflow/customer-audits",
-            hasAccess: hasPermission(userPermissions, "taskflow/customer-audits")
-          },
-          { 
-            title: "Approval of Accounts", 
-            url: "/taskflow/customer-approval",
-            hasAccess: hasPermission(userPermissions, "taskflow/customer-approval")
-          },
-          { 
-            title: "Activity Logs", 
-            url: "/taskflow/activity-logs",
-            hasAccess: hasPermission(userPermissions, "taskflow/activity-logs")
-          },
-          { 
-            title: "Progress Logs", 
-            url: "/taskflow/progress-logs",
-            hasAccess: hasPermission(userPermissions, "taskflow/progress-logs")
-          },
-          { 
-            title: "Endorsed Tickets", 
-            url: "/taskflow/csr-inquiries",
-            hasAccess: hasPermission(userPermissions, "taskflow/csr-inquiries")
-          },
-        ],
-      },
-      {
-        title: "Stash",
-        url: "#",
-        icon: Boxes,
-        isActive: pathname?.startsWith("/stash"),
-        items: [
-          { 
-            title: "Inventory", 
-            url: "/stash/inventory",
-            hasAccess: hasPermission(userPermissions, "stash/inventory")
-          },
-          { 
-            title: "Assigned Assets", 
-            url: "/stash/assigned-assets",
-            hasAccess: hasPermission(userPermissions, "stash/assigned-assets")
-          },
-          { 
-            title: "License", 
-            url: "/stash/license",
-            hasAccess: hasPermission(userPermissions, "stash/license")
-          },
-        ],
-      },
-      {
-        title: "Help Desk",
-        url: "#",
-        icon: TicketCheck,
-        isActive: pathname?.startsWith("/ticketing"),
-        items: [
-          { 
-            title: "Tickets", 
-            url: "/ticketing",
-            hasAccess: hasPermission(userPermissions, "ticketing")
-          },
-          { 
-            title: "Service Catalogue", 
-            url: "/ticketing/service-catalogue",
-            hasAccess: hasPermission(userPermissions, "ticketing/service-catalogue")
-          },
-        ],
-      },
-      {
-        title: "CloudFlare",
-        url: "#",
-        icon: Bot,
-        isActive: pathname?.startsWith("/cloudflare"),
-        items: [
-          { 
-            title: "DNS", 
-            url: "/cloudflare/dns",
-            hasAccess: hasPermission(userPermissions, "cloudflare/dns")
+        icon: IconComponent,
+        isActive: pathname?.startsWith(`/${module.key}`),
+        items: module.items.map((item) => {
+          // Determine permission key based on module and item
+          let permissionKey = "";
+          if (module.key === "audit-logs") {
+            permissionKey = `acculog:${item.title}`;
+          } else if (module.key === "applications") {
+            permissionKey = "applications:Modules";
+          } else if (module.key === "taskflow") {
+            permissionKey = `taskflow:${item.title}`;
+          } else if (module.key === "stash") {
+            permissionKey = `stash:${item.title}`;
+          } else if (module.key === "help-desk") {
+            permissionKey = `help-desk:${item.title}`;
+          } else if (module.key === "cloudflare") {
+            permissionKey = `cloudflare:${item.title}`;
+          } else if (module.key === "user-accounts") {
+            permissionKey = `user-accounts:${item.title}`;
+          } else if (module.key === "settings") {
+            permissionKey = `settings:${item.title}`;
+          } else if (module.key === "acculog") {
+            permissionKey = `acculog:${item.title}`;
           }
-        ],
-      },
-      {
-        title: "User Accounts",
-        url: "#",
-        icon: BookOpen,
-        isActive: pathname?.startsWith("/admin"),
-        items: [
-          { 
-            title: "Roles", 
-            url: "/admin/roles",
-            hasAccess: hasPermission(userPermissions, "admin/roles")
-          },
-          { 
-            title: "Resigned and Terminated", 
-            url: "/admin/roles-status",
-            hasAccess: hasPermission(userPermissions, "admin/users")
-          },
-          { 
-            title: "Sessions", 
-            url: "/admin/sessions",
-            hasAccess: hasPermission(userPermissions, "admin/sessions")
-          },
-          ...(hasPermission(userPermissions, "admin/it-permissions") ? [{ 
-            title: "IT Permissions", 
-            url: "/admin/it-permissions" 
-          }] : []),
-        ],
-      },
-      {
-        title: "Settings",
-        url: "#",
-        icon: Settings2,
-        isActive: pathname?.startsWith("/settings") || pathname?.startsWith("/admin/backup-database"),
-        items: [
-          { 
-            title: "General", 
-            url: "/settings/general",
-            hasAccess: hasPermission(userPermissions, "settings/general")
-          },
-          { 
-            title: "Database Backup", 
-            url: "/admin/backup-database",
-            hasAccess: hasPermission(userPermissions, "admin/backup-database")
-          },
-        ],
-      },
-    ],
-    navSecondary: [
-      { 
-        title: "Support", 
-        url: "/support", 
-        icon: LifeBuoy,
-        hasAccess: true // Support is always available
-      },
-      { 
-        title: "Feedback", 
-        url: "/feedback", 
-        icon: Send,
-        hasAccess: true // Feedback is always available
-      },
-    ],
-    projects: [
-      { 
-        name: "Acculog", 
-        url: "/acculog/activity-logs", 
-        icon: CalendarCheck,
-        hasAccess: hasPermission(userPermissions, "acculog")
-      },
-    ],
-  };
+          
+          return {
+            title: item.title,
+            url: item.url,
+            hasAccess: hasPermission(userPermissions, permissionKey)
+          };
+        }),
+      };
+    });
+
+    return {
+      navMain,
+      navSecondary: [
+        { 
+          title: "Support", 
+          url: "/support", 
+          icon: LifeBuoy,
+          hasAccess: true
+        },
+        { 
+          title: "Feedback", 
+          url: "/feedback", 
+          icon: Send,
+          hasAccess: true
+        },
+      ],
+      projects: [
+        { 
+          name: "Acculog", 
+          url: "/acculog/activity-logs", 
+          icon: CalendarCheck,
+          hasAccess: hasPermission(userPermissions, "acculog:Activity Logs")
+        },
+      ],
+    };
+  }, [sidebarModules, userPermissions, pathname]);
 
   return (
     <Sidebar variant="inset" {...props}>
