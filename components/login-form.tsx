@@ -355,7 +355,7 @@ export function LoginForm({
                       <span className="text-slate-500">SYSTEM ONLINE</span>
                     </div>
                     <span className="text-slate-600">|</span>
-                    <span className="text-slate-500">V.2.0.4</span>
+                    <span className="text-slate-500">V.2.0.6 (Leroux & Xchire)</span>
                   </div>
                 </form>
               </div>
