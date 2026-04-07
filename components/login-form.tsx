@@ -45,9 +45,14 @@ export function LoginForm({
   // Check if biometric is available on mount
   useEffect(() => {
     const checkBiometric = async () => {
-      const available = await isBiometricAvailable();
-      console.log("Biometric available:", available); // Debug log
-      setBiometricAvailable(available);
+      try {
+        const available = await isBiometricAvailable();
+        console.log("Biometric available:", available); // Debug log
+        setBiometricAvailable(available);
+      } catch (error) {
+        console.error("Error checking biometric availability:", error);
+        setBiometricAvailable(false);
+      }
     };
     checkBiometric();
     
@@ -131,7 +136,7 @@ export function LoginForm({
   };
 
   // Biometric login handler
-  const handleBiometricLogin = async () => {
+  const handleBiometricLogin = useCallback(async () => {
     if (!Email) {
       toast.error("Please enter your email first");
       return;
@@ -149,7 +154,6 @@ export function LoginForm({
       if (!userLookupResponse.ok) {
         const error = await userLookupResponse.json();
         toast.error(error.message || "User not found");
-        setLoading(false);
         return;
       }
 
@@ -169,12 +173,12 @@ export function LoginForm({
         toast.error(result.error || "Biometric authentication failed");
       }
     } catch (error) {
+      console.error("Biometric login error:", error);
       toast.error("Biometric authentication error");
-      console.error(error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [Email, setUserId]);
 
   return (
     <>
