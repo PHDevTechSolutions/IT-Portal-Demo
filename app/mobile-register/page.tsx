@@ -26,10 +26,10 @@ export default function MobileRegisterPage() {
   });
 
   useEffect(() => {
-    const sessionId = searchParams.get("sessionId");
-    const userId = searchParams.get("userId");
-    const expires = searchParams.get("expires");
-    const action = searchParams.get("action");
+    const sessionId = searchParams?.get("sessionId");
+    const userId = searchParams?.get("userId");
+    const expires = searchParams?.get("expires");
+    const action = searchParams?.get("action");
 
     if (!sessionId || !userId || !expires || action !== "biometric_register") {
       setStatus("invalid");
