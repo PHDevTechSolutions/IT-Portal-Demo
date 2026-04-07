@@ -31,7 +31,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 function TasksContent() {
   const searchParams = useSearchParams();
-  const { userId, setUserId } = useUser();
+  const { userId, setUserId, role } = useUser();
   const queryUserId = searchParams?.get("id") ?? "";
 
   // ✅ Load userId from localStorage after login
@@ -75,7 +75,7 @@ function TasksContent() {
             <TaskReminderNotifications userId={userId || "guest"} />
             <h1 className="text-2xl font-bold">My Tasks</h1>
             <DataMigrator userId={userId || "guest"} userName={"User"} />
-            <MyTaskDashboard userId={userId || "guest"} userName={"User"} />
+            <MyTaskDashboard userId={userId || "guest"} userName={"User"} userRole={role || ""} />
           </div>
         </div>
       </SidebarInset>

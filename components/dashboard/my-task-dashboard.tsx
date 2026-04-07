@@ -75,8 +75,10 @@ import {
   List,
   Circle,
   Pin,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { jsPDF } from "jspdf";
 
 interface Subtask {
   id: string;
@@ -145,9 +147,10 @@ const categories = [
 interface MyTaskDashboardProps {
   userId: string;
   userName: string;
+  userRole?: string;
 }
 
-export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
+export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -184,7 +187,11 @@ export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
     if (!userId) return;
 
     const tasksRef = collection(db, "user_tasks");
-    const q = query(tasksRef, where("userId", "==", userId));
+    
+    // Super Admin can see all tasks, regular users only see their own
+    const q = userRole === "SuperAdmin" 
+      ? query(tasksRef) // No where clause for Super Admin
+      : query(tasksRef, where("userId", "==", userId)); // Regular users only see their tasks
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tasksData: Task[] = [];
@@ -211,7 +218,7 @@ export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
     });
 
     return () => unsubscribe();
-  }, [userId]);
+  }, [userId, userRole]);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -478,8 +485,14 @@ export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
   };
 
   const openViewDialog = (task: Task) => {
-    setViewingTask(task);
-    setIsViewDialogOpen(true);
+    try {
+      console.log("Opening view dialog for task:", task);
+      setViewingTask(task);
+      setIsViewDialogOpen(true);
+    } catch (error) {
+      console.error("Error opening view dialog:", error);
+      toast.error("Failed to open task details");
+    }
   };
 
   const addTag = () => {
@@ -552,6 +565,16 @@ export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
     return null;
   };
 
+  // Check if user can edit/delete task
+  const canEditTask = (task: Task) => {
+    return userRole === "SuperAdmin" || task.userId === userId;
+  };
+
+  // Check if user can view task
+  const canViewTask = (task: Task) => {
+    return userRole === "SuperAdmin" || task.userId === userId;
+  };
+
   // Toggle pin status for a task
   const togglePin = async (taskId: string, currentPinned: boolean) => {
     try {
@@ -564,6 +587,189 @@ export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
     } catch (error) {
       console.error("Error toggling pin:", error);
       toast.error("Failed to pin/unpin task");
+    }
+  };
+
+  // Export task to PDF
+  const exportTaskToPDF = (task: Task) => {
+    try {
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let yPosition = 30;
+      const margin = 20;
+      const contentWidth = pageWidth - (margin * 2);
+      
+      // Helper function to check if we need a new page
+      const checkPageBreak = (requiredHeight: number) => {
+        if (yPosition + requiredHeight > pageHeight - 20) {
+          pdf.addPage();
+          yPosition = 30;
+          return true;
+        }
+        return false;
+      };
+      
+      // Title
+      pdf.setFontSize(18);
+      pdf.setFont("helvetica", "bold");
+      const titleLines = pdf.splitTextToSize(task.title, contentWidth);
+      titleLines.forEach((line: string) => {
+        pdf.text(line, margin, yPosition);
+        yPosition += 8;
+      });
+      yPosition += 10;
+      
+      // Basic Info Section
+      pdf.setFontSize(14);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Task Information", margin, yPosition);
+      yPosition += 12;
+      
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "normal");
+      
+      const basicInfo = [
+        `Status: ${statusConfig[task.status].label}`,
+        `Priority: ${priorityConfig[task.priority].label}`,
+        task.category ? `Category: ${task.category}` : null,
+        task.dueDate ? `Due Date: ${format(task.dueDate, "PPP")}` : null,
+        task.userName ? `Assigned to: ${task.userName}` : null,
+        task.createdAt ? `Created: ${format(task.createdAt, "PPP")}` : null
+      ].filter(Boolean);
+      
+      basicInfo.forEach((info) => {
+        if (info) {
+          checkPageBreak(8);
+          pdf.text(info, margin, yPosition);
+          yPosition += 8;
+        }
+      });
+      
+      // Description
+      if (task.description) {
+        yPosition += 10;
+        checkPageBreak(20);
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Description", margin, yPosition);
+        yPosition += 10;
+        
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        const descLines = pdf.splitTextToSize(task.description, contentWidth);
+        descLines.forEach((line: string) => {
+          checkPageBreak(8);
+          pdf.text(line, margin, yPosition);
+          yPosition += 6;
+        });
+      }
+      
+      // Notes
+      if (task.notes) {
+        yPosition += 10;
+        checkPageBreak(20);
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Notes", margin, yPosition);
+        yPosition += 10;
+        
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        const notesLines = pdf.splitTextToSize(task.notes, contentWidth);
+        notesLines.forEach((line: string) => {
+          checkPageBreak(8);
+          pdf.text(line, margin, yPosition);
+          yPosition += 6;
+        });
+      }
+      
+      // Subtasks Table
+      if (task.subtasks && task.subtasks.length > 0) {
+        yPosition += 10;
+        checkPageBreak(30);
+        
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Subtasks", margin, yPosition);
+        yPosition += 12;
+        
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        
+        // Table header
+        pdf.text("Status", margin, yPosition);
+        pdf.text("Subtask Title", margin + 25, yPosition);
+        yPosition += 8;
+        
+        // Draw line under header
+        pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+        yPosition += 5;
+        
+        // Subtasks
+        task.subtasks.forEach((subtask) => {
+          checkPageBreak(10);
+          
+          const checkbox = subtask.completed ? "[-]" : "[ ]";
+          const status = subtask.completed ? "Completed" : "Pending";
+          
+          pdf.text(checkbox, margin, yPosition);
+          pdf.text(status, margin + 25, yPosition);
+          
+          // Word wrap for subtask title
+          const subtaskLines = pdf.splitTextToSize(subtask.title, contentWidth - 80);
+          subtaskLines.forEach((line: string, index: number) => {
+            const xPos = index === 0 ? margin + 80 : margin + 25;
+            pdf.text(line, xPos, yPosition);
+            yPosition += 6;
+          });
+          
+          yPosition += 2; // Space between subtasks
+        });
+        
+        // Summary
+        const completedCount = task.subtasks.filter(st => st.completed).length;
+        yPosition += 5;
+        checkPageBreak(10);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`Progress: ${completedCount}/${task.subtasks.length} completed`, margin, yPosition);
+      }
+      
+      // Tags
+      if (task.tags && task.tags.length > 0) {
+        yPosition += 10;
+        checkPageBreak(20);
+        
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Tags", margin, yPosition);
+        yPosition += 10;
+        
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        const tagText = task.tags.map(tag => `#${tag}`).join(", ");
+        const tagLines = pdf.splitTextToSize(tagText, contentWidth);
+        tagLines.forEach((line: string) => {
+          checkPageBreak(8);
+          pdf.text(line, margin, yPosition);
+          yPosition += 6;
+        });
+      }
+      
+      // Footer
+      const footerY = pageHeight - 15;
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "italic");
+      pdf.text(`Generated on ${format(new Date(), "PPP 'at' p")}`, margin, footerY);
+      pdf.text(`Page 1`, pageWidth - margin - 20, footerY);
+      
+      // Save PDF
+      const fileName = `task-${task.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      pdf.save(fileName);
+      toast.success("Task exported to PDF successfully");
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast.error("Failed to export task to PDF");
     }
   };
 
@@ -855,31 +1061,37 @@ export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                openEditDialog(task);
-                              }}>
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                togglePin(task.id, task.pinned || false);
-                              }}>
-                                <Pin className={cn("h-4 w-4 mr-2", task.pinned && "fill-current")} />
-                                {task.pinned ? "Unpin" : "Pin"}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-red-600"
-                                onClick={(e) => {
+                              {canEditTask(task) && (
+                                <DropdownMenuItem onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeleteTask(task.id);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
+                                  openEditDialog(task);
+                                }}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
+                              {canEditTask(task) && (
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePin(task.id, task.pinned || false);
+                                }}>
+                                  <Pin className={cn("h-4 w-4 mr-2", task.pinned && "fill-current")} />
+                                  {task.pinned ? "Unpin" : "Pin"}
+                                </DropdownMenuItem>
+                              )}
+                              {canEditTask(task) && <DropdownMenuSeparator />}
+                              {canEditTask(task) && (
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteTask(task.id);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -1268,7 +1480,7 @@ export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
                             </p>
                           )}
                           <p className="text-xs text-muted-foreground">
-                            by {entry.performedBy} • {entry.timestamp ? format(entry.timestamp.toDate(), "MMM d, h:mm a") : "Just now"}
+                            by {entry.performedBy} • {entry.timestamp ? (typeof entry.timestamp === 'string' ? format(new Date(entry.timestamp), "MMM d, h:mm a") : format(entry.timestamp.toDate(), "MMM d, h:mm a")) : "Just now"}
                           </p>
                         </div>
                       </div>
@@ -1278,27 +1490,40 @@ export function MyTaskDashboard({ userId, userName }: MyTaskDashboardProps) {
               )}
 
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setIsViewDialogOpen(false);
-                    openEditDialog(viewingTask);
-                  }}
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  className="text-red-600"
-                  onClick={() => {
-                    handleDeleteTask(viewingTask.id);
-                    setIsViewDialogOpen(false);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
+                {canEditTask(viewingTask) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsViewDialogOpen(false);
+                      openEditDialog(viewingTask);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                )}
+                {canEditTask(viewingTask) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => exportTaskToPDF(viewingTask)}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </Button>
+                )}
+                {canEditTask(viewingTask) && (
+                  <Button
+                    variant="outline"
+                    className="text-red-600"
+                    onClick={() => {
+                      handleDeleteTask(viewingTask.id);
+                      setIsViewDialogOpen(false);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                )}
               </div>
             </div>
           )}
