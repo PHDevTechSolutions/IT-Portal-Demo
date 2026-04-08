@@ -83,10 +83,10 @@ const typeIcons: Record<string, React.ReactNode> = {
 };
 
 const typeColors: Record<string, string> = {
-  success: "border-l-green-500 bg-green-50/50",
-  error: "border-l-red-500 bg-red-50/50",
-  warning: "border-l-yellow-500 bg-yellow-50/50",
-  info: "border-l-blue-500 bg-blue-50/50",
+  success: "border-l-emerald-500 bg-emerald-500/10",
+  error: "border-l-red-500 bg-red-500/10",
+  warning: "border-l-yellow-500 bg-yellow-500/10",
+  info: "border-l-cyan-500 bg-cyan-500/10",
 };
 
 export function NotificationBell() {
@@ -386,25 +386,28 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className="relative text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5" />
           {totalUnreadCount > 0 && (
             <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-cyan-500 text-white border border-cyan-400/50 shadow-[0_0_8px_rgba(6,182,212,0.5)]"
             >
               {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
             </Badge>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="end">
-        <div className="flex items-center justify-between p-4 border-b">
+      <PopoverContent className="w-96 p-0 bg-slate-950/95 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden" align="end">
+        {/* Corner brackets */}
+        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50 pointer-events-none" />
+        
+        <div className="flex items-center justify-between p-4 border-b border-cyan-500/30 bg-slate-900/50">
           <div>
-            <h4 className="font-semibold">Notifications</h4>
-            <p className="text-xs text-muted-foreground">
+            <h4 className="font-semibold text-white tracking-wider uppercase text-sm">Notifications</h4>
+            <p className="text-xs text-cyan-400/80">
               {totalUnreadCount} unread
             </p>
           </div>
@@ -414,6 +417,7 @@ export function NotificationBell() {
               size="sm"
               onClick={handleMarkAllRead}
               disabled={totalUnreadCount === 0}
+              className="text-cyan-100 hover:text-white hover:bg-cyan-500/20 text-xs uppercase tracking-wider"
             >
               <Check className="h-4 w-4 mr-1" />
               Mark all read
@@ -423,10 +427,10 @@ export function NotificationBell() {
 
         <ScrollArea className="h-[400px]">
           {allNotifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Bell className="h-12 w-12 mb-3 opacity-50" />
-              <p className="text-sm">No notifications yet</p>
-              <p className="text-xs">
+            <div className="flex flex-col items-center justify-center py-12 text-cyan-100/50 bg-slate-900/30">
+              <Bell className="h-12 w-12 mb-3 opacity-50 text-cyan-400" />
+              <p className="text-sm text-white/80">No notifications yet</p>
+              <p className="text-xs text-white/50">
                 Notifications appear here when events occur
               </p>
             </div>
@@ -436,8 +440,8 @@ export function NotificationBell() {
                 const notificationItems = items as typeof allNotifications;
                 return (
                   <div key={date}>
-                    <div className="px-4 py-2 bg-muted/50">
-                      <p className="text-xs font-medium text-muted-foreground">
+                    <div className="px-4 py-2 bg-slate-900/70 border-b border-cyan-500/20">
+                      <p className="text-xs font-medium text-cyan-400/80 uppercase tracking-wider">
                         {new Date(date).toLocaleDateString(undefined, {
                           weekday: "short",
                           month: "short",
@@ -450,9 +454,9 @@ export function NotificationBell() {
                         <div
                           key={notification.id}
                           className={cn(
-                            "p-4 cursor-pointer transition-colors hover:bg-muted/50 border-l-4",
+                            "p-4 cursor-pointer transition-colors hover:bg-cyan-500/10 border-l-4 border-y border-cyan-500/10",
                             typeColors[notification.type],
-                            !notification.read && "bg-muted/30"
+                            !notification.read && "bg-slate-800/50"
                           )}
                           onClick={() => handleNotificationClick(notification)}
                         >
@@ -465,15 +469,15 @@ export function NotificationBell() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 {typeIcons[notification.type]}
-                                <p className="font-medium text-sm truncate">
+                                <p className="font-medium text-sm truncate text-white">
                                   {notification.title}
                                 </p>
                               </div>
-                              <p className="text-sm text-muted-foreground line-clamp-2">
+                              <p className="text-sm text-white/70 line-clamp-2">
                                 {notification.message}
                               </p>
                               <div className="flex items-center justify-between mt-2">
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-cyan-400/60">
                                   {formatDistanceToNow(
                                     new Date(notification.createdAt),
                                     { addSuffix: true }
@@ -482,8 +486,7 @@ export function NotificationBell() {
                                 <div className="flex items-center gap-2">
                                   {!notification.read && (
                                     <Badge
-                                      variant="secondary"
-                                      className="text-xs"
+                                      className="text-xs bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
                                     >
                                       New
                                     </Badge>
@@ -510,7 +513,7 @@ export function NotificationBell() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 shrink-0"
+                              className="h-6 w-6 shrink-0 text-cyan-100/60 hover:text-cyan-300 hover:bg-cyan-500/10"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 dismissNotification(notification.id);
@@ -529,16 +532,22 @@ export function NotificationBell() {
           )}
         </ScrollArea>
 
-        <Separator />
-        <div className="p-3">
+        <Separator className="bg-cyan-500/20" />
+        <div className="p-3 bg-slate-900/50">
           <Button
             variant="ghost"
-            className="w-full"
-            onClick={() => setOpen(false)}
+            className="w-full text-cyan-100 hover:text-white hover:bg-cyan-500/10 uppercase tracking-wider text-xs"
+            onClick={() => {
+              setOpen(false);
+              window.location.href = "/dashboard/notifications";
+            }}
           >
             View all notifications
           </Button>
         </div>
+        {/* Bottom corner brackets */}
+        <div className="absolute bottom-0 left-0 w-4 h-4 border-l border-b border-cyan-500/50 pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-4 h-4 border-r border-b border-cyan-500/50 pointer-events-none" />
       </PopoverContent>
     </Popover>
   );

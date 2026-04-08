@@ -53,6 +53,8 @@ interface DashboardDataContextType {
     activity: string | null;
   };
   refetch: () => void;
+  dateRange: string;
+  setDateRange: (range: string) => void;
 }
 
 const defaultData: DashboardData = {
@@ -78,6 +80,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     progress: null as string | null,
     activity: null as string | null,
   });
+  const [dateRange, setDateRange] = useState<string>("90"); // Default: last 90 days (3 months)
 
   const fetchAllData = async () => {
     // Reset loading states
@@ -94,12 +97,15 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
       activity: null,
     });
 
-    // Fetch all data in parallel
+    // Convert dateRange (90d, 30d, 7d) to days number
+    const days = parseInt(dateRange) || 90;
+    
+    // Fetch all data in parallel with date range filtering for chart data
     const [recordsRes, usersRes, progressRes, activityRes] = await Promise.allSettled([
       fetch("/api/Data/Applications/Taskflow/CustomerDatabase/Fetch"),
       fetch("/api/Dashboard/FetchUser"),
-      fetch("/api/fetch-progress"),
-      fetch("/api/fetch-activity"),
+      fetch(`/api/fetch-progress?days=${days}`),
+      fetch(`/api/fetch-activity?days=${days}`),
     ]);
 
     // Process records
@@ -135,33 +141,61 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     setLoading((prev) => ({ ...prev, users: false }));
 
     // Process progress
-    if (progressRes.status === "fulfilled" && progressRes.value.ok) {
-      try {
-        const json = await progressRes.value.json();
-        setData((prev) => ({
-          ...prev,
-          progressRecords: Array.isArray(json.activities) ? json.activities : [],
-        }));
-      } catch (err) {
-        setErrors((prev) => ({ ...prev, progress: "Failed to parse data" }));
+    if (progressRes.status === "fulfilled") {
+      if (progressRes.value.ok) {
+        try {
+          const json = await progressRes.value.json();
+          console.log("[DashboardDataContext] Progress fetched:", json.activities?.length || 0, "records");
+          setData((prev) => ({
+            ...prev,
+            progressRecords: Array.isArray(json.activities) ? json.activities : [],
+          }));
+          setErrors((prev) => ({ ...prev, progress: null }));
+        } catch (err) {
+          console.error("[DashboardDataContext] Failed to parse progress data:", err);
+          setErrors((prev) => ({ ...prev, progress: "Failed to parse progress data" }));
+        }
+      } else {
+        try {
+          const errorJson = await progressRes.value.json();
+          console.error("[DashboardDataContext] Progress API error:", errorJson);
+          setErrors((prev) => ({ ...prev, progress: errorJson.message || "Failed to fetch progress" }));
+        } catch {
+          setErrors((prev) => ({ ...prev, progress: "Failed to fetch progress" }));
+        }
       }
     } else {
+      console.error("[DashboardDataContext] Progress fetch rejected:", progressRes.reason);
       setErrors((prev) => ({ ...prev, progress: "Failed to fetch progress" }));
     }
     setLoading((prev) => ({ ...prev, progress: false }));
 
     // Process activity
-    if (activityRes.status === "fulfilled" && activityRes.value.ok) {
-      try {
-        const json = await activityRes.value.json();
-        setData((prev) => ({
-          ...prev,
-          activityRecords: Array.isArray(json.activities) ? json.activities : [],
-        }));
-      } catch (err) {
-        setErrors((prev) => ({ ...prev, activity: "Failed to parse data" }));
+    if (activityRes.status === "fulfilled") {
+      if (activityRes.value.ok) {
+        try {
+          const json = await activityRes.value.json();
+          console.log("[DashboardDataContext] Activity fetched:", json.activities?.length || 0, "records");
+          setData((prev) => ({
+            ...prev,
+            activityRecords: Array.isArray(json.activities) ? json.activities : [],
+          }));
+          setErrors((prev) => ({ ...prev, activity: null }));
+        } catch (err) {
+          console.error("[DashboardDataContext] Failed to parse activity data:", err);
+          setErrors((prev) => ({ ...prev, activity: "Failed to parse activity data" }));
+        }
+      } else {
+        try {
+          const errorJson = await activityRes.value.json();
+          console.error("[DashboardDataContext] Activity API error:", errorJson);
+          setErrors((prev) => ({ ...prev, activity: errorJson.message || "Failed to fetch activity" }));
+        } catch {
+          setErrors((prev) => ({ ...prev, activity: "Failed to fetch activity" }));
+        }
       }
     } else {
+      console.error("[DashboardDataContext] Activity fetch rejected:", activityRes.reason);
       setErrors((prev) => ({ ...prev, activity: "Failed to fetch activity" }));
     }
     setLoading((prev) => ({ ...prev, activity: false }));
@@ -175,8 +209,16 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     fetchAllData();
   };
 
+  // Refetch when dateRange changes (for progress/activity chart data)
+  useEffect(() => {
+    // Only refetch if not initial load (data already exists)
+    if (data.progressRecords.length > 0 || data.activityRecords.length > 0) {
+      fetchAllData();
+    }
+  }, [dateRange]);
+
   return (
-    <DashboardDataContext.Provider value={{ data, loading, errors, refetch }}>
+    <DashboardDataContext.Provider value={{ data, loading, errors, refetch, dateRange, setDateRange }}>
       {children}
     </DashboardDataContext.Provider>
   );

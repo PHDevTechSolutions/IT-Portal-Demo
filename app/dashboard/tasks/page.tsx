@@ -45,13 +45,24 @@ function TasksContent() {
     <ProtectedPageWrapper>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-auto min-h-[56px] items-center gap-2 justify-between px-2 md:px-4 py-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1 touch-button" />
-            <Button variant="outline" size="sm" onClick={() => window.location.href = "/dashboard"}>
+        <header className="relative flex h-auto min-h-[56px] items-center gap-2 justify-between px-2 md:px-4 py-2 flex-wrap bg-slate-950/95 backdrop-blur-xl border-b border-cyan-500/30 overflow-hidden">
+          {/* Corner brackets */}
+          <div className="absolute bottom-0 left-0 w-3 h-3 border-l border-b border-cyan-500/50" />
+          <div className="absolute bottom-0 right-0 w-3 h-3 border-r border-b border-cyan-500/50" />
+          {/* Cyan glow line on bottom edge */}
+          <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+          
+          <div className="flex items-center gap-2 relative z-10">
+            <SidebarTrigger className="-ml-1 touch-button text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10" />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => window.location.href = "/dashboard"}
+              className="bg-slate-900/80 border-cyan-500/30 text-cyan-100 hover:bg-cyan-500/10 hover:text-cyan-300 hover:border-cyan-400/50 text-xs uppercase tracking-wider"
+            >
               Home
             </Button>
-            <Separator orientation="vertical" className="h-4 hidden sm:block" />
+            <Separator orientation="vertical" className="h-4 hidden sm:block bg-cyan-500/30" />
             <Breadcrumb className="hidden sm:flex">
               <BreadcrumbList>
                 <BreadcrumbItem>
@@ -70,10 +81,9 @@ function TasksContent() {
         </header>
 
         {/* ✅ Main content */}
-        <div className="flex flex-1 flex-col p-4 md:p-6">
-          <div className="max-w-7xl mx-auto w-full space-y-4">
+        <div className="flex flex-1 flex-col bg-[#050a14]">
+          <div className="w-full">
             <TaskReminderNotifications userId={userId || "guest"} />
-            <h1 className="text-2xl font-bold">My Tasks</h1>
             <DataMigrator userId={userId || "guest"} userName={"User"} />
             <MyTaskDashboard userId={userId || "guest"} userName={"User"} userRole={role || ""} />
           </div>

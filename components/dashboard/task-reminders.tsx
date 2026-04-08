@@ -55,16 +55,16 @@ export function TaskReminderNotifications({ userId }: TaskReminderNotificationsP
           if (isOverdue || isHighPriority || daysPending >= 3) {
             // Show prominent notification
             toast(
-              <div className="flex items-start gap-3">
-                <div className={isOverdue ? "text-red-500" : isHighPriority ? "text-orange-500" : "text-yellow-500"}>
+              <div className="flex items-start gap-3 bg-slate-900/95 backdrop-blur-xl p-3 rounded-lg border border-cyan-500/30">
+                <div className={isOverdue ? "text-red-400" : isHighPriority ? "text-orange-400" : "text-cyan-400"}>
                   {isOverdue ? <AlertCircle className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
                 </div>
                 <div>
-                  <p className="font-semibold text-sm">
-                    {isOverdue ? "Overdue Task!" : isHighPriority ? "High Priority Task Pending" : "Task Reminder"}
+                  <p className="font-semibold text-sm text-white tracking-wide uppercase">
+                    {isOverdue ? "⚠ Overdue Mission!" : isHighPriority ? "🔴 High Priority Alert" : "⏱ Mission Reminder"}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    "{task.title}" has been pending for {daysPending} day{daysPending > 1 ? 's' : ''}
+                  <p className="text-xs text-white/70 mt-1">
+                    "{task.title}" has been pending for <span className="text-cyan-400 font-mono">{daysPending}</span> day{daysPending > 1 ? 's' : ''}
                     {isOverdue ? " and is now overdue" : ""}
                   </p>
                 </div>

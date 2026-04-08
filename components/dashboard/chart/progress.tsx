@@ -28,8 +28,8 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group";
-
 import { useDashboardData } from "@/contexts/DashboardDataContext";
+import { Activity, TrendingUp } from "lucide-react";
 
 interface ProgressRecord {
   _id: string;
@@ -45,11 +45,11 @@ interface ActivityRecord {
 const chartConfig = {
   progress: {
     label: "Progress Count",
-    color: "var(--color-desktop)",
+    color: "#22d3ee", // cyan-400
   },
   activity: {
     label: "Activity Count",
-    color: "var(--color-mobile)",
+    color: "#a855f7", // purple-500
   },
 } satisfies ChartConfig;
 
@@ -79,8 +79,17 @@ function countDistinctIdsByDate<T>(
 
 export function ChartAreaInteractive() {
   const isMobile = useIsMobile();
-  const [timeRange, setTimeRange] = React.useState("90d");
-  const { data, loading, errors } = useDashboardData();
+  const { data, loading, errors, dateRange, setDateRange } = useDashboardData();
+  
+  // Format timeRange for display (add 'd' suffix)
+  const timeRange = dateRange ? `${dateRange}d` : "90d";
+  
+  // Handle time range change
+  const handleTimeRangeChange = (value: string) => {
+    // Remove 'd' suffix and set as dateRange
+    const days = value.replace('d', '');
+    setDateRange(days);
+  };
   const progressRecords = data.progressRecords;
   const activityRecords = data.activityRecords;
   const loadingCombined = loading.progress || loading.activity;
@@ -104,7 +113,7 @@ export function ChartAreaInteractive() {
 
   React.useEffect(() => {
     if (isMobile) {
-      setTimeRange("7d");
+      setDateRange("7");
     }
   }, [isMobile]);
 
@@ -120,19 +129,19 @@ export function ChartAreaInteractive() {
     return val ? `hsl(${val})` : fallback;
   };
 
-  // Memoize colors so they update on dark mode toggle
+  // Sci-fi color scheme - always dark theme
   const chartColors = React.useMemo(
     () => ({
-      axisLine: getCssVarHsl("--chart-axis-line", isDark ? "#ddd" : "#666"),
-      tickColor: getCssVarHsl("--chart-tick-color", isDark ? "#ddd" : "#666"),
-      gridLine: getCssVarHsl("--chart-grid-line", isDark ? "#444" : "#ddd"),
-      tooltipBg: getCssVarHsl("--chart-tooltip-bg", isDark ? "#222" : "#fff"),
-      tooltipColor: getCssVarHsl("--chart-tooltip-color", isDark ? "#eee" : "#000"),
-      background: getCssVarHsl("--chart-background", isDark ? "#121212" : "#fff"),
-      progressColor: getCssVarHsl("--color-desktop", isDark ? "#65def1" : "#1e40af"),
-      activityColor: getCssVarHsl("--color-mobile", isDark ? "#65def1" : "#059669"),
+      axisLine: "#22d3ee",        // cyan-400
+      tickColor: "#94a3b8",       // slate-400
+      gridLine: "rgba(6, 182, 212, 0.2)",  // cyan with opacity
+      tooltipBg: "rgba(15, 23, 42, 0.95)",  // slate-900 with opacity
+      tooltipColor: "#ffffff",
+      background: "transparent",
+      progressColor: "#22d3ee",   // cyan-400
+      activityColor: "#a855f7",   // purple-500
     }),
-    [isDark]
+    []
   );
 
   // Count unique IDs per day
@@ -186,58 +195,95 @@ export function ChartAreaInteractive() {
   }
 
   return (
-    <Card className="@container/card" style={{ backgroundColor: chartColors.background }}>
-      <CardHeader>
-        <CardTitle>Taskflow Progress & Activity</CardTitle>
-        <CardDescription>
-          <span className="hidden @[540px]/card:block">
-            Combined Progress and Activity counts (Unique IDs)
-          </span>
-          <span className="@[540px]/card:hidden">Combined counts</span>
-        </CardDescription>
-        <ToggleGroup
-          type="single"
-          value={timeRange}
-          onValueChange={setTimeRange}
-          variant="outline"
-          className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
-        >
-          <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
-          <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
-          <ToggleGroupItem value="7d">Last 7 days</ToggleGroupItem>
-        </ToggleGroup>
-        <Select value={timeRange} onValueChange={setTimeRange}>
-          <SelectTrigger
-            className="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
-            aria-label="Select a value"
+    <div className="relative group">
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+      
+      <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
+        {/* Corner brackets - single border like section cards */}
+        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
+        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
+        
+        <CardHeader className="relative z-10 pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-white tracking-wider uppercase text-lg flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-cyan-400" />
+                Mission Analytics
+              </CardTitle>
+              <CardDescription className="text-white/60 mt-1">
+                <span className="hidden @[540px]/card:block">
+                  Progress and Activity telemetry data (Unique IDs)
+                </span>
+                <span className="@[540px]/card:hidden">Combined telemetry</span>
+              </CardDescription>
+            </div>
+            {/* Legend */}
+            <div className="hidden sm:flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                <span className="text-white/80 uppercase tracking-wider">Progress</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+                <span className="text-white/80 uppercase tracking-wider">Activity</span>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        
+        {/* Controls row - outside CardHeader */}
+        <div className="px-6 pb-4 flex items-center justify-between gap-4">
+          <ToggleGroup
+            type="single"
+            value={dateRange}
+            onValueChange={handleTimeRangeChange}
+            variant="outline"
+            className="hidden @[767px]/card:flex bg-slate-800/50 border border-cyan-500/30 rounded-lg p-1"
           >
-            <SelectValue placeholder="Last 3 months" />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl">
-            <SelectItem value="90d" className="rounded-lg">
-              Last 3 months
-            </SelectItem>
-            <SelectItem value="30d" className="rounded-lg">
-              Last 30 days
-            </SelectItem>
-            <SelectItem value="7d" className="rounded-lg">
-              Last 7 days
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </CardHeader>
+            <ToggleGroupItem value="90" className="text-white/70 data-[state=on]:bg-cyan-500/20 data-[state=on]:text-cyan-300 data-[state=on]:border-cyan-400/50 border-transparent uppercase text-xs tracking-wider px-4">Last 3 months</ToggleGroupItem>
+            <ToggleGroupItem value="30" className="text-white/70 data-[state=on]:bg-cyan-500/20 data-[state=on]:text-cyan-300 data-[state=on]:border-cyan-400/50 border-transparent uppercase text-xs tracking-wider px-4">Last 30 days</ToggleGroupItem>
+            <ToggleGroupItem value="7" className="text-white/70 data-[state=on]:bg-cyan-500/20 data-[state=on]:text-cyan-300 data-[state=on]:border-cyan-400/50 border-transparent uppercase text-xs tracking-wider px-4">Last 7 days</ToggleGroupItem>
+          </ToggleGroup>
+          <Select value={timeRange} onValueChange={handleTimeRangeChange}>
+            <SelectTrigger
+              className="flex w-40 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50 @[767px]/card:hidden"
+              aria-label="Select a value"
+            >
+              <SelectValue placeholder="Last 3 months" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900 border-cyan-500/30 rounded-xl">
+              <SelectItem value="90d" className="text-white focus:bg-cyan-500/20 rounded-lg">
+                Last 3 months
+              </SelectItem>
+              <SelectItem value="30d" className="text-white focus:bg-cyan-500/20 rounded-lg">
+                Last 30 days
+              </SelectItem>
+              <SelectItem value="7d" className="text-white focus:bg-cyan-500/20 rounded-lg">
+                Last 7 days
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           <AreaChart data={filteredData}>
             <defs>
               <linearGradient id="fillProgress" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={chartColors.progressColor} stopOpacity={1.0} />
-                <stop offset="95%" stopColor={chartColors.progressColor} stopOpacity={0.1} />
+                <stop offset="5%" stopColor={chartColors.progressColor} stopOpacity={0.8} />
+                <stop offset="95%" stopColor={chartColors.progressColor} stopOpacity={0.05} />
               </linearGradient>
               <linearGradient id="fillActivity" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={chartColors.activityColor} stopOpacity={0.8} />
-                <stop offset="95%" stopColor={chartColors.activityColor} stopOpacity={0.1} />
+                <stop offset="5%" stopColor={chartColors.activityColor} stopOpacity={0.6} />
+                <stop offset="95%" stopColor={chartColors.activityColor} stopOpacity={0.05} />
               </linearGradient>
+              {/* Glow filter */}
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feMerge>
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
             </defs>
             <CartesianGrid vertical={false} stroke={chartColors.gridLine} strokeDasharray="3 3" />
             <XAxis
@@ -271,21 +317,26 @@ export function ChartAreaInteractive() {
             />
             <Area
               dataKey="progress"
-              type="natural"
+              type="monotone"
               fill="url(#fillProgress)"
               stroke={chartColors.progressColor}
+              strokeWidth={2}
+              filter="url(#glow)"
               stackId="a"
             />
             <Area
               dataKey="activity"
-              type="natural"
+              type="monotone"
               fill="url(#fillActivity)"
               stroke={chartColors.activityColor}
+              strokeWidth={2}
+              filter="url(#glow)"
               stackId="a"
             />
           </AreaChart>
         </ChartContainer>
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

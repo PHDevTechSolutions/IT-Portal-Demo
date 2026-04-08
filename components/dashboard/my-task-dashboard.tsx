@@ -315,6 +315,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
     try {
       const response = await fetch(`/api/users/${collaborator.id}`);
+      
       if (response.ok) {
         const userData = await response.json();
         
@@ -419,23 +420,17 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
     return () => unsubscribe();
   }, [userId, pendingRequests]);
 
-  // Mock available users (in production, fetch from users collection)
+  // Fetch available users
   useEffect(() => {
     const fetchUsers = async (searchQuery = "") => {
-      console.log("Fetching users with searchQuery:", searchQuery);
-      console.log("Current userId:", userId);
-      
       try {
         setIsSearchingUsers(true);
         const response = await fetch(`/api/users?currentUserId=${userId}&search=${encodeURIComponent(searchQuery)}`);
-        console.log("API response status:", response.status);
         
         if (response.ok) {
           const data = await response.json();
-          console.log("API data:", data);
           setAvailableUsers(data.users || []);
         } else {
-          console.log("API failed, using fallback");
           // Fallback to mock users if API fails
           const mockUsers = [
             { id: "user1", referenceId: "EMP001", firstName: "John", lastName: "Doe", fullName: "John Doe", email: "john.doe@company.com", role: "user", department: "IT", position: "Developer" },
@@ -448,45 +443,20 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
           
           // Filter out current user and apply search (only by department)
           const filteredUsers = mockUsers.filter(user => {
-            console.log("Checking user:", user.id, "vs userId:", userId);
             if (user.id === userId) return false;
             
             if (searchQuery.trim()) {
               const query = searchQuery.toLowerCase();
-              console.log("Search query:", query, "user department:", user.department);
               return user.department && user.department.toLowerCase().includes(query);
             }
             return true;
           });
           
-          console.log("Filtered users:", filteredUsers);
           setAvailableUsers(filteredUsers);
         }
       } catch (error) {
         console.error("Error fetching users:", error);
-        // Fallback to mock users
-        const mockUsers = [
-          { id: "user1", referenceId: "EMP001", firstName: "John", lastName: "Doe", fullName: "John Doe", email: "john.doe@company.com", role: "user", department: "IT", position: "Developer" },
-          { id: "user2", referenceId: "EMP002", firstName: "Jane", lastName: "Smith", fullName: "Jane Smith", email: "jane.smith@company.com", role: "user", department: "HR", position: "Manager" },
-          { id: "user3", referenceId: "EMP003", firstName: "Mike", lastName: "Johnson", fullName: "Mike Johnson", email: "mike.johnson@company.com", role: "admin", department: "IT", position: "Team Lead" },
-          { id: "user4", referenceId: "EMP004", firstName: "Sarah", lastName: "Wilson", fullName: "Sarah Wilson", email: "sarah.wilson@company.com", role: "user", department: "Finance", position: "Accountant" },
-          { id: "user5", referenceId: "EMP005", firstName: "Alex", lastName: "Turner", fullName: "Alex Turner", email: "alex.turner@company.com", role: "user", department: "IT", position: "Senior Developer" },
-          { id: "user6", referenceId: "EMP006", firstName: "Lisa", lastName: "Anderson", fullName: "Lisa Anderson", email: "lisa.anderson@company.com", role: "user", department: "IT", position: "DevOps Engineer" },
-        ];
-        
-        // Filter out current user and apply search (only by department)
-        const filteredUsers = mockUsers.filter(user => {
-          if (user.id === userId) return false;
-          
-          if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            return user.department && user.department.toLowerCase().includes(query);
-          }
-          return true;
-        });
-        
-        console.log("Error fallback users:", filteredUsers);
-        setAvailableUsers(filteredUsers);
+        setAvailableUsers([]);
       } finally {
         setIsSearchingUsers(false);
       }
@@ -780,7 +750,6 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
   const openViewDialog = (task: Task) => {
     try {
-      console.log("Opening view dialog for task:", task);
       setViewingTask(task);
       setIsViewDialogOpen(true);
     } catch (error) {
@@ -918,8 +887,6 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
       const docRef = await addDoc(requestRef, requestData);
       const actualRequestId = docRef.id;
 
-      console.log("Collaboration request created with ID:", actualRequestId);
-
       // Notify the selected user
       toast.success(`Collaboration request sent to ${selectedUser.fullName} (${selectedUser.referenceId})`, {
         description: "They will receive a notification about your collaboration request"
@@ -983,95 +950,75 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
   // Accept collaboration request
   const acceptCollaborationRequest = async (requestId: string) => {
     try {
-      console.log("=== ACCEPTING COLLABORATION REQUEST ===");
-      console.log("Request ID:", requestId);
-      console.log("Current User ID:", userId);
-      console.log("Current User Name:", userName);
-      
       const requestRef = doc(db, "collaboration_requests", requestId);
       const requestDoc = await getDoc(requestRef);
       
       if (!requestDoc.exists()) {
-        console.error("Collaboration request not found:", requestId);
         toast.error("Collaboration request not found");
         return;
       }
       
       const requestData = requestDoc.data();
-      console.log("Request data:", requestData);
       
       // Update request status
       await updateDoc(requestRef, { status: "accepted" });
-      console.log("Request status updated to 'accepted'");
 
       // Add collaborator to task
       const request = pendingRequests.find(r => r.id === requestId);
-      console.log("Found request in pendingRequests:", !!request);
       
       if (request) {
-        console.log("Request details:", request);
         const taskRef = doc(db, "user_tasks", request.taskId);
         const taskDoc = await getDoc(taskRef);
         
         if (!taskDoc.exists()) {
-          console.error("Task not found:", request.taskId);
           toast.error("Task not found");
           return;
         }
         
         const taskData = taskDoc.data();
-        console.log("Current task data from Firestore:", taskData);
         
+        // Fetch user profile FIRST before creating collaborator
+        let userProfileData = null;
+        try {
+          const userResponse = await fetch(`/api/users/${userId}`);
+          if (userResponse.ok) {
+            userProfileData = await userResponse.json();
+          }
+        } catch (profileError) {
+          console.warn("Could not fetch user profile:", profileError);
+        }
+        
+        // Create collaborator with real profile data or fallback to basic info
         const newCollaborator: Collaborator = {
           id: userId,
-          name: userName,
-          email: `${userName}@company.com`,
+          name: userProfileData?.fullName || 
+                (userProfileData?.firstName && userProfileData?.lastName 
+                  ? `${userProfileData.firstName} ${userProfileData.lastName}` 
+                  : userName),
+          email: userProfileData?.email || `${userName}@company.com`,
           role: request.role,
           addedAt: new Date().toISOString(),
           addedBy: request.requesterName,
           status: "accepted",
+          profilePicture: userProfileData?.profilePicture || 
+            (userProfileData?.firstName && userProfileData?.lastName 
+              ? `/avatars/${userProfileData.firstName.toLowerCase()}-${userProfileData.lastName.toLowerCase()}.jpg`
+              : undefined),
+          department: userProfileData?.department,
+          position: userProfileData?.position,
         };
-        
-        console.log("New collaborator to add:", newCollaborator);
-
-        // Get user profile information for the collaborator
-        try {
-          const userResponse = await fetch(`/api/users/${userId}`);
-          if (userResponse.ok) {
-            const userData = await userResponse.json();
-            console.log("User profile data:", userData);
-            
-            // Update collaborator with real profile information
-            newCollaborator.profilePicture = userData.profilePicture || `/avatars/${userData.firstName?.toLowerCase()}-${userData.lastName?.toLowerCase()}.jpg`;
-            newCollaborator.department = userData.department;
-            newCollaborator.position = userData.position;
-            newCollaborator.email = userData.email || `${userName}@company.com`;
-            
-            // Use the real name from user data if available
-            if (userData.fullName || (userData.firstName && userData.lastName)) {
-              newCollaborator.name = userData.fullName || `${userData.firstName} ${userData.lastName}`;
-            }
-          }
-        } catch (profileError) {
-          console.warn("Could not fetch user profile, using defaults:", profileError);
-        }
-
-        console.log("Final collaborator data:", newCollaborator);
 
         // Get task data directly from Firestore instead of local state
         const existingCollaborators = taskData.collaborators || [];
-        console.log("Existing collaborators from Firestore:", existingCollaborators);
         
         // Check if user is already a collaborator
         const isAlreadyCollaborator = existingCollaborators.some((collab: Collaborator) => collab.id === userId);
         if (isAlreadyCollaborator) {
-          console.log("User is already a collaborator");
           toast.info("You are already a collaborator on this task");
           return;
         }
         
         const updatedCollaborators = [...existingCollaborators, newCollaborator];
-        console.log("Updated collaborators array:", updatedCollaborators);
         
         const updateData = {
           collaborators: updatedCollaborators,
@@ -1079,16 +1026,12 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
           updatedAt: serverTimestamp(),
         };
         
-        console.log("Updating task with data:", updateData);
-        
         try {
           await updateDoc(taskRef, updateData);
-          console.log("Task updated successfully in Firestore");
           
           // Verify the update
           const updatedTaskDoc = await getDoc(taskRef);
           const updatedTaskData = updatedTaskDoc.data();
-          console.log("Verified updated task data:", updatedTaskData);
           
           if (updatedTaskData) {
             // Show success message with option to view task
@@ -1132,16 +1075,10 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
           toast.error("Failed to update task with collaborator");
           return;
         }
-      } else {
-        console.error("Request not found in pendingRequests:", requestId);
       }
 
       toast.success("Collaboration request accepted");
       setPendingRequests(pendingRequests.filter(r => r.id !== requestId));
-      
-      // Don't auto-refresh - let user see the result and debug
-      console.log("Acceptance process completed. Check console for any errors.");
-      
     } catch (error) {
       console.error("Error accepting collaboration request:", error);
       toast.error("Failed to accept collaboration request");
@@ -1383,195 +1320,329 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
   }, [filteredTasks]);
 
   return (
-    <div className="space-y-6">
-      {/* Collaboration Notifications */}
-      {pendingRequests.length > 0 && (
-        <Card className="border-blue-200 bg-blue-50/30" data-collaboration-notifications>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-500" />
-              Collaboration Requests ({pendingRequests.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {pendingRequests.map((request) => (
-                <div key={request.id} className="flex items-center justify-between p-3 bg-white rounded-lg border">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{request.requesterName} wants to collaborate</p>
-                    <p className="text-xs text-muted-foreground">Task: {request.taskTitle}</p>
-                    <p className="text-xs text-muted-foreground">Role: {request.role}</p>
-                    {request.message && (
-                      <p className="text-xs text-muted-foreground mt-1 italic">"{request.message}"</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => acceptCollaborationRequest(request.id)}
-                      className="bg-green-500 hover:bg-green-600"
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => rejectCollaborationRequest(request.id)}
-                      className="text-red-600 border-red-200 hover:bg-red-50"
-                    >
-                      Decline
-                    </Button>
-                  </div>
-                </div>
-              ))}
+    <div className="min-h-screen w-full bg-[#050a14] relative overflow-hidden p-4">
+      {/* Animated background grid */}
+      <div className="absolute inset-0 h-full w-full">
+        <div 
+          className="h-full w-full opacity-10"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(6, 182, 212, 0.15) 1px, transparent 1px)
+            `,
+            backgroundSize: '50px 50px',
+            backgroundRepeat: 'repeat'
+          }}
+        />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
+      </div>
+
+      {/* Floating particles */}
+      <div className="absolute inset-0 h-full w-full overflow-hidden pointer-events-none">
+        {[...Array(15)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 bg-cyan-400/40 rounded-full"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animation: `float ${5 + Math.random() * 10}s linear infinite`,
+              animationDelay: `${Math.random() * 5}s` 
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Main Content */}
+      <div className="relative z-10 w-full px-4 py-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-wider text-white uppercase">
+              <span className="text-cyan-400">TASK</span> COMMAND
+            </h1>
+            <p className="text-white/80 text-xs tracking-[0.3em] uppercase mt-1">
+              Mission Control Center
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-cyan-300/80 font-mono">SYSTEM ONLINE</span>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <span className="text-cyan-500/50">|</span>
+            <span className="text-cyan-300/80 font-mono">V.2.0.6</span>
+          </div>
+        </div>
+
+        {/* Collaboration Notifications */}
+        {pendingRequests.length > 0 && (
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl blur opacity-30" />
+            <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
+              <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
+              <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
+              <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
+              <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
+              
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
+                  <Users className="h-5 w-5" />
+                  Collaboration Requests ({pendingRequests.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {pendingRequests.map((request) => (
+                    <div key={request.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm text-cyan-100">{request.requesterName} wants to collaborate</p>
+                        <p className="text-xs text-white/70">Task: {request.taskTitle}</p>
+                        <p className="text-xs text-white/70">Role: {request.role}</p>
+                        {request.message && (
+                          <p className="text-xs text-white/50 mt-1 italic">"{request.message}"</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => acceptCollaborationRequest(request.id)}
+                          className="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-1" />
+                          Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => rejectCollaborationRequest(request.id)}
+                          className="text-red-400 border-red-500/30 hover:bg-red-500/10 hover:border-red-400/50"
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Decline
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-2">
-            <ListTodo className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-2xl font-bold">{stats.total}</p>
-              <p className="text-xs text-muted-foreground">Total Tasks</p>
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl p-4 overflow-hidden">
+            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
+            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
+                <ListTodo className="h-5 w-5 text-cyan-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{stats.total}</p>
+                <p className="text-xs text-white/80 uppercase tracking-wider">Total Tasks</p>
+              </div>
             </div>
+          </Card>
+        </div>
+        
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-emerald-500/30 rounded-xl p-4 overflow-hidden">
+            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-emerald-500/50" />
+            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-emerald-500/50" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30">
+                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{stats.completed}</p>
+                <p className="text-xs text-emerald-400/60 uppercase tracking-wider">Completed</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+        
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-blue-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-blue-500/30 rounded-xl p-4 overflow-hidden">
+            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-blue-500/50" />
+            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-blue-500/50" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-500/20 border border-blue-500/30">
+                <PlayCircle className="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{stats.inProgress}</p>
+                <p className="text-xs text-white/80 uppercase tracking-wider">In Progress</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+        
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-yellow-500/30 rounded-xl p-4 overflow-hidden">
+            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-yellow-500/50" />
+            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-yellow-500/50" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-yellow-500/20 border border-yellow-500/30">
+                <Clock className="h-5 w-5 text-yellow-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{stats.pending}</p>
+                <p className="text-xs text-yellow-400/60 uppercase tracking-wider">Pending</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+        
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-red-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-red-500/30 rounded-xl p-4 overflow-hidden">
+            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-red-500/50" />
+            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-red-500/50" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-red-500/20 border border-red-500/30">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{stats.overdue}</p>
+                <p className="text-xs text-red-400/60 uppercase tracking-wider">Overdue</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+        
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-orange-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-orange-500/30 rounded-xl p-4 overflow-hidden">
+            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-orange-500/50" />
+            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-orange-500/50" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-orange-500/20 border border-orange-500/30">
+                <ArrowUpCircle className="h-5 w-5 text-orange-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{stats.highPriority}</p>
+                <p className="text-xs text-orange-400/60 uppercase tracking-wider">High Priority</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="relative group">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl blur opacity-20" />
+        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl p-4 overflow-hidden">
+          <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
+          <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-cyan-100 uppercase tracking-wider">Completion Rate</span>
+            <span className="text-sm font-bold text-cyan-400">{stats.completionRate}%</span>
           </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-green-500" />
-            <div>
-              <p className="text-2xl font-bold">{stats.completed}</p>
-              <p className="text-xs text-muted-foreground">Completed</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-2">
-            <PlayCircle className="h-5 w-5 text-blue-500" />
-            <div>
-              <p className="text-2xl font-bold">{stats.inProgress}</p>
-              <p className="text-xs text-muted-foreground">In Progress</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-yellow-500" />
-            <div>
-              <p className="text-2xl font-bold">{stats.pending}</p>
-              <p className="text-xs text-muted-foreground">Pending</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 border-red-200">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
-            <div>
-              <p className="text-2xl font-bold">{stats.overdue}</p>
-              <p className="text-xs text-muted-foreground">Overdue</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 border-orange-200">
-          <div className="flex items-center gap-2">
-            <ArrowUpCircle className="h-5 w-5 text-red-500" />
-            <div>
-              <p className="text-2xl font-bold">{stats.highPriority}</p>
-              <p className="text-xs text-muted-foreground">High Priority</p>
-            </div>
+          <div className="h-2 bg-slate-800 rounded-full overflow-hidden border border-cyan-500/20">
+            <div 
+              className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.5)] transition-all duration-500"
+              style={{ width: `${stats.completionRate}%` }}
+            />
           </div>
         </Card>
       </div>
 
-      {/* Progress Bar */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">Completion Rate</span>
-          <span className="text-sm font-medium">{stats.completionRate}%</span>
-        </div>
-        <Progress value={stats.completionRate} className="h-2" />
-      </Card>
-
       {/* Filters & Actions */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          <div className="flex flex-1 gap-2 items-center">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tasks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+      <div className="relative group">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/50 to-purple-500/50 rounded-xl blur opacity-20" />
+        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl p-4 overflow-hidden">
+          <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
+          <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
+          <div className="absolute bottom-0 left-0 w-4 h-4 border-l border-b border-cyan-500/50" />
+          <div className="absolute bottom-0 right-0 w-4 h-4 border-r border-b border-cyan-500/50" />
+          
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+              <div className="flex flex-1 gap-2 items-center">
+                <div className="relative flex-1 max-w-md group/input">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70 group-focus-within/input:text-cyan-400 transition-colors" />
+                  <Input
+                    placeholder="Search missions..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-slate-800/50 border-cyan-500/30 text-white placeholder:text-white/50 rounded-lg focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setViewMode(viewMode === "list" ? "grid" : "list")}
+                  className="bg-slate-800/50 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-400/50"
+                >
+                  {viewMode === "list" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                {selectedTasks.size > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsBulkActionsOpen(true)}
+                    className="gap-2 bg-slate-800/50 border-cyan-500/30 text-white hover:bg-cyan-500/20 hover:border-cyan-400/50"
+                  >
+                    <CheckSquare className="h-4 w-4 text-cyan-400" />
+                    {selectedTasks.size} selected
+                  </Button>
+                )}
+                <Button 
+                  onClick={() => setIsCreateDialogOpen(true)}
+                  className="gap-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Mission
+                </Button>
+              </div>
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setViewMode(viewMode === "list" ? "grid" : "list")}
-            >
-              {viewMode === "list" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            {selectedTasks.size > 0 && (
-              <Button
-                variant="outline"
-                onClick={() => setIsBulkActionsOpen(true)}
-                className="gap-2"
-              >
-                <CheckSquare className="h-4 w-4" />
-                {selectedTasks.size} selected
-              </Button>
-            )}
-            <Button className="gap-2" onClick={() => setIsCreateDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
-              New Task
-            </Button>
-          </div>
-        </div>
 
-        {/* Filter Bar */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
-            <SelectTrigger className="w-[140px] h-8">
-              <SelectValue placeholder="All Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="in-progress">In Progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="on-hold">On Hold</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
+            {/* Filter Bar */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <Filter className="h-4 w-4 text-white/70" />
+              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+                <SelectTrigger className="w-[140px] h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-cyan-500/30">
+                  <SelectItem value="all" className="text-white focus:bg-cyan-500/20">All Status</SelectItem>
+                  <SelectItem value="pending" className="text-white focus:bg-cyan-500/20">Pending</SelectItem>
+                  <SelectItem value="in-progress" className="text-white focus:bg-cyan-500/20">In Progress</SelectItem>
+                  <SelectItem value="completed" className="text-white focus:bg-cyan-500/20">Completed</SelectItem>
+                  <SelectItem value="on-hold" className="text-white focus:bg-cyan-500/20">On Hold</SelectItem>
+                  <SelectItem value="cancelled" className="text-white focus:bg-cyan-500/20">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
 
-          <Select value={filterPriority} onValueChange={(v) => setFilterPriority(v as any)}>
-            <SelectTrigger className="w-[140px] h-8">
-              <SelectValue placeholder="All Priorities" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Priorities</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-            </SelectContent>
-          </Select>
+              <Select value={filterPriority} onValueChange={(v) => setFilterPriority(v as any)}>
+                <SelectTrigger className="w-[140px] h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
+                  <SelectValue placeholder="All Priorities" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-cyan-500/30">
+                  <SelectItem value="all" className="text-white focus:bg-cyan-500/20">All Priorities</SelectItem>
+                  <SelectItem value="high" className="text-white focus:bg-cyan-500/20">High</SelectItem>
+                  <SelectItem value="medium" className="text-white focus:bg-cyan-500/20">Medium</SelectItem>
+                  <SelectItem value="low" className="text-white focus:bg-cyan-500/20">Low</SelectItem>
+                </SelectContent>
+              </Select>
 
           <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-[140px] h-8">
+            <SelectTrigger className="w-[140px] h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
+            <SelectContent className="bg-slate-900 border-cyan-500/30">
+              <SelectItem className="text-white focus:bg-cyan-500/20" value="all">All Categories</SelectItem>
               {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
+                <SelectItem className="text-white focus:bg-cyan-500/20" key={cat} value={cat}>
                   {cat}
                 </SelectItem>
               ))}
@@ -1582,7 +1653,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
             variant={showOverdueOnly ? "default" : "outline"}
             size="sm"
             onClick={() => setShowOverdueOnly(!showOverdueOnly)}
-            className="h-8"
+            className="w-[140px] h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50"
           >
             <AlertTriangle className="h-4 w-4 mr-2" />
             Overdue Only
@@ -1605,326 +1676,369 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
             </Button>
           )}
         </div>
+        </div>
+      </Card>
       </div>
 
-      {/* Collaborative Tasks Section */}
-      {sortedTasks.some(task => task.isCollaborative) && (
-        <Card className="border-blue-200 bg-blue-50/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-500" />
-              Collaborative Tasks ({sortedTasks.filter(task => task.isCollaborative).length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {sortedTasks.filter(task => task.isCollaborative).map((task) => {
-                const statusConfigItem = statusConfig[task.status];
-                const StatusIcon = statusConfigItem.icon;
-                const priorityConfigItem = priorityConfig[task.priority];
-                const PriorityIcon = priorityConfigItem.icon;
-                const dueStatus = getDueDateStatus(task.dueDate, task.status);
-                const isSelected = selectedTasks.has(task.id);
+      {/* GRID LAYOUT: My Tasks (Left) | Collaborative Tasks (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* LEFT SIDE: My Tasks */}
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-xl blur opacity-20 group-hover:opacity-30 transition duration-500" />
+          <Card className="relative h-full bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
+            <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
+            <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
+            <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
+            <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
+            
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
+                  <ListTodo className="h-5 w-5" />
+                  My Tasks ({sortedTasks.filter(task => !task.isCollaborative).length})
+                </CardTitle>
+                {sortedTasks.filter(task => !task.isCollaborative).length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectAll}
+                      onCheckedChange={handleSelectAll}
+                      id="select-all"
+                      className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                    />
+                    <Label htmlFor="select-all" className="text-sm cursor-pointer text-white">
+                      Select All
+                    </Label>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[500px] pr-4">
+                {sortedTasks.filter(task => !task.isCollaborative).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-32 text-cyan-300/70">
+                    <ListTodo className="h-8 w-8 mb-2 opacity-70" />
+                    <p className="text-sm text-white">No missions found</p>
+                    <p className="text-xs text-white/70">Initialize new mission</p>
+                  </div>
+                ) : (
+                  <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-2"}>
+                    {sortedTasks.filter(task => !task.isCollaborative).map((task) => {
+                    const statusConfigItem = statusConfig[task.status];
+                    const StatusIcon = statusConfigItem.icon;
+                    const priorityConfigItem = priorityConfig[task.priority];
+                    const PriorityIcon = priorityConfigItem.icon;
+                    const dueStatus = getDueDateStatus(task.dueDate, task.status);
+                    const isSelected = selectedTasks.has(task.id);
 
-                return (
-                  <div
-                    key={task.id}
-                    onClick={() => openViewDialog(task)}
-                    className={cn(
-                      "group flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer bg-white",
-                      isSelected && "border-primary bg-primary/5",
-                      task.pinned && "border-yellow-400 bg-yellow-50/30",
-                      task.priority === "high" && task.status !== "completed" && "border-l-4 border-l-red-500"
-                    )}
-                  >
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleTaskSelection(task.id);
-                      }}
-                      className="mt-1"
-                    >
-                      {isSelected ? (
-                        <CheckSquare className="h-5 w-5 text-primary" />
-                      ) : (
-                        <Square className="h-5 w-5 text-muted-foreground" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            {task.pinned && <Pin className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
-                            <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
-                              <Users className="h-3 w-3" />
-                              Collaborative
-                            </div>
-                            <p className="font-medium leading-tight">{task.title}</p>
-                          </div>
-                          {task.description && (
-                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                              {task.description}
-                            </p>
+                    return (
+                      <div
+                        key={task.id}
+                        onClick={() => openViewDialog(task)}
+                        className={cn(
+                          "group flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer bg-slate-800/50 border-cyan-500/20 hover:bg-cyan-500/10 hover:border-cyan-400/40",
+                          isSelected && "border-cyan-400 bg-cyan-500/20",
+                          task.pinned && "border-yellow-400/50 bg-yellow-500/10",
+                          task.priority === "high" && task.status !== "completed" && "border-l-4 border-l-red-500"
+                        )}
+                      >
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTaskSelection(task.id);
+                          }}
+                          className="mt-1"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="h-5 w-5 text-cyan-400" />
+                          ) : (
+                            <Square className="h-5 w-5 text-cyan-400/40" />
                           )}
                         </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              openViewDialog(task);
-                            }}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              View Details
-                            </DropdownMenuItem>
-                            {isOwner(task) && (
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                openCollaborationDialog(task);
-                              }}>
-                                <UserPlus className="h-4 w-4 mr-2" />
-                                Add Collaborator
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                      
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <StatusIcon className="h-3 w-3" />
-                          {statusConfigItem.label}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <PriorityIcon className="h-3 w-3" />
-                          {priorityConfigItem.label}
-                        </div>
-                        {task.userName && (
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1">
-                              <div className="h-5 w-5 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-semibold text-[8px]">
-                                {task.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                {task.pinned && <Pin className="h-4 w-4 text-yellow-400 fill-yellow-400" />}
+                                {task.isCollaborative && (
+                                  <div className="flex items-center gap-1 bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full text-xs font-medium border border-cyan-400/30">
+                                    <Users className="h-3 w-3" />
+                                    Team
+                                  </div>
+                                )}
+                                <p className="font-medium leading-tight text-cyan-100">{task.title}</p>
                               </div>
-                              <span className="text-xs">Owner: {task.userName}</span>
+                              {task.description && (
+                                <p className="text-sm text-white/80 mt-1 line-clamp-2">
+                                  {task.description}
+                                </p>
+                              )}
                             </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800/50 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-400/50"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-slate-900 border-cyan-500/30 text-cyan-100">
+                                {canEditTask(task) && (
+                                  <DropdownMenuItem onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditDialog(task);
+                                  }}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                )}
+                                {isOwner(task) && (
+                                  <DropdownMenuItem onClick={(e) => {
+                                    e.stopPropagation();
+                                    openCollaborationDialog(task);
+                                  }}>
+                                    <UserPlus className="h-4 w-4 mr-2" />
+                                    Add Collaborator
+                                  </DropdownMenuItem>
+                                )}
+                                {canEditTask(task) && (
+                                  <DropdownMenuItem onClick={(e) => {
+                                    e.stopPropagation();
+                                    togglePin(task.id, task.pinned || false);
+                                  }}>
+                                    <Pin className={cn("h-4 w-4 mr-2", task.pinned && "fill-current")} />
+                                    {task.pinned ? "Unpin" : "Pin"}
+                                  </DropdownMenuItem>
+                                )}
+                                {canEditTask(task) && <DropdownMenuSeparator />}
+                                {canEditTask(task) && (
+                                  <DropdownMenuItem
+                                    className="text-red-600"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteTask(task.id);
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
-                        )}
-                        {task.collaborators && task.collaborators.length > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Users className="h-3 w-3 text-blue-500" />
-                            <span className="text-xs">{task.collaborators.length} collaborator{task.collaborators.length > 1 ? 's' : ''}</span>
+
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <Badge variant="outline" className={cn("text-xs", statusConfigItem.color)}>
+                              <StatusIcon className="h-3 w-3 mr-1" />
+                              {statusConfigItem.label}
+                            </Badge>
+
+                            <Badge variant="outline" className={cn("text-xs", priorityConfigItem.bgColor, priorityConfigItem.color)}>
+                              <PriorityIcon className="h-3 w-3 mr-1" />
+                              {priorityConfigItem.label}
+                            </Badge>
+
+                            {task.category && (
+                              <Badge className="text-xs">
+                                <Tag className="h-3 w-3 mr-1" />
+                                {task.category}
+                              </Badge>
+                            )}
+
+                            {task.dueDate && (
+                              <Badge
+                                
+                                className={cn(
+                                  "text-xs",
+                                  dueStatus?.color || "bg-gray-500/10 text-white"
+                                )}
+                              >
+                                <CalendarIcon className="h-3 w-3 mr-1" />
+                                {dueStatus?.label || format(task.dueDate, "MMM d")}
+                              </Badge>
+                            )}
+
+                            {task.tags?.map((tag) => (
+                              <Badge key={tag} variant="secondary" className="text-xs">
+                                #{tag}
+                              </Badge>
+                            ))}
                           </div>
-                        )}
-                        {dueStatus && (
-                          <div className={dueStatus.color}>
-                            {dueStatus.label}
-                          </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
           </CardContent>
         </Card>
-      )}
+        </div>
 
-      {/* Task List */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold">
-              My Tasks ({filteredTasks.filter(task => !task.isCollaborative).length})
-            </CardTitle>
-            {filteredTasks.filter(task => !task.isCollaborative).length > 0 && (
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={selectAll}
-                  onCheckedChange={handleSelectAll}
-                  id="select-all"
-                />
-                <Label htmlFor="select-all" className="text-sm cursor-pointer">
-                  Select All
-                </Label>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[400px] pr-4">
-            {sortedTasks.filter(task => !task.isCollaborative).length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-                <ListTodo className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm">No tasks found</p>
-                <p className="text-xs">Create a new task to get started</p>
-              </div>
-            ) : (
-              <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-2"}>
-                {sortedTasks.filter(task => !task.isCollaborative).map((task) => {
-                  const statusConfigItem = statusConfig[task.status];
-                  const StatusIcon = statusConfigItem.icon;
-                  const priorityConfigItem = priorityConfig[task.priority];
-                  const PriorityIcon = priorityConfigItem.icon;
-                  const dueStatus = getDueDateStatus(task.dueDate, task.status);
-                  const isSelected = selectedTasks.has(task.id);
+        {/* RIGHT SIDE: Collaborative Tasks */}
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-20 group-hover:opacity-30 transition duration-500" />
+          <Card className="relative h-full bg-slate-900/90 backdrop-blur-xl border-blue-500/30 rounded-xl overflow-hidden">
+            <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-blue-500/50" />
+            <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-blue-500/50" />
+            <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-blue-500/50" />
+            <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-blue-500/50" />
+            
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2 text-blue-400 tracking-wider uppercase">
+                <Users className="h-5 w-5" />
+                Collaborative Tasks ({sortedTasks.filter(task => task.isCollaborative).length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[500px] pr-4">
+                {sortedTasks.filter(task => task.isCollaborative).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-32 text-blue-300/70">
+                    <Users className="h-8 w-8 mb-2 opacity-70" />
+                    <p className="text-sm text-white">No collaborative missions</p>
+                    <p className="text-xs text-white/70">Add collaborators to missions</p>
+                  </div>
+                ) : (
+                <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-2"}>
+                  {sortedTasks.filter(task => task.isCollaborative).map((task) => {
+                    const statusConfigItem = statusConfig[task.status];
+                    const StatusIcon = statusConfigItem.icon;
+                    const priorityConfigItem = priorityConfig[task.priority];
+                    const PriorityIcon = priorityConfigItem.icon;
+                    const dueStatus = getDueDateStatus(task.dueDate, task.status);
 
-                  return (
-                    <div
-                      key={task.id}
-                      onClick={() => openViewDialog(task)}
-                      className={cn(
-                        "group flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer",
-                        isSelected && "border-primary bg-primary/5",
-                        task.pinned && "border-yellow-400 bg-yellow-50/30",
-                        task.priority === "high" && task.status !== "completed" && "border-l-4 border-l-red-500"
-                      )}
-                    >
+                    return (
                       <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleTaskSelection(task.id);
-                        }}
-                        className="mt-1"
-                      >
-                        {isSelected ? (
-                          <CheckSquare className="h-5 w-5 text-primary" />
-                        ) : (
-                          <Square className="h-5 w-5 text-muted-foreground" />
+                        key={task.id}
+                        onClick={() => openViewDialog(task)}
+                        className={cn(
+                          "group flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer bg-white",
+                          task.pinned && "border-yellow-400 bg-yellow-50/30",
+                          task.priority === "high" && task.status !== "completed" && "border-l-4 border-l-red-500"
                         )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              {task.pinned && <Pin className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
-                              {task.isCollaborative && (
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {task.pinned && <Pin className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
                                 <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
                                   <Users className="h-3 w-3" />
                                   Collaborative
                                 </div>
+                                <p className="font-medium leading-tight">{task.title}</p>
+                              </div>
+                              {task.description && (
+                                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                  {task.description}
+                                </p>
                               )}
-                              <p className="font-medium leading-tight">{task.title}</p>
                             </div>
-                            {task.description && (
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                {task.description}
-                              </p>
-                            )}
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {canEditTask(task) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={(e) => {
                                   e.stopPropagation();
-                                  openEditDialog(task);
+                                  openViewDialog(task);
                                 }}>
                                   <Edit className="h-4 w-4 mr-2" />
-                                  Edit
+                                  View Details
                                 </DropdownMenuItem>
-                              )}
-                              {isOwner(task) && (
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  openCollaborationDialog(task);
-                                }}>
-                                  <UserPlus className="h-4 w-4 mr-2" />
-                                  Add Collaborator
-                                </DropdownMenuItem>
-                              )}
-                              {canEditTask(task) && (
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  togglePin(task.id, task.pinned || false);
-                                }}>
-                                  <Pin className={cn("h-4 w-4 mr-2", task.pinned && "fill-current")} />
-                                  {task.pinned ? "Unpin" : "Pin"}
-                                </DropdownMenuItem>
-                              )}
-                              {canEditTask(task) && <DropdownMenuSeparator />}
-                              {canEditTask(task) && (
-                                <DropdownMenuItem
-                                  className="text-red-600"
-                                  onClick={(e) => {
+                                {isOwner(task) && (
+                                  <DropdownMenuItem onClick={(e) => {
                                     e.stopPropagation();
-                                    handleDeleteTask(task.id);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
+                                    openCollaborationDialog(task);
+                                  }}>
+                                    <UserPlus className="h-4 w-4 mr-2" />
+                                    Add Collaborator
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <Badge variant="outline" className={cn("text-xs", statusConfigItem.color)}>
+                              <StatusIcon className="h-3 w-3 mr-1" />
+                              {statusConfigItem.label}
+                            </Badge>
+
+                            <Badge variant="outline" className={cn("text-xs", priorityConfigItem.bgColor, priorityConfigItem.color)}>
+                              <PriorityIcon className="h-3 w-3 mr-1" />
+                              {priorityConfigItem.label}
+                            </Badge>
+
+                            {task.category && (
+                              <Badge variant="outline" className="text-xs">
+                                <Tag className="h-3 w-3 mr-1" />
+                                {task.category}
+                              </Badge>
+                            )}
+
+                            {task.dueDate && (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs",
+                                  dueStatus?.color || "bg-gray-500/10 text-gray-600"
+                                )}
+                              >
+                                <CalendarIcon className="h-3 w-3 mr-1" />
+                                {dueStatus?.label || format(task.dueDate, "MMM d")}
+                              </Badge>
+                            )}
+
+                            {task.tags?.map((tag) => (
+                              <Badge key={tag} variant="secondary" className="text-xs">
+                                #{tag}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          {task.userName && (
+                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <div className="h-5 w-5 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-semibold text-[8px]">
+                                  {task.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                </div>
+                                <span>Owner: {task.userName}</span>
+                              </div>
+                              {task.collaborators && task.collaborators.length > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-3 w-3 text-blue-500" />
+                                  <span>{task.collaborators.length} collaborator{task.collaborators.length > 1 ? 's' : ''}</span>
+                                </div>
                               )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          <Badge variant="outline" className={cn("text-xs", statusConfigItem.color)}>
-                            <StatusIcon className="h-3 w-3 mr-1" />
-                            {statusConfigItem.label}
-                          </Badge>
-
-                          <Badge variant="outline" className={cn("text-xs", priorityConfigItem.bgColor, priorityConfigItem.color)}>
-                            <PriorityIcon className="h-3 w-3 mr-1" />
-                            {priorityConfigItem.label}
-                          </Badge>
-
-                          {task.category && (
-                            <Badge variant="outline" className="text-xs">
-                              <Tag className="h-3 w-3 mr-1" />
-                              {task.category}
-                            </Badge>
-                          )}
-
-                          {task.dueDate && (
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-xs",
-                                dueStatus?.color || "bg-gray-500/10 text-gray-600"
+                              {dueStatus && (
+                                <div className={dueStatus.color}>
+                                  {dueStatus.label}
+                                </div>
                               )}
-                            >
-                              <CalendarIcon className="h-3 w-3 mr-1" />
-                              {dueStatus?.label || format(task.dueDate, "MMM d")}
-                            </Badge>
+                            </div>
                           )}
-
-                          {task.tags?.map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-xs">
-                              #{tag}
-                            </Badge>
-                          ))}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
+      </div>
 
       {/* Create/Edit Dialog */}
       <Dialog
@@ -1937,70 +2051,77 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
           }
         }}
       >
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-cyan-500/30 rounded-xl">
+          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
+          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
+          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
+          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
+          
           <DialogHeader>
-            <DialogTitle>{editingTask ? "Edit Task" : "Create New Task"}</DialogTitle>
-            <DialogDescription>
-              {editingTask ? "Update your task details." : "Add a new task to track your work progress."}
+            <DialogTitle className="text-cyan-400 tracking-wider uppercase">{editingTask ? "Edit Mission" : "Create New Mission"}</DialogTitle>
+            <DialogDescription className="text-white/80">
+              {editingTask ? "Update mission parameters." : "Initialize new mission for tracking."}
             </DialogDescription>
           </DialogHeader>
 
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="basic">Basic Info</TabsTrigger>
-              <TabsTrigger value="subtasks">Subtasks ({subtasks.length})</TabsTrigger>
-              <TabsTrigger value="details">Notes</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 bg-slate-800/50 border border-cyan-500/30">
+              <TabsTrigger value="basic" className="text-white data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300">Basic Info</TabsTrigger>
+              <TabsTrigger value="subtasks" className="text-white data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300">Subtasks ({subtasks.length})</TabsTrigger>
+              <TabsTrigger value="details" className="text-white data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300">Notes</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="title">Task Title *</Label>
+                <Label htmlFor="title" className="text-white uppercase tracking-wider text-xs font-medium">Mission Title *</Label>
                 <Input
                   id="title"
-                  placeholder="Enter task title"
+                  placeholder="Enter mission designation"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
+                  className="bg-slate-800/50 border-cyan-500/30 text-white placeholder:text-white/50 rounded-lg focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description" className="text-white uppercase tracking-wider text-xs font-medium">Mission Brief</Label>
                 <Textarea
                   id="description"
-                  placeholder="Describe your task..."
+                  placeholder="Describe mission parameters..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
+                  className="bg-slate-800/50 border-cyan-500/30 text-white placeholder:text-white/50 rounded-lg focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status" className="text-white uppercase tracking-wider text-xs font-medium">Mission Status</Label>
                   <Select value={status} onValueChange={(v: Task["status"]) => setStatus(v)}>
-                    <SelectTrigger id="status">
+                    <SelectTrigger id="status" className="bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="in-progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="on-hold">On Hold</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectContent className="bg-slate-900 border-cyan-500/30">
+                      <SelectItem value="pending" className="text-white focus:bg-cyan-500/20">Pending</SelectItem>
+                      <SelectItem value="in-progress" className="text-white focus:bg-cyan-500/20">In Progress</SelectItem>
+                      <SelectItem value="completed" className="text-white focus:bg-cyan-500/20">Completed</SelectItem>
+                      <SelectItem value="on-hold" className="text-white focus:bg-cyan-500/20">On Hold</SelectItem>
+                      <SelectItem value="cancelled" className="text-white focus:bg-cyan-500/20">Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="priority">Priority</Label>
+                  <Label htmlFor="priority" className="text-white uppercase tracking-wider text-xs font-medium">Priority Level</Label>
                   <Select value={priority} onValueChange={(v: Task["priority"]) => setPriority(v)}>
-                    <SelectTrigger id="priority">
+                    <SelectTrigger id="priority" className="bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
+                    <SelectContent className="bg-slate-900 border-cyan-500/30">
+                      <SelectItem value="low" className="text-white focus:bg-cyan-500/20">Low</SelectItem>
+                      <SelectItem value="medium" className="text-white focus:bg-cyan-500/20">Medium</SelectItem>
+                      <SelectItem value="high" className="text-white focus:bg-cyan-500/20">High</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2008,7 +2129,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label>Due Date</Label>
+                  <Label className="text-white uppercase tracking-wider text-xs font-medium">Due Date</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -2034,15 +2155,15 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category" className="text-white uppercase tracking-wider text-xs font-medium">Category</Label>
                   <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger id="category">
+                    <SelectTrigger id="category" className="bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-slate-900 border-cyan-500/30">
                       <SelectItem value="none">No Category</SelectItem>
                       {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
+                        <SelectItem className="text-white focus:bg-cyan-500/20" key={cat} value={cat}>
                           {cat}
                         </SelectItem>
                       ))}
@@ -2052,13 +2173,14 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
               </div>
 
               <div className="grid gap-2">
-                <Label>Tags</Label>
+                <Label className="text-white uppercase tracking-wider text-xs font-medium">Tags</Label>
                 <div className="flex gap-2">
                   <Input
                     placeholder="Add a tag..."
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
+                    className="text-white uppercase"
                   />
                   <Button type="button" variant="outline" onClick={addTag}>
                     Add
@@ -2066,7 +2188,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="gap-1">
+                    <Badge key={tag} variant="secondary" className="gap-1 uppercase">
                       #{tag}
                       <button
                         onClick={() => removeTag(tag)}
@@ -2082,13 +2204,14 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
             <TabsContent value="subtasks" className="space-y-4">
               <div className="grid gap-2">
-                <Label>Subtasks ({subtasks.filter(st => st.completed).length}/{subtasks.length} completed)</Label>
+                <Label className="text-white uppercase tracking-wider text-xs font-medium">Subtasks ({subtasks.filter(st => st.completed).length}/{subtasks.length} completed)</Label>
                 <div className="flex gap-2">
                   <Input
                     placeholder="Add a subtask..."
                     value={subtaskInput}
                     onChange={(e) => setSubtaskInput(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addSubtask())}
+                    className="text-white"
                   />
                   <Button type="button" variant="outline" onClick={addSubtask}>
                     <Plus className="h-4 w-4" />
@@ -2101,7 +2224,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                     subtasks.map((subtask) => (
                       <div
                         key={subtask.id}
-                        className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted/50"
+                        className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted/50 text-white"
                       >
                         <Checkbox
                           checked={subtask.completed}
@@ -2127,11 +2250,12 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
             <TabsContent value="details" className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes" className="text-white uppercase tracking-wider text-xs font-medium">Notes</Label>
                 <Textarea
                   id="notes"
                   placeholder="Additional notes, links, or references..."
                   value={notes}
+                  className="text-white"
                   onChange={(e) => setNotes(e.target.value)}
                   rows={10}
                 />
@@ -2163,16 +2287,21 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
       {/* View Task Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-cyan-500/30 rounded-xl">
+          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
+          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
+          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
+          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
+          
           <DialogHeader>
-            <DialogTitle>Task Details</DialogTitle>
+            <DialogTitle className="text-cyan-400 tracking-wider uppercase">Mission Details</DialogTitle>
           </DialogHeader>
           {viewingTask && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold">{viewingTask.title}</h3>
+                <h3 className="text-lg font-semibold text-white">{viewingTask.title}</h3>
                 {viewingTask.description && (
-                  <p className="text-muted-foreground mt-2">{viewingTask.description}</p>
+                  <p className="text-white/70 mt-2">{viewingTask.description}</p>
                 )}
               </div>
 
@@ -2183,19 +2312,19 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                 <Badge className={cn(priorityConfig[viewingTask.priority].bgColor, priorityConfig[viewingTask.priority].color)}>
                   {priorityConfig[viewingTask.priority].label} Priority
                 </Badge>
-                {viewingTask.category && <Badge variant="outline">{viewingTask.category}</Badge>}
+                {viewingTask.category && <Badge>{viewingTask.category}</Badge>}
               </div>
 
               <div className="space-y-2 text-sm">
                 {viewingTask.dueDate && (
                   <div className="flex items-center gap-2">
                     <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                    <span>Due: {format(viewingTask.dueDate, "PPP")}</span>
+                    <span className="text-white/70">Due: {format(viewingTask.dueDate, "PPP")}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>Created: {viewingTask.createdAt ? format(viewingTask.createdAt, "PPp") : "Just now"}</span>
+                  <span className="text-white/70">Created: {viewingTask.createdAt ? format(viewingTask.createdAt, "PPp") : "Just now"}</span>
                 </div>
               </div>
 
@@ -2217,18 +2346,18 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
               {/* Subtasks Section */}
               {viewingTask.subtasks && viewingTask.subtasks.length > 0 && (
                 <div className="border rounded-lg p-3">
-                  <Label className="text-xs text-muted-foreground mb-2 block">
+                  <Label className="text-xs text-white mb-2 block">
                     Subtasks ({viewingTask.subtasks.filter(st => st.completed).length}/{viewingTask.subtasks.length})
                   </Label>
-                  <div className="space-y-1">
+                  <div className="space-y-1 text-white/70">
                     {viewingTask.subtasks.map((subtask) => (
                       <div key={subtask.id} className="flex items-center gap-2 text-sm">
                         {subtask.completed ? (
                           <CheckCircle2 className="h-4 w-4 text-green-500" />
                         ) : (
-                          <Circle className="h-4 w-4 text-muted-foreground" />
+                          <Circle className="h-4 w-4 text-white" />
                         )}
-                        <span className={cn(subtask.completed && "line-through text-muted-foreground")}>
+                        <span className={cn(subtask.completed && "line-through text-white")}>
                           {subtask.title}
                         </span>
                       </div>
@@ -2245,7 +2374,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                   </Label>
                   <div className="space-y-2">
                     {viewTaskEnhancedCollaborators.map((collaborator) => (
-                      <div key={collaborator.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                      <div key={collaborator.id} className="flex items-center justify-between p-3 bg-muted/10 rounded-md">
                         <div className="flex items-center gap-3">
                           <div className="relative">
                             <img
@@ -2270,7 +2399,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-medium">{collaborator.name}</p>
-                              <Badge variant="outline" className="text-xs">
+                              <Badge className="text-xs uppercase">
                                 {collaborator.role}
                               </Badge>
                             </div>
@@ -2315,7 +2444,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
               {viewingTask.history && viewingTask.history.length > 0 && (
                 <div className="border rounded-lg p-3">
                   <Label className="text-xs text-muted-foreground mb-2 block">Activity History</Label>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto text-white">
                     {viewingTask.history.map((entry, index) => (
                       <div key={entry.id || index} className="flex items-start gap-2 text-sm">
                         <div className="mt-1">
@@ -2401,28 +2530,33 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
       {/* Collaboration Dialog */}
       <Dialog open={isCollaborationDialogOpen} onOpenChange={setIsCollaborationDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-cyan-500/30 rounded-xl">
+          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
+          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
+          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
+          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
+          
           <DialogHeader>
-            <DialogTitle>Send Collaboration Request</DialogTitle>
-            <DialogDescription>
-              Send a collaboration request to "{collaboratingTask?.title}". The collaborator will receive a notification and can accept or decline.
+            <DialogTitle className="text-cyan-400 tracking-wider uppercase">Transmit Collaboration Request</DialogTitle>
+            <DialogDescription className="text-white/80">
+              Transmit collaboration request for "{collaboratingTask?.title}". The recipient will receive notification and can accept or decline.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="collaborator-select">Select IT Department Collaborator</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+              <Label htmlFor="collaborator-select" className="text-white uppercase tracking-wider text-xs font-medium">Select Operative</Label>
+              <div className="relative group/input">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70 group-focus-within/input:text-cyan-400 transition-colors z-10" />
                 <Input
                   id="collaborator-search"
-                  placeholder="Search IT Department..."
+                  placeholder="Search operative..."
                   value={userSearchQuery}
                   onChange={(e) => {
                     setUserSearchQuery(e.target.value);
-                    setSelectedUser(null); // Reset selection when searching
+                    setSelectedUser(null);
                   }}
-                  className="pl-10"
+                  className="pl-10 bg-slate-800/50 border-cyan-500/30 text-white placeholder:text-white/50 rounded-lg focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all"
                 />
                 {isSearchingUsers && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -2431,16 +2565,19 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                 )}
               </div>
               
-              {/* Show search results */}
-              {userSearchQuery && availableUsers.length > 0 && (
-                <div className="border rounded-lg max-h-60 overflow-y-auto">
+              {/* User List */}
+              {availableUsers.length > 0 && (
+                <div className="border rounded-lg max-h-60 overflow-y-auto text-white hover:text-black">
                   {availableUsers.map((user) => (
                     <div
                       key={user.id}
-                      className="flex items-center gap-3 p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
+                      className={cn(
+                        "flex items-center gap-3 p-3 hover:bg-muted cursor-pointer border-b last:border-b-0",
+                        selectedUser?.id === user.id && "bg-blue-50"
+                      )}
                       onClick={() => {
                         setSelectedUser(user);
-                        setUserSearchQuery(user.fullName); // Set search to selected user name
+                        setUserSearchQuery(user.fullName);
                       }}
                     >
                       {user.avatar ? (
@@ -2468,128 +2605,41 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <Badge variant="outline" className="text-xs">
+                        <Badge className="text-xs uppercase">
                           {user.role}
                         </Badge>
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
-              
-              {/* Show all users when no search query */}
-              {!userSearchQuery && availableUsers.length > 0 && (
-                <div className="border rounded-lg max-h-60 overflow-y-auto">
-                  {availableUsers.map((user) => (
-                    <div
-                      key={user.id}
-                      className="flex items-center gap-3 p-3 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                      onClick={() => {
-                        setSelectedUser(user);
-                        setUserSearchQuery(user.fullName); // Set search to selected user name
-                      }}
-                    >
-                      {user.avatar ? (
-                        <img 
-                          src={user.avatar} 
-                          alt={user.fullName} 
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-sm font-medium">
-                            {user.firstName?.charAt(0).toUpperCase()}{user.lastName?.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="font-medium">{user.fullName}</div>
-                        <div className="text-xs text-blue-600 font-semibold">ID: {user.referenceId}</div>
-                        <div className="text-xs text-muted-foreground">{user.email}</div>
-                        {user.department && user.position && (
-                          <div className="text-xs text-blue-600">
-                            {user.department} - {user.position}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <Badge variant="outline" className="text-xs">
-                          {user.role}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Show selected user */}
-              {selectedUser && !userSearchQuery && (
-                <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                  {selectedUser.avatar ? (
-                    <img 
-                      src={selectedUser.avatar} 
-                      alt={selectedUser.fullName} 
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">
-                        {selectedUser.firstName?.charAt(0).toUpperCase()}{selectedUser.lastName?.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <div className="font-medium">{selectedUser.fullName}</div>
-                    <div className="text-xs text-blue-600 font-semibold">ID: {selectedUser.referenceId}</div>
-                    <div className="text-xs text-muted-foreground">{selectedUser.email}</div>
-                    {selectedUser.department && selectedUser.position && (
-                      <div className="text-xs text-blue-600">
-                        {selectedUser.department} - {selectedUser.position}
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedUser(null);
-                      setUserSearchQuery("");
-                    }}
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </Button>
                 </div>
               )}
               
               {/* No results message */}
               {userSearchQuery && availableUsers.length === 0 && !isSearchingUsers && (
                 <div className="p-3 text-center text-muted-foreground border rounded-lg">
-                  No IT Department users found
-                  <div className="text-xs mt-1">
-                    Type "IT" to see IT Department collaborators
-                  </div>
+                  No users found
                 </div>
               )}
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="collaborator-role">Role</Label>
-              <Select value={collaboratorRole} onValueChange={setCollaboratorRole}>
-                <SelectTrigger id="collaborator-role">
+              <Label htmlFor="collaborator-role" className="text-white uppercase tracking-wider text-xs font-medium">Role</Label>
+              <Select value={collaboratorRole} onValueChange={setCollaboratorRole} >
+                <SelectTrigger id="collaborator-role" className="w-full h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="viewer">Viewer (Can view only)</SelectItem>
-                  <SelectItem value="editor">Editor (Can view and edit)</SelectItem>
+                <SelectContent className="bg-slate-900 border-cyan-500/30">
+                  <SelectItem className="text-white focus:bg-cyan-500/20" value="viewer">Viewer (Can view only)</SelectItem>
+                  <SelectItem className="text-white focus:bg-cyan-500/20" value="editor">Editor (Can view and edit)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="collaboration-message">Message (Optional)</Label>
+              <Label htmlFor="collaboration-message" className="text-white uppercase tracking-wider text-xs font-medium">Message (Optional)</Label>
               <Textarea
                 id="collaboration-message"
+                className="text-white"
                 placeholder="Add a message to the collaborator..."
                 value={collaborationMessage}
                 onChange={(e) => setCollaborationMessage(e.target.value)}
@@ -2625,29 +2675,56 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
 
       {/* Bulk Actions Dialog */}
       <Dialog open={isBulkActionsOpen} onOpenChange={setIsBulkActionsOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-cyan-500/30 rounded-xl">
+          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
+          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
+          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
+          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
+          
           <DialogHeader>
-            <DialogTitle>Bulk Actions ({selectedTasks.size} selected)</DialogTitle>
-            <DialogDescription>Choose an action to apply to all selected tasks.</DialogDescription>
+            <DialogTitle className="text-cyan-400 tracking-wider uppercase">Bulk Operations ({selectedTasks.size} selected)</DialogTitle>
+            <DialogDescription className="text-white/80">
+              Select operation to apply to all selected missions.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="grid gap-2">
               <Label>Change Status</Label>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleBulkStatusUpdate("pending")}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleBulkStatusUpdate("pending")}
+                  className="bg-slate-800/50 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 hover:border-yellow-400/50"
+                >
                   <Clock className="h-4 w-4 mr-2" />
                   Pending
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleBulkStatusUpdate("in-progress")}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleBulkStatusUpdate("in-progress")}
+                  className="bg-slate-800/50 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:border-blue-400/50"
+                >
                   <PlayCircle className="h-4 w-4 mr-2" />
                   In Progress
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleBulkStatusUpdate("completed")}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleBulkStatusUpdate("completed")}
+                  className="bg-slate-800/50 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-400/50"
+                >
                   <CheckCircle2 className="h-4 w-4 mr-2" />
                   Completed
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleBulkStatusUpdate("on-hold")}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleBulkStatusUpdate("on-hold")}
+                  className="bg-slate-800/50 border-orange-500/30 text-orange-400 hover:bg-orange-500/20 hover:border-orange-400/50"
+                >
                   <PauseCircle className="h-4 w-4 mr-2" />
                   On Hold
                 </Button>
@@ -2668,6 +2745,7 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
           </div>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   );
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { IconTrendingUp } from "@tabler/icons-react";
+import { IconTrendingUp, IconUsers, IconDatabase, IconActivity, IconChartBar, IconFileAnalytics } from "@tabler/icons-react";
 import { useDashboardData } from "@/contexts/DashboardDataContext";
 import { Spinner } from "@/components/ui/spinner";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle, } from "@/components/ui/card";
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface CustomerRecord {
     _id: string;
@@ -84,209 +84,158 @@ export function SectionCards() {
 
     return (
         <>
-            <div className="grid grid-cols-1 gap-2 px-4 sm:grid-cols-2 lg:grid-cols-4 lg:px-6">
+            <div className="grid grid-cols-1 gap-3 px-4 sm:grid-cols-2 lg:grid-cols-4 lg:px-6">
                 {/* Total Customer Records */}
-                <Card className="@container/card flex flex-col rounded-3xl p-1 ">
-                    <Card className="flex rounded-3xl p-6 bg-black/80 shadow-xl border-none">
-                        {/* Left side: Vertical stack (title + count) */}
-                        <div className="flex flex-1 flex-col justify-center gap-2">
-                            <CardDescription className="text-cyan-300">Total Customer Records</CardDescription>
-                            <CardTitle className="text-3xl font-extrabold text-white tabular-nums">
-                                {renderTitle(loading.records, errors.records, allRecords.length)}
-                            </CardTitle>
-                            {!loading.records && !errors.records && (
-                                <Badge variant="outline" className="flex items-center gap-1 w-max text-cyan-400 border-cyan-400">
-                                    <IconTrendingUp />
-                                    {totalRecordsTrend}
-                                </Badge>
-                            )}
+                <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl p-4 overflow-hidden h-full">
+                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
+                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
+                        
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
+                                <IconDatabase className="h-6 w-6 text-cyan-400" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.records, errors.records, allRecords.length)}</p>
+                                <p className="text-xs text-white/80 uppercase tracking-wider">Total Records</p>
+                            </div>
                         </div>
-
-                        {/* Right side: Vertical Battery Bar */}
-                        <div className="relative w-8 h-24 bg-gray-900 rounded-lg border border-cyan-600 flex flex-col justify-end p-1 shadow-[0_0_8px_cyan]">
-                            {/* Battery level with animation */}
-                            <div
-                                className="w-6 mx-auto rounded-md bg-gradient-to-t from-cyan-500 via-cyan-400 to-cyan-300 shadow-lg transition-all duration-1000 ease-in-out"
-                                style={{ height: "75%" }} // Adjust based on newRecordsCount or trend if you want dynamic height
-                            ></div>
-
-                            {/* Battery tip */}
-                            <div className="absolute left-1/2 top-[-6px] -translate-x-1/2 w-4 h-2 bg-cyan-400 rounded-t-md"></div>
-                        </div>
+                        {!loading.records && !errors.records && (
+                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-cyan-400 border-cyan-400/50 bg-cyan-500/10 text-xs">
+                                <IconTrendingUp className="h-3 w-3" />
+                                {totalRecordsTrend}
+                            </Badge>
+                        )}
                     </Card>
-                    {/* Footer below the row */}
-                    <CardFooter className="mt-4 flex flex-col items-start gap-1.5 text-sm">
-                        <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                            Trending up this month <IconTrendingUp className="size-4 text-cyan-400" />
-                        </div>
-                        <div>Total customer records in the database</div>
-                    </CardFooter>
-                </Card>
+                </div>
 
                 {/* New Customer Records */}
-                <Card className="@container/card flex flex-col rounded-3xl p-1">
-                    <Card className="flex rounded-3xl p-6 bg-black/80 shadow-xl border-none">
-                        {/* Left side: Vertical stack (title + count) */}
-                        <div className="flex flex-1 flex-col justify-center gap-2">
-                            <CardDescription className="text-cyan-300">
-                                New Customer Records (Last {NEW_RECORDS_DAYS} Days)
-                            </CardDescription>
-                            <CardTitle className="text-3xl font-extrabold text-white tabular-nums">
-                                {renderTitle(loading.records, errors.records, newRecordsCount)}
-                            </CardTitle>
-                            {!loading.records && !errors.records && (
-                                <Badge variant="outline" className="flex items-center gap-1 w-max text-cyan-400 border-cyan-400">
-                                    <IconTrendingUp />
-                                    {newRecordsTrend}
-                                </Badge>
-                            )}
+                <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-emerald-500/30 rounded-xl p-4 overflow-hidden h-full">
+                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-emerald-500/50" />
+                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-emerald-500/50" />
+                        
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30">
+                                <IconFileAnalytics className="h-6 w-6 text-emerald-400" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.records, errors.records, newRecordsCount)}</p>
+                                <p className="text-xs text-white/80 uppercase tracking-wider">New (7 Days)</p>
+                            </div>
                         </div>
-
-                        {/* Right side: Vertical Battery Bar */}
-                        <div className="relative w-8 h-24 bg-gray-900 rounded-lg border border-cyan-600 flex flex-col justify-end p-1 shadow-[0_0_8px_cyan]">
-                            {/* Battery level with animation */}
-                            <div
-                                className="w-6 mx-auto rounded-md bg-gradient-to-t from-cyan-500 via-cyan-400 to-cyan-300 shadow-lg transition-all duration-1000 ease-in-out"
-                                style={{ height: "75%" }} // Adjust based on newRecordsCount or trend if you want dynamic height
-                            ></div>
-
-                            {/* Battery tip */}
-                            <div className="absolute left-1/2 top-[-6px] -translate-x-1/2 w-4 h-2 bg-cyan-400 rounded-t-md"></div>
-                        </div>
+                        {!loading.records && !errors.records && (
+                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-emerald-400 border-emerald-400/50 bg-emerald-500/10 text-xs">
+                                <IconTrendingUp className="h-3 w-3" />
+                                {newRecordsTrend}
+                            </Badge>
+                        )}
                     </Card>
-
-                    {/* Footer below the row */}
-                    <CardFooter className="mt-4 flex flex-col items-start gap-1.5 text-sm">
-                        <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                            Trending up this period <IconTrendingUp className="size-4 text-cyan-400" />
-                        </div>
-                        <div>Recently added customer records</div>
-                    </CardFooter>
-                </Card>
+                </div>
 
                 {/* Total Users */}
-                <Card className="@container/card flex flex-col rounded-3xl p-1">
-                    <Card className="flex rounded-3xl p-6 bg-black/80 shadow-xl border-none">
-                        {/* Left side: Vertical stack (title + count) */}
-                        <div className="flex flex-1 flex-col justify-center gap-2">
-                            <CardDescription className="text-cyan-300">Total Users</CardDescription>
-                            <CardTitle className="text-3xl font-extrabold text-white tabular-nums">
-                                {renderTitle(loading.users, errors.users, userRecords.length)}
-                            </CardTitle>
-                            {!loading.users && !errors.users && (
-                                <Badge variant="outline" className="flex items-center gap-1 w-max text-cyan-400 border-cyan-400">
-                                    <IconTrendingUp />
-                                    {totalUsersTrend}
-                                </Badge>
-                            )}
+                <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-blue-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-blue-500/30 rounded-xl p-4 overflow-hidden h-full">
+                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-blue-500/50" />
+                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-blue-500/50" />
+                        
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-blue-500/20 border border-blue-500/30">
+                                <IconUsers className="h-6 w-6 text-blue-400" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.users, errors.users, userRecords.length)}</p>
+                                <p className="text-xs text-white/80 uppercase tracking-wider">Total Users</p>
+                            </div>
                         </div>
-
-                        {/* Right side: Vertical Battery Bar */}
-                        <div className="relative w-8 h-24 bg-gray-900 rounded-lg border border-cyan-600 flex flex-col justify-end p-1 shadow-[0_0_8px_cyan]">
-                            {/* Battery level with animation */}
-                            <div
-                                className="w-6 mx-auto rounded-md bg-gradient-to-t from-cyan-500 via-cyan-400 to-cyan-300 shadow-lg transition-all duration-1000 ease-in-out"
-                                style={{ height: "75%" }} // Adjust based on newRecordsCount or trend if you want dynamic height
-                            ></div>
-
-                            {/* Battery tip */}
-                            <div className="absolute left-1/2 top-[-6px] -translate-x-1/2 w-4 h-2 bg-cyan-400 rounded-t-md"></div>
-                        </div>
+                        {!loading.users && !errors.users && (
+                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-blue-400 border-blue-400/50 bg-blue-500/10 text-xs">
+                                <IconTrendingUp className="h-3 w-3" />
+                                {totalUsersTrend}
+                            </Badge>
+                        )}
                     </Card>
-
-                    {/* Footer below the row */}
-                    <CardFooter className="mt-4 flex flex-col items-start gap-1.5 text-sm">
-                        <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                            Trending up this period <IconTrendingUp className="size-4 text-cyan-400" />
-                        </div>
-                        <div>total user records</div>
-                    </CardFooter>
-                </Card>
+                </div>
 
                 {/* New Users */}
-                <Card className="@container/card flex flex-col rounded-3xl p-1">
-                    <Card className="flex rounded-3xl p-6 bg-black/80 shadow-xl border-none">
-                        {/* Left side: Vertical stack (title + count) */}
-                        <div className="flex flex-1 flex-col justify-center gap-2">
-                            <CardDescription className="text-cyan-300">New Users (Last {NEW_RECORDS_DAYS} Days)</CardDescription>
-                            <CardTitle className="text-3xl font-extrabold text-white tabular-nums">
-                                {renderTitle(loading.users, errors.users, newUsersCount)}
-                            </CardTitle>
-                            {!loading.users && !errors.users && (
-                                <Badge variant="outline" className="flex items-center gap-1 w-max text-cyan-400 border-cyan-400">
-                                    <IconTrendingUp />
-                                    {newUsersTrend}
-                                </Badge>
-                            )}
+                <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-purple-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-purple-500/30 rounded-xl p-4 overflow-hidden h-full">
+                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-purple-500/50" />
+                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-purple-500/50" />
+                        
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-purple-500/20 border border-purple-500/30">
+                                <IconUsers className="h-6 w-6 text-purple-400" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.users, errors.users, newUsersCount)}</p>
+                                <p className="text-xs text-white/80 uppercase tracking-wider">New Users (7 Days)</p>
+                            </div>
                         </div>
-
-                        {/* Right side: Vertical Battery Bar */}
-                        <div className="relative w-8 h-24 bg-gray-900 rounded-lg border border-cyan-600 flex flex-col justify-end p-1 shadow-[0_0_8px_cyan]">
-                            {/* Battery level with animation */}
-                            <div
-                                className="w-6 mx-auto rounded-md bg-gradient-to-t from-cyan-500 via-cyan-400 to-cyan-300 shadow-lg transition-all duration-1000 ease-in-out"
-                                style={{ height: "75%" }} // Adjust based on newRecordsCount or trend if you want dynamic height
-                            ></div>
-
-                            {/* Battery tip */}
-                            <div className="absolute left-1/2 top-[-6px] -translate-x-1/2 w-4 h-2 bg-cyan-400 rounded-t-md"></div>
-                        </div>
+                        {!loading.users && !errors.users && (
+                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-purple-400 border-purple-400/50 bg-purple-500/10 text-xs">
+                                <IconTrendingUp className="h-3 w-3" />
+                                {newUsersTrend}
+                            </Badge>
+                        )}
                     </Card>
-
-                    {/* Footer below the row */}
-                    <CardFooter className="mt-4 flex flex-col items-start gap-1.5 text-sm">
-                        <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                            Trending up this period <IconTrendingUp className="size-4 text-cyan-400" />
-                        </div>
-                        <div>Recently registered users</div>
-                    </CardFooter>
-                </Card>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 px-4 sm:grid-cols-2 lg:grid-cols-2 lg:px-6">
+            <div className="grid grid-cols-1 gap-3 px-4 sm:grid-cols-2 lg:grid-cols-2 lg:px-6">
                 {/* Total Progress Records */}
-                <Card className="@container/card flex flex-col rounded-3xl">
-                    <CardHeader className="flex flex-col gap-2">
-                        <CardDescription>Total Progress Records</CardDescription>
-                        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                            {renderTitle(loading.progress, errors.progress, progressRecords.length)}
-                        </CardTitle>
+                <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-orange-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-orange-500/30 rounded-xl p-4 overflow-hidden h-full">
+                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-orange-500/50" />
+                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-orange-500/50" />
+                        
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-orange-500/20 border border-orange-500/30">
+                                <IconChartBar className="h-6 w-6 text-orange-400" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.progress, errors.progress, progressRecords.length)}</p>
+                                <p className="text-xs text-white/80 uppercase tracking-wider">Progress Records</p>
+                            </div>
+                        </div>
                         {!loading.progress && !errors.progress && (
-                            <Badge variant="outline" className="flex items-center gap-1 w-max">
-                                <IconTrendingUp />
+                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-orange-400 border-orange-400/50 bg-orange-500/10 text-xs">
+                                <IconTrendingUp className="h-3 w-3" />
                                 {totalProgressTrend}
                             </Badge>
                         )}
-                    </CardHeader>
-                    <CardFooter className="mt-auto flex flex-col items-start gap-1.5 text-sm">
-                        <div className="line-clamp-1 flex gap-2 font-medium">
-                            Progress updates this month <IconTrendingUp className="size-4" />
-                        </div>
-                        <div className="text-muted-foreground">Total progress entries in database</div>
-                    </CardFooter>
-                </Card>
+                    </Card>
+                </div>
 
                 {/* Total Activity Records */}
-                <Card className="@container/card flex flex-col rounded-3xl">
-                    <CardHeader className="flex flex-col gap-2">
-                        <CardDescription>Total Activity Records</CardDescription>
-                        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                            {renderTitle(loading.activity, errors.activity, activityRecords.length)}
-                        </CardTitle>
+                <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-yellow-500/30 rounded-xl p-4 overflow-hidden h-full">
+                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-yellow-500/50" />
+                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-yellow-500/50" />
+                        
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-yellow-500/20 border border-yellow-500/30">
+                                <IconActivity className="h-6 w-6 text-yellow-400" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.activity, errors.activity, activityRecords.length)}</p>
+                                <p className="text-xs text-white/80 uppercase tracking-wider">Activity Records</p>
+                            </div>
+                        </div>
                         {!loading.activity && !errors.activity && (
-                            <Badge variant="outline" className="flex items-center gap-1 w-max">
-                                <IconTrendingUp />
+                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-yellow-400 border-yellow-400/50 bg-yellow-500/10 text-xs">
+                                <IconTrendingUp className="h-3 w-3" />
                                 {totalActivityTrend}
                             </Badge>
                         )}
-                    </CardHeader>
-                    <CardFooter className="mt-auto flex flex-col items-start gap-1.5 text-sm">
-                        <div className="line-clamp-1 flex gap-2 font-medium">
-                            Activity logs this month <IconTrendingUp className="size-4" />
-                        </div>
-                        <div className="text-muted-foreground">Total activity logs in database</div>
-                    </CardFooter>
-                </Card>
+                    </Card>
+                </div>
             </div>
         </>
     );

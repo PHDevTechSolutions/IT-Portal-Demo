@@ -32,12 +32,18 @@ function DashboardContent() {
     <ProtectedPageWrapper>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 justify-between">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
+        <header className="relative flex h-16 shrink-0 items-center gap-2 justify-between bg-slate-950/95 backdrop-blur-xl border-b border-cyan-500/30 overflow-hidden">
+          {/* Corner brackets */}
+          <div className="absolute bottom-0 left-0 w-3 h-3 border-l border-b border-cyan-500/50" />
+          <div className="absolute bottom-0 right-0 w-3 h-3 border-r border-b border-cyan-500/50" />
+          {/* Cyan glow line on bottom edge */}
+          <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
+          
+          <div className="flex items-center gap-2 px-4 relative z-10">
+            <SidebarTrigger className="-ml-1 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10" />
             <Separator
               orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
+              className="mr-2 h-4 bg-cyan-500/30"
             />
             <Breadcrumb>
               <BreadcrumbList>
@@ -59,8 +65,38 @@ function DashboardContent() {
         </header>
 
         {/* ✅ Main dashboard content */}
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
+        <div className="flex flex-1 flex-col bg-[#050a14] relative overflow-hidden">
+          {/* Animated background grid */}
+          <div className="absolute inset-0 h-full w-full">
+            <div 
+              className="h-full w-full opacity-10"
+              style={{
+                backgroundImage: `
+                  linear-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(6, 182, 212, 0.15) 1px, transparent 1px)
+                `,
+                backgroundSize: '50px 50px',
+              }}
+            />
+          </div>
+          
+          {/* Floating particles */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {[...Array(15)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-1 h-1 bg-cyan-400/30 rounded-full"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animation: `float ${5 + Math.random() * 10}s linear infinite`,
+                  animationDelay: `${Math.random() * 5}s` 
+                }}
+              />
+            ))}
+          </div>
+          
+          <div className="relative z-10 @container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <SectionCards />
               <div className="px-4 lg:px-6">
