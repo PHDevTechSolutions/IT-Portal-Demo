@@ -38,7 +38,7 @@ export type TransferField = "tsm" | "manager";
 // ─── DB client factories ──────────────────────────────────────────────────────
 
 function getNeon() {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.TASKFLOW_DB_URL;
   if (!url) throw new Error("DATABASE_URL env var is not set.");
   return neon(url);
 }

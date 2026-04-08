@@ -332,14 +332,12 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <SettingsContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
-    </UserProvider>
+    <FormatProvider>
+      <SidebarProvider>
+        <Suspense fallback={<div>Loading...</div>}>
+          <SettingsContent />
+        </Suspense>
+      </SidebarProvider>
+    </FormatProvider>
   );
 }

@@ -222,7 +222,13 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
   managers,
 }) => {
   // Current logged-in user (used as the audit actor)
-  const currentUser = useCurrentUser();
+  const { 
+    uid: actorUid,
+    name: actorName,
+    email: actorEmail,
+    referenceId: actorReferenceId,
+    isLoading: userLoading 
+  } = useCurrentUser() || {};
 
   const [phase, setPhase] = React.useState<Phase>("config");
   const [isLoading, setIsLoading] = React.useState(false);
@@ -376,7 +382,14 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
         // Replace the "running" line with the result
         setLogEntries((prev) => {
           const copy = [...prev];
-          const idx = copy.findLastIndex((e) => e.level === "running");
+          // Use compatible alternative to findLastIndex
+          let idx = -1;
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].level === "running") {
+              idx = i;
+              break;
+            }
+          }
           if (idx !== -1) {
             if (!result.success) {
               copy[idx] = log(
@@ -391,7 +404,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                   : `✗ MongoDB(${rLog.mongodb})`;
               const neonCount = rLog.neon?.updated ?? "?";
               const neonStatus = rLog.neon?.error
-                ? `✗ Neon`
+                ? `✗ Neon` 
                 : `✓ Neon(${neonCount} rows)`;
               copy[idx] = log(
                 "success",
@@ -441,9 +454,9 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
           Manager: field === "manager" ? newValue : null,
           previousTSM: field === "tsm" ? (user.TSM ?? null) : null,
           previousManager: field === "manager" ? (user.Manager ?? null) : null,
-          actorName: currentUser.name,
-          actorEmail: currentUser.email,
-          actorReferenceID: currentUser.referenceId,
+          actorName: actorName || "System",
+          actorEmail: actorEmail || "system@ecoshift.com",
+          actorReferenceID: actorReferenceId || "SYSTEM",
         });
         addLog(log("dim", `           Firestore activity_logs ✓ written`));
       }
@@ -703,16 +716,16 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
               </div>
 
               {/* Actor info */}
-              {currentUser.name && (
+              {actorName && (
                 <p className="text-[11px] text-muted-foreground">
                   Acting as{" "}
                   <span className="font-medium text-foreground">
-                    {currentUser.name}
+                    {actorName}
                   </span>
-                  {currentUser.referenceId && (
+                  {actorReferenceId && (
                     <span className="text-zinc-400">
                       {" "}
-                      ({currentUser.referenceId})
+                      ({actorReferenceId})
                     </span>
                   )}
                   {" — "}changes will be logged to Firestore{" "}
