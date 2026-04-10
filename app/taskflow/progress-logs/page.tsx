@@ -78,17 +78,17 @@ interface Agent {
     profilePicture?: string;
 }
 
-const ROWS_PER_PAGE = 10;
-
 export default function ActivityLogsPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
     const [activities, setActivities] = useState<Activity[]>([]);
+    const [allActivities, setAllActivities] = useState<Activity[]>([]); // All data for searching
     const [isFetching, setIsFetching] = useState(false);
 
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -154,7 +154,14 @@ export default function ActivityLogsPage() {
         date_created: true,
         date_updated: true,
     });
-    const [showColumnMenu, setShowColumnMenu] = useState(false);
+    // Combined filter dialog
+    const [showFilterDialog, setShowFilterDialog] = useState(false);
+    const [statusFilter, setStatusFilter] = useState("");
+    const [statusOptions, setStatusOptions] = useState<string[]>([]);
+
+    // Progressive fetching states
+    const [fetchLimit, setFetchLimit] = useState(100); // Initial 100 rows
+    const [totalDbRows, setTotalDbRows] = useState(0); // Total rows in database
 
     // Keyboard navigation
     const [focusedCell, setFocusedCell] = useState<{rowId: string, field: string} | null>(null);
@@ -167,35 +174,115 @@ export default function ActivityLogsPage() {
     // Save indicator
     const [unsavedChanges, setUnsavedChanges] = useState<Set<string>>(new Set());
 
-    // Fetch activities from supabase
-    const fetchActivities = async () => {
+    // Edit dialog state
+    const [showEditDialog, setShowEditDialog] = useState(false);
+    const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+    const [editFormData, setEditFormData] = useState<Partial<Activity>>({});
+
+    // Fetch activities from API with progressive loading
+    const fetchActivities = async (limit?: number) => {
         setIsFetching(true);
 
-        let query = supabase
-            .from("history")
-            .select("*");
+        try {
+            const maxRows = limit || fetchLimit;
 
-        // Apply date range filter if set
-        if (dateFrom) {
-            query = query.gte("date_created", dateFrom);
-        }
-        if (dateTo) {
-            query = query.lte("date_created", dateTo);
-        }
+            // Build query params for date filter
+            let queryParams = '';
+            if (dateFrom && dateTo) {
+                const daysDiff = Math.ceil((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / (1000 * 60 * 60 * 24));
+                queryParams = `?days=${daysDiff}`;
+            }
 
-        // Order by date_updated descending (latest first) and limit to 1000
-        const { data, error } = await query
-            .order("date_updated", { ascending: false })
-            .limit(1000);
+            const response = await fetch(`/api/fetch-progress${queryParams}`);
+            const result = await response.json();
 
-        if (error) {
-            toast.error(`Error fetching activities: ${error.message}`);
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to fetch progress logs');
+            }
+
+            // Get total count
+            const totalCount = result.count || result.activities?.length || 0;
+            setTotalDbRows(totalCount);
+
+            // Filter by date range if set
+            let data = result.activities || [];
+            if (dateFrom) {
+                data = data.filter((act: Activity) => act.date_created >= dateFrom);
+            }
+            if (dateTo) {
+                data = data.filter((act: Activity) => act.date_created <= dateTo + 'T23:59:59');
+            }
+
+            // Sort by date_updated descending
+            data.sort((a: Activity, b: Activity) => {
+                const dateA = new Date(a.date_updated || a.date_created || 0).getTime();
+                const dateB = new Date(b.date_updated || b.date_created || 0).getTime();
+                return dateB - dateA;
+            });
+
+            // Store all data for searching
+            setAllActivities(data);
+
+            // Apply limit for display
+            const limitedData = data.slice(0, maxRows);
+            setActivities(limitedData);
+            toast.success(`Loaded ${limitedData.length} of ${totalCount} progress logs`);
+        } catch (err) {
+            toast.error(`Error fetching activities: ${(err as Error).message}`);
             setActivities([]);
-        } else {
-            setActivities(data);
         }
 
         setIsFetching(false);
+    };
+
+    // Handle fetch more button click
+    const handleFetchMore = () => {
+        let nextLimit: number;
+
+        if (fetchLimit === 100) {
+            nextLimit = 2100; // 100 + 2000
+        } else if (fetchLimit === 2100) {
+            nextLimit = 7100; // 2100 + 5000
+        } else {
+            // After 7100, keep adding 5000
+            nextLimit = fetchLimit + 5000;
+        }
+
+        setFetchLimit(nextLimit);
+        fetchActivities(nextLimit);
+        toast.success(`Fetching up to ${nextLimit.toLocaleString()} rows...`);
+    };
+
+    // Handle edit click
+    const handleEditClick = (activity: Activity) => {
+        setEditingActivity(activity);
+        setEditFormData({ ...activity });
+        setShowEditDialog(true);
+    };
+
+    // Handle edit form change
+    const handleEditFormChange = (field: keyof Activity, value: string) => {
+        setEditFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    // Save edited activity
+    const handleSaveEdit = async () => {
+        if (!editingActivity || !editFormData) return;
+
+        const { error } = await supabase
+            .from("history")
+            .update(editFormData)
+            .eq("id", editingActivity.id);
+
+        if (error) {
+            toast.error("Failed to update progress log");
+            return;
+        }
+
+        toast.success("Progress log updated successfully");
+        setShowEditDialog(false);
+        setEditingActivity(null);
+        await fetchActivities();
     };
 
     useEffect(() => {
@@ -206,18 +293,39 @@ export default function ActivityLogsPage() {
         fetchActivities();
     }, [dateFrom, dateTo]);
 
-    const filteredActivities = useMemo(() => {
-        if (!search.trim()) return activities;
+    // Populate status options when activities change
+    useEffect(() => {
+        const uniqueStatuses = [...new Set(activities.map(act => act.status).filter(Boolean))];
+        setStatusOptions(uniqueStatuses.sort());
+    }, [activities]);
 
+    // Reset page when filters, search, or rowsPerPage changes
+    useEffect(() => {
+        setPage(1);
+    }, [dateFrom, dateTo, search, statusFilter, rowsPerPage]);
+
+    const filteredActivities = useMemo(() => {
+        // Use allActivities for searching, activities for display when no search
+        let result = search.trim() ? allActivities : activities;
+
+        // Apply status filter
+        if (statusFilter) {
+            result = result.filter(act => act.status?.toLowerCase() === statusFilter.toLowerCase());
+        }
+
+        if (!search.trim()) return result;
         const lowerSearch = search.toLowerCase();
 
-        return activities
+        return result
             .filter((act) =>
                 [
+                    act.id,
                     act.referenceid,
+                    act.activity_reference_number,
+                    act.ticket_reference_number,
+                    act.account_reference_number,
                     act.tsm,
                     act.manager,
-                    act.ticket_reference_number,
                     act.agent,
                     act.company_name,
                     act.contact_person,
@@ -225,12 +333,38 @@ export default function ActivityLogsPage() {
                     act.email_address,
                     act.address,
                     act.type_client,
-                    act.activity_reference_number,
+                    act.vat_type,
+                    act.project_name,
+                    act.product_category,
+                    act.project_type,
+                    act.source,
+                    act.type_activity,
+                    act.target_quota,
+                    act.call_status,
+                    act.call_type,
+                    act.quotation_number,
+                    act.quotation_amount,
+                    act.quotation_type,
+                    act.so_number,
+                    act.so_amount,
+                    act.actual_sales,
+                    act.dr_number,
+                    act.payment_terms,
+                    act.scheduled_status,
+                    act.product_sku,
+                    act.product_title,
+                    act.product_quantity,
+                    act.product_amount,
+                    act.product_description,
+                    act.status,
+                    act.remarks,
+                    act.tsm_approved_status,
+                    act.tsm_approved_remarks,
                 ]
                     .filter(Boolean)
-                    .some((field) => field.toLowerCase().includes(lowerSearch))
+                    .some((field) => String(field).toLowerCase().includes(lowerSearch))
             )
-    }, [activities, search]);
+    }, [activities, allActivities, search, statusFilter]);
 
     // Get sorted activities
     const sortedActivities = useMemo(() => {
@@ -245,18 +379,17 @@ export default function ActivityLogsPage() {
         });
     }, [filteredActivities, sortColumn, sortDirection]);
 
-    const totalPages = Math.max(1, Math.ceil(sortedActivities.length / ROWS_PER_PAGE));
+    const totalPages = useMemo(() => {
+        return Math.max(1, Math.ceil(sortedActivities.length / rowsPerPage));
+    }, [sortedActivities.length, rowsPerPage]);
+
     const paginatedActivities = useMemo(() => {
-        const start = (page - 1) * ROWS_PER_PAGE;
-        return sortedActivities.slice(start, start + ROWS_PER_PAGE);
-    }, [sortedActivities, page]);
+        const start = (page - 1) * rowsPerPage;
+        return sortedActivities.slice(start, start + rowsPerPage);
+    }, [sortedActivities, page, rowsPerPage]);
 
     const goToPrevious = () => setPage((p) => Math.max(1, p - 1));
     const goToNext = () => setPage((p) => Math.min(totalPages, p + 1));
-
-    useEffect(() => {
-        setPage(1);
-    }, [search]);
 
     // Keyboard navigation
     useEffect(() => {
@@ -462,673 +595,365 @@ export default function ActivityLogsPage() {
                 <AppSidebar />
                 <SidebarInset>
                     {/* Header */}
-                    <header className="flex h-auto min-h-[56px] items-center gap-2 px-2 md:px-4 py-2 flex-wrap">
-                        <SidebarTrigger className="-ml-1 touch-button" />
-                        <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-                            Home
-                        </Button>
-                        <Separator orientation="vertical" className="h-4 hidden sm:block" />
-                        <Breadcrumb className="hidden sm:flex">
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator />
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage>Progress Logs</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
+                    <header className="flex h-14 shrink-0 items-center gap-2 px-4 bg-slate-950 border-b border-slate-800">
+                        <div className="flex items-center gap-2">
+                            <SidebarTrigger className="-ml-1" />
+                            <Separator orientation="vertical" className="h-4 bg-slate-700" />
+                            <Breadcrumb>
+                                <BreadcrumbList>
+                                    <BreadcrumbItem>
+                                        <BreadcrumbLink href="#" className="text-slate-400 hover:text-cyan-400">Taskflow</BreadcrumbLink>
+                                    </BreadcrumbItem>
+                                    <BreadcrumbSeparator className="text-slate-600" />
+                                    <BreadcrumbItem>
+                                        <BreadcrumbPage className="text-cyan-400 font-medium flex items-center gap-2">
+                                            Progress Logs
+                                            {search.trim() && (
+                                                <span className="text-[10px] px-2 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-none">
+                                                    {filteredActivities.length} / {activities.length}
+                                                </span>
+                                            )}
+                                        </BreadcrumbPage>
+                                    </BreadcrumbItem>
+                                </BreadcrumbList>
+                            </Breadcrumb>
+                        </div>
                     </header>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
-                        {/* Search */}
-                        <div className="relative w-full sm:max-w-xs">
-                            <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="pl-8 w-full"
-                            />
-                            {isFetching && (
-                                <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
-                            )}
-                        </div>
+                    {/* Toolbar */}
+                    <div className="flex flex-col gap-3 px-4 py-3 bg-slate-950">
+                        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+                            {/* Left: Search + Pagination */}
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
+                                {/* Search */}
+                                <div className="relative w-full sm:w-64">
+                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-500" />
+                                    <Input
+                                        placeholder="Search all fields..."
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        className="pl-8 w-full bg-slate-900 border-slate-700 text-slate-300 focus:border-cyan-500/50 rounded-none h-9"
+                                    />
+                                    {isFetching && (
+                                        <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-cyan-400" />
+                                    )}
+                                </div>
 
-                        {/* Date Range Filter */}
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <Input
-                                type="date"
-                                value={dateFrom}
-                                onChange={(e) => setDateFrom(e.target.value)}
-                                className="w-full sm:w-auto"
-                                placeholder="From"
-                            />
-                            <span className="text-muted-foreground">to</span>
-                            <Input
-                                type="date"
-                                value={dateTo}
-                                onChange={(e) => setDateTo(e.target.value)}
-                                className="w-full sm:w-auto"
-                                placeholder="To"
-                            />
-                            {(dateFrom || dateTo) && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                        setDateFrom("");
-                                        setDateTo("");
-                                    }}
-                                >
-                                    Clear
-                                </Button>
-                            )}
-                        </div>
+                                {/* Pagination */}
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={goToPrevious}
+                                        disabled={page === 1}
+                                        className="bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-cyan-400 rounded-none h-8 px-2"
+                                    >
+                                        ←
+                                    </Button>
+                                    <span className="text-sm text-slate-400 min-w-[80px] text-center">
+                                        {page} / {totalPages}
+                                    </span>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={goToNext}
+                                        disabled={page === totalPages}
+                                        className="bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-cyan-400 rounded-none h-8 px-2"
+                                    >
+                                        →
+                                    </Button>
+                                </div>
+                            </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={exportToCSV}
-                                className="flex items-center gap-2"
-                            >
-                                Export CSV
-                            </Button>
-                            
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setShowColumnMenu(!showColumnMenu)}
-                                className="flex items-center gap-2"
-                            >
-                                Columns
-                            </Button>
+                            {/* Right: Date Range + Filter + Actions */}
+                            <div className="flex items-center gap-2 w-full lg:w-auto flex-wrap">
+                                {/* Date Range */}
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        type="date"
+                                        value={dateFrom}
+                                        onChange={(e) => setDateFrom(e.target.value)}
+                                        className="w-32 bg-slate-900 border-slate-700 text-slate-300 focus:border-cyan-500/50 rounded-none h-9"
+                                        placeholder="From"
+                                    />
+                                    <span className="text-slate-500">-</span>
+                                    <Input
+                                        type="date"
+                                        value={dateTo}
+                                        onChange={(e) => setDateTo(e.target.value)}
+                                        className="w-32 bg-slate-900 border-slate-700 text-slate-300 focus:border-cyan-500/50 rounded-none h-9"
+                                        placeholder="To"
+                                    />
+                                    {(dateFrom || dateTo) && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setDateFrom("");
+                                                setDateTo("");
+                                            }}
+                                            className="text-slate-400 hover:text-cyan-400 hover:bg-slate-900 rounded-none h-9 px-2"
+                                        >
+                                            ×
+                                        </Button>
+                                    )}
+                                </div>
 
-                            {selectedIds.length > 0 && (
+                                <Separator orientation="vertical" className="h-6 bg-slate-700 hidden sm:block" />
+
+                                {/* Filters Button */}
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setShowBulkEditDialog(true)}
+                                    onClick={() => setShowFilterDialog(true)}
+                                    className={`text-xs uppercase tracking-wider rounded-none h-9 ${showFilterDialog || statusFilter ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-cyan-400'}`}
                                 >
-                                    Bulk Edit ({selectedIds.length})
+                                    Filters {statusFilter && '•'}
                                 </Button>
-                            )}
 
-                            {selectedIds.length > 0 && (
+                                {/* Export */}
                                 <Button
-                                    variant="destructive"
-                                    onClick={() => setShowDeleteConfirm(true)}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={exportToCSV}
+                                    className="bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-cyan-400 text-xs uppercase tracking-wider rounded-none h-9"
                                 >
-                                    Delete ({selectedIds.length})
+                                    Export
                                 </Button>
-                            )}
+
+                                {selectedIds.length > 0 && (
+                                    <>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowBulkEditDialog(true)}
+                                            className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20 text-xs uppercase tracking-wider rounded-none h-9"
+                                        >
+                                            Bulk Edit ({selectedIds.length})
+                                        </Button>
+
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => setShowDeleteConfirm(true)}
+                                            className="bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20 text-xs uppercase tracking-wider rounded-none h-9"
+                                        >
+                                            Delete ({selectedIds.length})
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
 
-                    {/* Column Visibility Menu */}
-                    {showColumnMenu && (
-                        <div className="mx-4 p-4 border border-border rounded-lg bg-background shadow-sm">
-                            <div className="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto">
-                                {Object.keys(columnVisibility).map(column => (
-                                    <label key={column} className="flex items-center gap-2 text-sm cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={columnVisibility[column]}
-                                            onChange={() => toggleColumnVisibility(column)}
-                                        />
-                                        <span className="capitalize">{column.replace(/_/g, ' ')}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Table */}
-                    <div className="mx-4 border border-border shadow-sm rounded-lg overflow-hidden">
+                    {/* Card Grid */}
+                    <div className="flex-1 overflow-hidden bg-slate-950">
                         {isFetching ? (
-                            <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
-                                <Loader2 className="size-6 animate-spin" />
-                                <span>Loading activities...</span>
+                            <div className="py-20 text-center flex flex-col items-center gap-3 text-slate-500">
+                                <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+                                <span className="text-xs uppercase tracking-wider">Loading progress logs...</span>
                             </div>
                         ) : (
-                            <div className="overflow-auto max-h-[calc(100vh-300px)]">
-                                <Table className="min-w-[3000px] w-full text-sm whitespace-nowrap">
-                                    <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-                                        <TableRow>
-                                            <TableHead className="w-10 bg-background">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={
-                                                        paginatedActivities.length > 0 &&
-                                                        paginatedActivities.every((a) => selectedIds.includes(a.id))
-                                                    }
-                                                    onChange={toggleSelectAll}
-                                                />
-                                            </TableHead>
-                                            <TableHead className="bg-background">Ref ID</TableHead>
-                                            <TableHead className="bg-background">TSM</TableHead>
-                                            <TableHead className="bg-background">Manager</TableHead>
-                                            <TableHead className="bg-background">Company Name</TableHead>
-                                            <TableHead className="bg-background">Contact Person</TableHead>
-                                            <TableHead className="bg-background">Contact Number</TableHead>
-                                            <TableHead className="bg-background">Email</TableHead>
-                                            <TableHead className="bg-background">Address</TableHead>
-                                            <TableHead className="bg-background">Type Client</TableHead>
-                                            <TableHead className="bg-background">Project Name</TableHead>
-                                            <TableHead className="bg-background">Product Category</TableHead>
-                                            <TableHead className="bg-background">Project Type</TableHead>
-                                            <TableHead className="bg-background">Source</TableHead>
-                                            <TableHead className="bg-background">Target Quota</TableHead>
-                                            <TableHead className="bg-background">Type Activity</TableHead>
-                                            <TableHead className="bg-background">Callback</TableHead>
-                                            <TableHead className="bg-background">Call Status</TableHead>
-                                            <TableHead className="bg-background">Call Type</TableHead>
-                                            <TableHead className="bg-background">Quotation #</TableHead>
-                                            <TableHead className="bg-background">Quotation Amount</TableHead>
-                                            <TableHead className="bg-background">SO #</TableHead>
-                                            <TableHead className="bg-background">SO Amount</TableHead>
-                                            <TableHead className="bg-background">Actual Sales</TableHead>
-                                            <TableHead className="bg-background">Delivery Date</TableHead>
-                                            <TableHead className="bg-background">DR #</TableHead>
-                                            <TableHead className="bg-background">Ticket Ref #</TableHead>
-                                            <TableHead className="bg-background">Remarks</TableHead>
-                                            <TableHead className="bg-background">Status</TableHead>
-                                            <TableHead className="bg-background">Start Date</TableHead>
-                                            <TableHead className="bg-background">End Date</TableHead>
-                                            <TableHead className="bg-background">Date Followup</TableHead>
-                                            <TableHead className="bg-background">Date Site Visit</TableHead>
-                                            <TableHead className="bg-background">Account Ref #</TableHead>
-                                            <TableHead className="bg-background">Payment Terms</TableHead>
-                                            <TableHead className="bg-background">Scheduled Status</TableHead>
-                                            <TableHead className="bg-background">Product Qty</TableHead>
-                                            <TableHead className="bg-background">Product Amount</TableHead>
-                                            <TableHead className="bg-background">Product Description</TableHead>
-                                            <TableHead className="bg-background">Product SKU</TableHead>
-                                            <TableHead className="bg-background">Product Title</TableHead>
-                                            <TableHead className="bg-background">Quotation Type</TableHead>
-                                            <TableHead className="bg-background">SI Date</TableHead>
-                                            <TableHead className="bg-background">Agent</TableHead>
-                                            <TableHead className="bg-background">TSM Approved Status</TableHead>
-                                            <TableHead className="bg-background">TSM Approved Remarks</TableHead>
-                                            <TableHead className="bg-background">TSM Approved Date</TableHead>
-                                            <TableHead className="bg-background">VAT Type</TableHead>
-                                            <TableHead className="bg-background">Activity Ref #</TableHead>
-                                            <TableHead className="bg-background">Date Created</TableHead>
-                                            <TableHead className="bg-background">Date Updated</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
+                            <div className="h-full overflow-y-auto">
+                                {/* Grid Header */}
+                                <div className="grid grid-cols-[40px_40px_1fr] gap-2 px-4 py-2 bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+                                    <div className="text-slate-300 font-medium text-xs">#</div>
+                                    <div className="text-slate-300 font-medium text-xs">
+                                        <input
+                                            type="checkbox"
+                                            checked={
+                                                paginatedActivities.length > 0 &&
+                                                paginatedActivities.every((a) => selectedIds.includes(a.id))
+                                            }
+                                            onChange={toggleSelectAll}
+                                            className="accent-cyan-500"
+                                        />
+                                    </div>
+                                    <div className="text-slate-300 font-medium text-xs">Progress Log Details</div>
+                                </div>
 
-                                <TableBody>
+                                {/* Grid Cards - 4 columns */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
                                     {paginatedActivities.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={50} className="text-center">
-                                                No activities found.
-                                            </TableCell>
-                                        </TableRow>
+                                        <div className="py-20 text-center text-slate-500 text-sm">
+                                            No progress logs found.
+                                        </div>
                                     ) : (
-                                        paginatedActivities.map((act) => (
-                                            <TableRow key={act.id}>
-                                                <TableCell>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedIds.includes(act.id)}
-                                                        onChange={() => toggleSelect(act.id)}
-                                                    />
-                                                </TableCell>
+                                        paginatedActivities.map((act, index) => (
+                                            <div
+                                                key={`${act.id}-${index}`}
+                                                onClick={() => handleEditClick(act)}
+                                                className="bg-slate-900 border border-slate-800 hover:border-cyan-500/30 transition-colors cursor-pointer group"
+                                            >
+                                                {/* Card Header */}
+                                                <div className="flex items-center justify-between px-3 py-2 bg-slate-950 border-b border-slate-800">
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedIds.includes(act.id)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onChange={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleSelect(act.id);
+                                                            }}
+                                                            className="accent-cyan-500"
+                                                        />
+                                                        <span className="text-xs text-slate-500">#{(page - 1) * rowsPerPage + index + 1}</span>
+                                                    </div>
+                                                </div>
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.referenceid || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "referenceid", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                {/* Card Body */}
+                                                <div className="p-3 space-y-2">
+                                                    {/* Activity Ref */}
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs text-slate-500 uppercase">Activity Ref</span>
+                                                        <span className="text-xs text-cyan-400 font-medium">{act.activity_reference_number || '-'}</span>
+                                                    </div>
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.tsm || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "tsm", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                    {/* Ticket Ref */}
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs text-slate-500 uppercase">Ticket Ref</span>
+                                                        <span className="text-xs text-slate-300">{act.ticket_reference_number || '-'}</span>
+                                                    </div>
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.manager || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "manager", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                    {/* Company */}
+                                                    {columnVisibility.company_name && (
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <span className="text-xs text-slate-500 uppercase">Company</span>
+                                                            <span className="text-xs text-slate-300 text-right">{act.company_name || '-'}</span>
+                                                        </div>
+                                                    )}
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.company_name || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "company_name", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                    {/* Contact */}
+                                                    {columnVisibility.contact_person && (
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <span className="text-xs text-slate-500 uppercase">Contact</span>
+                                                            <span className="text-xs text-slate-300 text-right">{act.contact_person || '-'}</span>
+                                                        </div>
+                                                    )}
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.contact_person || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "contact_person", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                    {/* Phone */}
+                                                    {columnVisibility.contact_number && (
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <span className="text-xs text-slate-500 uppercase">Phone</span>
+                                                            <span className="text-xs text-slate-300 text-right">{act.contact_number || '-'}</span>
+                                                        </div>
+                                                    )}
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.contact_number || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "contact_number", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                    {/* Email */}
+                                                    {columnVisibility.email_address && (
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <span className="text-xs text-slate-500 uppercase">Email</span>
+                                                            <span className="text-xs text-slate-300 text-right truncate max-w-[150px]">{act.email_address || '-'}</span>
+                                                        </div>
+                                                    )}
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.email_address || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "email_address", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                    {/* Status */}
+                                                    {columnVisibility.status && (
+                                                        <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                                                            <span className="text-xs text-slate-500 uppercase">Status</span>
+                                                            <span className={`text-xs px-2 py-0.5 ${act.status?.toLowerCase() === 'completed' || act.status?.toLowerCase() === 'resolved'
+                                                                    ? 'bg-emerald-500/10 text-emerald-400'
+                                                                    : act.status?.toLowerCase() === 'pending' || act.status?.toLowerCase() === 'open'
+                                                                        ? 'bg-yellow-500/10 text-yellow-400'
+                                                                        : act.status?.toLowerCase() === 'cancelled' || act.status?.toLowerCase() === 'closed'
+                                                                            ? 'bg-red-500/10 text-red-400'
+                                                                            : 'bg-slate-800 text-slate-300'
+                                                                }`}>
+                                                                {act.status || 'N/A'}
+                                                            </span>
+                                                        </div>
+                                                    )}
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.address || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "address", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                    {/* TSM */}
+                                                    {columnVisibility.tsm && (
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-xs text-slate-500 uppercase">TSM</span>
+                                                            <span className="text-xs text-slate-300">{act.tsm || '-'}</span>
+                                                        </div>
+                                                    )}
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.type_client || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "type_client", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
+                                                    {/* Manager */}
+                                                    {columnVisibility.manager && (
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-xs text-slate-500 uppercase">Manager</span>
+                                                            <span className="text-xs text-slate-300">{act.manager || '-'}</span>
+                                                        </div>
+                                                    )}
 
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.project_name || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "project_name", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.product_category || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "product_category", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.project_type || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "project_type", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.source || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "source", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.target_quota || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "target_quota", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.type_activity || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "type_activity", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        type="date"
-                                                        defaultValue={act.callback || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "callback", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.call_status || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "call_status", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.call_type || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "call_type", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.quotation_number || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "quotation_number", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.quotation_amount || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "quotation_amount", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.so_number || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "so_number", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.so_amount || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "so_amount", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.actual_sales || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "actual_sales", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        type="date"
-                                                        defaultValue={act.delivery_date || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "delivery_date", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.dr_number || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "dr_number", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.ticket_reference_number || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "ticket_reference_number", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.remarks || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "remarks", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.status || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "status", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        type="date"
-                                                        defaultValue={act.start_date || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "start_date", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        type="date"
-                                                        defaultValue={act.end_date || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "end_date", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        type="date"
-                                                        defaultValue={act.date_followup || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "date_followup", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        type="date"
-                                                        defaultValue={act.date_site_visit || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "date_site_visit", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.account_reference_number || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "account_reference_number", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.payment_terms || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "payment_terms", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.scheduled_status || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "scheduled_status", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.product_quantity || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "product_quantity", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.product_amount || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "product_amount", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.product_description || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "product_description", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.product_sku || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "product_sku", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.product_title || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "product_title", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.quotation_type || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "quotation_type", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        type="date"
-                                                        defaultValue={act.si_date || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "si_date", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.agent || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "agent", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.tsm_approved_status || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "tsm_approved_status", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.tsm_approved_remarks || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "tsm_approved_remarks", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        type="date"
-                                                        defaultValue={act.tsm_approved_date || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "tsm_approved_date", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Input
-                                                        defaultValue={act.vat_type || ""}
-                                                        onBlur={(e) => handleInlineUpdate(act.id, "vat_type", e.target.value)}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <span className="text-[10px]">{act.activity_reference_number}</span>
-                                                </TableCell>
-
-                                                <TableCell>{formatDate(act.date_created)}</TableCell>
-
-                                                <TableCell>{formatDate(act.date_updated)}</TableCell>
-                                            </TableRow>
-
+                                                    {/* Date Created */}
+                                                    {columnVisibility.date_created && (
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-xs text-slate-500 uppercase">Date</span>
+                                                            <span className="text-xs text-slate-400">{formatDate(act.date_created)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         ))
                                     )}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                </div>
+                            </div>
                         )}
                     </div>
 
-                    {/* Pagination */}
-                    <div className="flex justify-center items-center gap-4 my-4">
-                        <Button variant="outline" onClick={goToPrevious} disabled={page === 1}>
-                            Previous
-                        </Button>
-                        <span>
-                            Page {page} of {totalPages}
-                        </span>
-                        <Button variant="outline" onClick={goToNext} disabled={page === totalPages}>
-                            Next
-                        </Button>
-                    </div>
-
                     <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-                        <DialogContent className="max-w-md">
+                        <DialogContent className="max-w-md bg-slate-900/95 border-red-500/30">
                             <DialogHeader>
-                                <DialogTitle>Confirm Delete</DialogTitle>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                                        <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <DialogTitle className="text-cyan-100 tracking-wider">SECURITY ALERT</DialogTitle>
+                                </div>
                             </DialogHeader>
 
-                            <p className="text-sm">
-                                Are you sure you want to delete{" "}
-                                <strong>{selectedIds.length}</strong> selected activities?
-                                This action cannot be undone.
+                            <p className="text-sm text-cyan-300/60 pt-2">
+                                You are about to purge{" "}
+                                <span className="text-red-400 font-bold">{selectedIds.length}</span> activity records from the system. This action cannot be undone.
                             </p>
 
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
-                                    Cancel
+                            <DialogFooter className="gap-2">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+                                >
+                                    Abort
                                 </Button>
-                                <Button variant="destructive" onClick={handleBulkDelete}>
-                                    Delete
+                                <Button 
+                                    variant="destructive" 
+                                    onClick={handleBulkDelete}
+                                    className="bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded-none"
+                                >
+                                    Purge
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
 
                     <Dialog open={showBulkEditDialog} onOpenChange={setShowBulkEditDialog}>
-                        <DialogContent className="max-w-md">
+                        <DialogContent className="max-w-md bg-slate-900/95 border-cyan-500/30">
                             <DialogHeader>
-                                <DialogTitle>Bulk Edit</DialogTitle>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+                                        <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                    </div>
+                                    <DialogTitle className="text-cyan-100 tracking-wider">BULK EDIT PROTOCOL</DialogTitle>
+                                </div>
                             </DialogHeader>
 
-                            <div className="space-y-4">
+                            <div className="space-y-4 pt-2">
                                 <div>
-                                    <label className="text-sm font-medium">Field to Edit</label>
+                                    <label className="text-xs font-bold uppercase text-cyan-400/70 tracking-wider">Target Field</label>
                                     <select
                                         value={bulkEditField}
                                         onChange={(e) => setBulkEditField(e.target.value)}
-                                        className="w-full mt-1 p-2 border rounded"
+                                        className="w-full mt-1 p-2 border border-slate-700 bg-slate-900 text-slate-300 rounded-none focus:border-cyan-500/50"
                                     >
                                         <option value="">Select a field</option>
                                         <option value="tsm">TSM</option>
@@ -1141,22 +966,519 @@ export default function ActivityLogsPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium">New Value</label>
+                                    <label className="text-xs font-bold uppercase text-cyan-400/70 tracking-wider">New Value</label>
                                     <Input
                                         value={bulkEditValue}
                                         onChange={(e) => setBulkEditValue(e.target.value)}
-                                        className="mt-1"
+                                        className="mt-1 bg-slate-900 border-slate-700 text-slate-300 rounded-none focus:border-cyan-500/50"
                                         placeholder="Enter new value"
                                     />
                                 </div>
+                                <p className="text-xs text-cyan-300/50">
+                                    This will update <span className="text-cyan-400 font-bold">{selectedIds.length}</span> selected records.
+                                </p>
                             </div>
 
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setShowBulkEditDialog(false)}>
+                            <DialogFooter className="gap-2">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => setShowBulkEditDialog(false)}
+                                    className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+                                >
                                     Cancel
                                 </Button>
-                                <Button onClick={handleBulkEdit} disabled={!bulkEditField || !bulkEditValue}>
-                                    Update {selectedIds.length} Rows
+                                <Button 
+                                    onClick={handleBulkEdit} 
+                                    disabled={!bulkEditField || !bulkEditValue}
+                                    className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
+                                >
+                                    Update {selectedIds.length} Records
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Edit Dialog */}
+                    <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+                        <DialogContent className="max-w-2xl bg-slate-900/95 border-cyan-500/30">
+                            <DialogHeader>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+                                        <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                    </div>
+                                    <DialogTitle className="text-cyan-100 tracking-wider">EDIT PROGRESS LOG</DialogTitle>
+                                </div>
+                            </DialogHeader>
+
+                            {editingActivity && (
+                                <div className="max-h-[60vh] overflow-y-auto pr-2">
+                                    {/* Basic Info Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Basic Information</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Reference ID</label>
+                                                <Input value={editFormData.referenceid || ''} onChange={(e) => handleEditFormChange('referenceid', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Activity Ref</label>
+                                                <Input value={editFormData.activity_reference_number || ''} onChange={(e) => handleEditFormChange('activity_reference_number', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Ticket Ref</label>
+                                                <Input value={editFormData.ticket_reference_number || ''} onChange={(e) => handleEditFormChange('ticket_reference_number', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Account Ref</label>
+                                                <Input value={editFormData.account_reference_number || ''} onChange={(e) => handleEditFormChange('account_reference_number', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Client Info Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Client Information</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Company Name</label>
+                                                <Input value={editFormData.company_name || ''} onChange={(e) => handleEditFormChange('company_name', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Contact Person</label>
+                                                <Input value={editFormData.contact_person || ''} onChange={(e) => handleEditFormChange('contact_person', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Contact Number</label>
+                                                <Input value={editFormData.contact_number || ''} onChange={(e) => handleEditFormChange('contact_number', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Email Address</label>
+                                                <Input value={editFormData.email_address || ''} onChange={(e) => handleEditFormChange('email_address', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1 col-span-2">
+                                                <label className="text-xs text-slate-400 uppercase">Address</label>
+                                                <Input value={editFormData.address || ''} onChange={(e) => handleEditFormChange('address', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Type Client</label>
+                                                <Input value={editFormData.type_client || ''} onChange={(e) => handleEditFormChange('type_client', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">VAT Type</label>
+                                                <Input value={editFormData.vat_type || ''} onChange={(e) => handleEditFormChange('vat_type', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Project Info Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Project Details</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Project Name</label>
+                                                <Input value={editFormData.project_name || ''} onChange={(e) => handleEditFormChange('project_name', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Product Category</label>
+                                                <Input value={editFormData.product_category || ''} onChange={(e) => handleEditFormChange('product_category', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Project Type</label>
+                                                <Input value={editFormData.project_type || ''} onChange={(e) => handleEditFormChange('project_type', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Source</label>
+                                                <Input value={editFormData.source || ''} onChange={(e) => handleEditFormChange('source', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Type Activity</label>
+                                                <Input value={editFormData.type_activity || ''} onChange={(e) => handleEditFormChange('type_activity', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Target Quota</label>
+                                                <Input value={editFormData.target_quota || ''} onChange={(e) => handleEditFormChange('target_quota', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Start Date</label>
+                                                <Input type="date" value={editFormData.start_date || ''} onChange={(e) => handleEditFormChange('start_date', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">End Date</label>
+                                                <Input type="date" value={editFormData.end_date || ''} onChange={(e) => handleEditFormChange('end_date', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Call Info Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Call Details</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Call Status</label>
+                                                <Input value={editFormData.call_status || ''} onChange={(e) => handleEditFormChange('call_status', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Call Type</label>
+                                                <Input value={editFormData.call_type || ''} onChange={(e) => handleEditFormChange('call_type', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Callback</label>
+                                                <Input type="date" value={editFormData.callback || ''} onChange={(e) => handleEditFormChange('callback', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Date Followup</label>
+                                                <Input type="date" value={editFormData.date_followup || ''} onChange={(e) => handleEditFormChange('date_followup', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Date Site Visit</label>
+                                                <Input type="date" value={editFormData.date_site_visit || ''} onChange={(e) => handleEditFormChange('date_site_visit', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Quotation Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Quotation & Sales</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Quotation Number</label>
+                                                <Input value={editFormData.quotation_number || ''} onChange={(e) => handleEditFormChange('quotation_number', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Quotation Amount</label>
+                                                <Input value={editFormData.quotation_amount || ''} onChange={(e) => handleEditFormChange('quotation_amount', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Quotation Type</label>
+                                                <Input value={editFormData.quotation_type || ''} onChange={(e) => handleEditFormChange('quotation_type', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">SO Number</label>
+                                                <Input value={editFormData.so_number || ''} onChange={(e) => handleEditFormChange('so_number', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">SO Amount</label>
+                                                <Input value={editFormData.so_amount || ''} onChange={(e) => handleEditFormChange('so_amount', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Actual Sales</label>
+                                                <Input value={editFormData.actual_sales || ''} onChange={(e) => handleEditFormChange('actual_sales', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Delivery Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Delivery Information</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Delivery Date</label>
+                                                <Input type="date" value={editFormData.delivery_date || ''} onChange={(e) => handleEditFormChange('delivery_date', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">DR Number</label>
+                                                <Input value={editFormData.dr_number || ''} onChange={(e) => handleEditFormChange('dr_number', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">SI Date</label>
+                                                <Input type="date" value={editFormData.si_date || ''} onChange={(e) => handleEditFormChange('si_date', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Payment Terms</label>
+                                                <Input value={editFormData.payment_terms || ''} onChange={(e) => handleEditFormChange('payment_terms', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Scheduled Status</label>
+                                                <Input value={editFormData.scheduled_status || ''} onChange={(e) => handleEditFormChange('scheduled_status', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Product Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Product Details</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Product SKU</label>
+                                                <Input value={editFormData.product_sku || ''} onChange={(e) => handleEditFormChange('product_sku', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Product Title</label>
+                                                <Input value={editFormData.product_title || ''} onChange={(e) => handleEditFormChange('product_title', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Product Qty</label>
+                                                <Input value={editFormData.product_quantity || ''} onChange={(e) => handleEditFormChange('product_quantity', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Product Amount</label>
+                                                <Input value={editFormData.product_amount || ''} onChange={(e) => handleEditFormChange('product_amount', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1 col-span-2">
+                                                <label className="text-xs text-slate-400 uppercase">Product Description</label>
+                                                <Input value={editFormData.product_description || ''} onChange={(e) => handleEditFormChange('product_description', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Assignment Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Assignment</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">TSM</label>
+                                                <Input value={editFormData.tsm || ''} onChange={(e) => handleEditFormChange('tsm', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Manager</label>
+                                                <Input value={editFormData.manager || ''} onChange={(e) => handleEditFormChange('manager', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Agent</label>
+                                                <Input value={editFormData.agent || ''} onChange={(e) => handleEditFormChange('agent', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Status</label>
+                                                <Input value={editFormData.status || ''} onChange={(e) => handleEditFormChange('status', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* TSM Approval Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">TSM Approval</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Approved Status</label>
+                                                <Input value={editFormData.tsm_approved_status || ''} onChange={(e) => handleEditFormChange('tsm_approved_status', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs text-slate-400 uppercase">Approved Date</label>
+                                                <Input type="date" value={editFormData.tsm_approved_date || ''} onChange={(e) => handleEditFormChange('tsm_approved_date', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                            <div className="space-y-1 col-span-2">
+                                                <label className="text-xs text-slate-400 uppercase">Approved Remarks</label>
+                                                <Input value={editFormData.tsm_approved_remarks || ''} onChange={(e) => handleEditFormChange('tsm_approved_remarks', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Remarks Section */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold uppercase text-cyan-400 tracking-wider border-b border-slate-700 pb-1 mb-2">Remarks</h4>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-slate-400 uppercase">Remarks</label>
+                                            <Input value={editFormData.remarks || ''} onChange={(e) => handleEditFormChange('remarks', e.target.value)} className="bg-slate-900 border-slate-700 text-slate-300 rounded-none h-8" />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <DialogFooter className="gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowEditDialog(false)}
+                                    className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleSaveEdit}
+                                    className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
+                                >
+                                    Save Changes
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Combined Filter Dialog */}
+                    <Dialog open={showFilterDialog} onOpenChange={setShowFilterDialog}>
+                        <DialogContent className="max-w-2xl bg-slate-900/95 border-cyan-500/30 max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+                                        <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                        </svg>
+                                    </div>
+                                    <DialogTitle className="text-cyan-100 tracking-wider">FILTERS & OPTIONS</DialogTitle>
+                                </div>
+                            </DialogHeader>
+
+                            {/* Fetch More Alert Banner - Inside Dialog */}
+                            {activities.length < totalDbRows && (
+                                <div className="mb-4 p-3 bg-cyan-500/10 border border-cyan-500/30">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <svg className="h-5 w-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <div>
+                                                <p className="text-sm text-cyan-400 font-medium">
+                                                    Showing {activities.length.toLocaleString()} of {totalDbRows.toLocaleString()} records
+                                                </p>
+                                                <p className="text-xs text-slate-400">
+                                                    {activities.length === 100
+                                                        ? "Initial load: 100 records"
+                                                        : `Fetched ${fetchLimit.toLocaleString()} rows`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                handleFetchMore();
+                                                setShowFilterDialog(false);
+                                            }}
+                                            className="bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+                                        >
+                                            {activities.length === 100
+                                                ? "Fetch more 2K"
+                                                : "Fetch more 5K"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-6 py-4">
+                                {/* Left Column - Filters */}
+                                <div className="space-y-4">
+                                    <h3 className="text-xs font-medium text-cyan-400 uppercase tracking-wider border-b border-slate-700 pb-2">
+                                        Filters
+                                    </h3>
+
+                                    {/* Status Filter */}
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 uppercase tracking-wider">Filter by Status</label>
+                                        <select
+                                            value={statusFilter}
+                                            onChange={(e) => setStatusFilter(e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700 text-slate-300 rounded-none h-9 px-2 text-sm"
+                                        >
+                                            <option value="">All Statuses</option>
+                                            {statusOptions.map((status) => (
+                                                <option key={status} value={status}>{status}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Clear Filters */}
+                                    {statusFilter && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setStatusFilter("")}
+                                            className="w-full bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-cyan-400 rounded-none h-9"
+                                        >
+                                            Clear Filter
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {/* Right Column - Sorting & Page Length */}
+                                <div className="space-y-4">
+                                    <h3 className="text-xs font-medium text-cyan-400 uppercase tracking-wider border-b border-slate-700 pb-2">
+                                        Sorting & Display
+                                    </h3>
+
+                                    {/* Sort Column */}
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 uppercase tracking-wider">Sort By</label>
+                                        <select
+                                            value={sortColumn}
+                                            onChange={(e) => setSortColumn(e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700 text-slate-300 rounded-none h-9 px-2 text-sm"
+                                        >
+                                            <option value="date_updated">Date Updated</option>
+                                            <option value="date_created">Date Created</option>
+                                            <option value="referenceid">Reference ID</option>
+                                            <option value="company_name">Company Name</option>
+                                            <option value="contact_person">Contact Person</option>
+                                            <option value="status">Status</option>
+                                            <option value="tsm">TSM</option>
+                                            <option value="manager">Manager</option>
+                                            <option value="ticket_reference_number">Ticket Reference</option>
+                                            <option value="activity_reference_number">Activity Reference</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Sort Direction */}
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 uppercase tracking-wider">Sort Direction</label>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSortDirection('asc')}
+                                                className={`flex-1 rounded-none h-9 ${sortDirection === 'asc' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-slate-900 border-slate-700 text-slate-300'}`}
+                                            >
+                                                ASC ↑
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSortDirection('desc')}
+                                                className={`flex-1 rounded-none h-9 ${sortDirection === 'desc' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-slate-900 border-slate-700 text-slate-300'}`}
+                                            >
+                                                DESC ↓
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* Page Length */}
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 uppercase tracking-wider">Rows Per Page</label>
+                                        <div className="flex gap-2">
+                                            {[10, 20, 50, 100].map((num) => (
+                                                <Button
+                                                    key={num}
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setRowsPerPage(num);
+                                                        setPage(1);
+                                                    }}
+                                                    className={`flex-1 rounded-none h-9 ${rowsPerPage === num ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-slate-900 border-slate-700 text-slate-300'}`}
+                                                >
+                                                    {num}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Column Visibility Section */}
+                            <div className="space-y-3 border-t border-slate-700 pt-4">
+                                <h3 className="text-xs font-medium text-cyan-400 uppercase tracking-wider">
+                                    Column Visibility
+                                </h3>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {Object.keys(columnVisibility).map(column => (
+                                        <label key={column} className="flex items-center gap-2 text-sm cursor-pointer text-slate-300 hover:text-cyan-400">
+                                            <input
+                                                type="checkbox"
+                                                checked={columnVisibility[column]}
+                                                onChange={() => toggleColumnVisibility(column)}
+                                                className="accent-cyan-500"
+                                            />
+                                            <span className="capitalize">{column.replace(/_/g, ' ')}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <DialogFooter className="mt-4 gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowFilterDialog(false)}
+                                    className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+                                >
+                                    Close
                                 </Button>
                             </DialogFooter>
                         </DialogContent>

@@ -1,4 +1,118 @@
-"use client";
+const fs = require('fs');
+
+// 1. Pagination Component
+const paginationContent = `"use client"
+
+import React from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+interface PaginationProps {
+  page: number
+  totalPages: number
+  onPageChangeAction: (newPage: number) => void
+}
+
+export const Pagination: React.FC<PaginationProps> = ({
+  page,
+  totalPages,
+  onPageChangeAction,
+}) => {
+  if (totalPages <= 1) return null
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChangeAction(Math.max(1, page - 1))}
+        disabled={page === 1}
+        className="h-8 w-8 p-0 border-cyan-500/30 bg-slate-900/50 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:opacity-30 disabled:hover:bg-transparent rounded-none"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      
+      <div className="flex items-center gap-1 px-3 py-1 rounded border border-cyan-500/30 bg-slate-900/50">
+        <span className="text-xs text-cyan-400 font-mono">{page}</span>
+        <span className="text-xs text-cyan-500/50">/</span>
+        <span className="text-xs text-cyan-300/60 font-mono">{totalPages}</span>
+      </div>
+      
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChangeAction(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages}
+        className="h-8 w-8 p-0 border-cyan-500/30 bg-slate-900/50 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:opacity-30 disabled:hover:bg-transparent rounded-none"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  )
+}
+`;
+
+// 2. Delete Dialog
+const deleteContent = `"use client"
+
+import React from "react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Trash2, AlertTriangle } from "lucide-react"
+
+interface DeleteDialogProps {
+  open: boolean
+  count: number
+  onCancelAction: () => void
+  onConfirmAction: () => void
+}
+
+export function DeleteDialog({ open, count, onCancelAction, onConfirmAction }: DeleteDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onCancelAction}>
+      <DialogContent className="bg-slate-900/95 border-red-500/30 max-w-md">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/30">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+            </div>
+            <DialogTitle className="text-cyan-100 tracking-wider">SECURITY ALERT</DialogTitle>
+          </div>
+          <DialogDescription className="text-cyan-300/60 text-sm pt-2">
+            You are about to purge <span className="text-red-400 font-bold">{count}</span> user profile{count !== 1 ? "s" : ""} from the system. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button 
+            variant="outline" 
+            onClick={onCancelAction}
+            className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+          >
+            Abort
+          </Button>
+          <Button 
+            variant="destructive" 
+            onClick={onConfirmAction}
+            className="bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded-none"
+          >
+            <Trash2 className="w-4 h-4 mr-1" /> Purge
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+`;
+
+// 3. Convert Dialog
+const convertContent = `"use client";
 
 import React, { useState, useMemo } from "react";
 import {
@@ -21,7 +135,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Search, Mail, ArrowRight, RotateCcw } from "lucide-react";
+import { Search, Mail, ArrowRight, RotateCcw, Database } from "lucide-react";
 
 interface Account {
   _id: string;
@@ -161,7 +275,9 @@ export function ConvertEmailDialog({ open, onOpenChangeAction, accounts, setAcco
               <Mail className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <DialogTitle className="text-cyan-100 tracking-wider">EMAIL DOMAIN CONVERSION</DialogTitle>
+              <DialogTitle className="text-cyan-100 tracking-wider flex items-center gap-2">
+                EMAIL DOMAIN CONVERSION
+              </DialogTitle>
               <DialogDescription className="text-cyan-300/60 text-xs">
                 Filter and select accounts to convert email domains
               </DialogDescription>
@@ -299,3 +415,15 @@ export function ConvertEmailDialog({ open, onOpenChangeAction, accounts, setAcco
     </Dialog>
   );
 }
+`;
+
+// Write all files
+fs.writeFileSync('components/app-pagination.tsx', paginationContent);
+fs.writeFileSync('components/admin/roles/delete.tsx', deleteContent);
+fs.writeFileSync('components/admin/roles/convert.tsx', convertContent);
+
+console.log('All components updated successfully!');
+";
+
+fs.writeFileSync('fix-components.js', content);
+node fix-components.js && del fix-components.js

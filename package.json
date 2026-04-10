@@ -116,7 +116,8 @@
     "three-stdlib": "^2.35.14",
     "twilio": "^5.5.1",
     "ua-parser-js": "^2.0.8",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "exceljs": "^4.4.0"
   },
   "overrides": {
     "draft-js": {

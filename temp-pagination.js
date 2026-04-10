@@ -1,4 +1,6 @@
-"use client"
+const fs = require('fs');
+
+const content = `"use client"
 
 import React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
@@ -24,7 +26,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         size="sm"
         onClick={() => onPageChangeAction(Math.max(1, page - 1))}
         disabled={page === 1}
-        className="h-8 w-8 p-0 border-cyan-500/30 bg-slate-900/50 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:opacity-30 disabled:hover:bg-transparent rounded-none"
+        className="h-8 w-8 p-0 border-cyan-500/30 bg-slate-900/50 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:opacity-30 disabled:hover:bg-transparent"
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
@@ -40,10 +42,18 @@ export const Pagination: React.FC<PaginationProps> = ({
         size="sm"
         onClick={() => onPageChangeAction(Math.min(totalPages, page + 1))}
         disabled={page === totalPages}
-        className="h-8 w-8 p-0 border-cyan-500/30 bg-slate-900/50 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:opacity-30 disabled:hover:bg-transparent rounded-none"
+        className="h-8 w-8 p-0 border-cyan-500/30 bg-slate-900/50 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:opacity-30 disabled:hover:bg-transparent"
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
     </div>
   )
 }
+`;
+
+fs.writeFileSync('components/app-pagination.tsx', content);
+console.log('Pagination updated');
+";
+
+fs.writeFileSync('temp-pagination.js', content);
+node temp-pagination.js && del temp-pagination.js

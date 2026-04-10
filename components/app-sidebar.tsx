@@ -181,6 +181,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           icon: Send,
           hasAccess: true
         },
+        { 
+          title: "API Tester", 
+          url: "/settings/api-tester", 
+          icon: SquareTerminal,
+          hasAccess: true
+        },
       ],
       projects: [
         { 
@@ -188,6 +194,12 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           url: "/acculog/activity-logs", 
           icon: CalendarCheck,
           hasAccess: hasPermission(userPermissions, "acculog:Activity Logs")
+        },
+        { 
+          name: "Data Management", 
+          url: "/acculog/data-management", 
+          icon: Database,
+          hasAccess: hasPermission(userPermissions, "acculog:Data Management")
         },
       ],
     };

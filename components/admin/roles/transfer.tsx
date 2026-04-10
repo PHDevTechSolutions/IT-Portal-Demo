@@ -162,11 +162,11 @@ async function logTransferToFirestore(params: {
 
 const LEVEL_CLASS: Record<LogLevel, string> = {
   header: "text-cyan-400 font-semibold",
-  info: "text-zinc-300",
-  success: "text-green-400",
+  info: "text-cyan-200",
+  success: "text-emerald-400",
   error: "text-red-400",
-  warn: "text-yellow-400",
-  dim: "text-zinc-500",
+  warn: "text-amber-400",
+  dim: "text-cyan-500/50",
   running: "text-blue-400",
 };
 
@@ -177,13 +177,13 @@ function Terminal({ entries }: { entries: LogEntry[] }) {
   }, [entries]);
 
   return (
-    <div className="bg-zinc-950 border border-zinc-800 rounded-md h-64 overflow-y-auto font-mono text-xs p-3 select-text">
+    <div className="bg-slate-950 border border-cyan-500/30 rounded-none h-64 overflow-y-auto font-mono text-xs p-3 select-text">
       {entries.length === 0 ? (
-        <span className="text-zinc-600">Waiting to start…</span>
+        <span className="text-cyan-500/30">Waiting to start...</span>
       ) : (
         entries.map((e) => (
           <div key={e.id} className="flex gap-2 leading-5">
-            <span className="text-zinc-600 shrink-0">{e.time}</span>
+            <span className="text-cyan-500/40 shrink-0">{e.time}</span>
             <span className={LEVEL_CLASS[e.level]}>{e.text}</span>
           </div>
         ))
@@ -513,17 +513,23 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl bg-slate-900/95 border-cyan-500/30">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Database className="w-4 h-4" />
-            Transfer Users
-            {salesUsers.length > 0 && (
-              <Badge variant="secondary">
-                {salesUsers.length} Sales user(s)
-              </Badge>
-            )}
-          </DialogTitle>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+              <Database className="w-5 h-5 text-cyan-400" />
+            </div>
+            <div>
+              <DialogTitle className="text-cyan-100 tracking-wider flex items-center gap-2">
+                DATA TRANSFER PROTOCOL
+              </DialogTitle>
+              {salesUsers.length > 0 && (
+                <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30 text-[10px] mt-1">
+                  {salesUsers.length} Sales user(s) selected
+                </Badge>
+              )}
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -532,8 +538,8 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
             <>
               {/* Dual TSM + Manager field selection */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Transfer targets</label>
-                <p className="text-xs text-muted-foreground">
+                <label className="text-xs font-bold uppercase text-cyan-400/70 tracking-wider">Transfer Targets</label>
+                <p className="text-xs text-cyan-300/50">
                   Enable one or both. Each selection updates the corresponding
                   supervisor across MongoDB, Neon, and the selected Supabase
                   tables.
@@ -541,7 +547,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
                 {/* TSM row */}
                 <div
-                  className={`rounded-md border px-3 py-2.5 space-y-2 transition-colors ${tsmEnabled ? "border-primary/50 bg-primary/5" : "border-border"}`}
+                  className={"rounded-none border px-3 py-2.5 space-y-2 transition-colors " + (tsmEnabled ? "border-cyan-400/50 bg-cyan-500/10" : "border-cyan-500/20 bg-slate-900/30")}
                 >
                   <div
                     className="flex items-center gap-2.5 cursor-pointer"
@@ -550,10 +556,10 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                     <Checkbox
                       checked={tsmEnabled}
                       onCheckedChange={(v) => setTsmEnabled(!!v)}
-                      className="pointer-events-none"
+                      className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500 pointer-events-none"
                     />
-                    <span className="text-sm font-medium">Update TSM</span>
-                    <span className="text-xs text-muted-foreground ml-auto">
+                    <span className="text-sm font-medium text-cyan-100">Update TSM</span>
+                    <span className="text-xs text-cyan-400/50 ml-auto">
                       Territory Sales Manager
                     </span>
                   </div>
@@ -562,12 +568,12 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                       value={tsmSelection}
                       onValueChange={setTsmSelection}
                     >
-                      <SelectTrigger className="w-full h-8 text-xs">
-                        <SelectValue placeholder="Choose a TSM…" />
+                      <SelectTrigger className="w-full h-8 text-xs bg-slate-900/50 border-cyan-500/30 text-cyan-100 rounded-none">
+                        <SelectValue placeholder="Choose a TSM..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-slate-900 border-cyan-500/30">
                         {tsms.map((u) => (
-                          <SelectItem key={u.value} value={u.value}>
+                          <SelectItem key={u.value} value={u.value} className="text-cyan-100">
                             {u.label}
                           </SelectItem>
                         ))}
@@ -578,7 +584,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
                 {/* Manager row */}
                 <div
-                  className={`rounded-md border px-3 py-2.5 space-y-2 transition-colors ${managerEnabled ? "border-primary/50 bg-primary/5" : "border-border"}`}
+                  className={"rounded-none border px-3 py-2.5 space-y-2 transition-colors " + (managerEnabled ? "border-cyan-400/50 bg-cyan-500/10" : "border-cyan-500/20 bg-slate-900/30")}
                 >
                   <div
                     className="flex items-center gap-2.5 cursor-pointer"
@@ -587,10 +593,10 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                     <Checkbox
                       checked={managerEnabled}
                       onCheckedChange={(v) => setManagerEnabled(!!v)}
-                      className="pointer-events-none"
+                      className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500 pointer-events-none"
                     />
-                    <span className="text-sm font-medium">Update Manager</span>
-                    <span className="text-xs text-muted-foreground ml-auto">
+                    <span className="text-sm font-medium text-cyan-100">Update Manager</span>
+                    <span className="text-xs text-cyan-400/50 ml-auto">
                       Regional Manager
                     </span>
                   </div>
@@ -599,12 +605,12 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                       value={managerSelection}
                       onValueChange={setManagerSelection}
                     >
-                      <SelectTrigger className="w-full h-8 text-xs">
-                        <SelectValue placeholder="Choose a Manager…" />
+                      <SelectTrigger className="w-full h-8 text-xs bg-slate-900/50 border-cyan-500/30 text-cyan-100 rounded-none">
+                        <SelectValue placeholder="Choose a Manager..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-slate-900 border-cyan-500/30">
                         {managers.map((u) => (
-                          <SelectItem key={u.value} value={u.value}>
+                          <SelectItem key={u.value} value={u.value} className="text-cyan-100">
                             {u.label}
                           </SelectItem>
                         ))}
@@ -616,18 +622,18 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
               {/* Table selection */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Tables to update</label>
+                <label className="text-xs font-bold uppercase text-cyan-400/70 tracking-wider">Database Targets</label>
 
                 {/* Locked core tables */}
                 <div className="grid grid-cols-2 gap-1.5">
                   {(["MongoDB  users", "Neon  accounts"] as const).map((t) => (
                     <div
                       key={t}
-                      className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+                      className="flex items-center gap-2 rounded-none border border-cyan-500/20 bg-slate-900/30 px-3 py-2 text-xs text-cyan-300/50"
                     >
-                      <Lock className="w-3 h-3 shrink-0" />
+                      <Lock className="w-3 h-3 shrink-0 text-cyan-400/50" />
                       <span className="font-mono">{t}</span>
-                      <Badge variant="outline" className="ml-auto text-[10px]">
+                      <Badge variant="outline" className="ml-auto text-[10px] border-cyan-500/30 text-cyan-400/50">
                         always
                       </Badge>
                     </div>
@@ -641,31 +647,31 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                     return (
                       <div key={table} className="space-y-1">
                         <div
-                          className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${
-                            isChecked
-                              ? "border-primary/50 bg-primary/5"
-                              : "border-border bg-background hover:bg-muted/30"
-                          }`}
+                          className={"flex items-center gap-2 rounded-none border px-3 py-2 cursor-pointer transition-colors " +
+                            (isChecked
+                              ? "border-cyan-400/50 bg-cyan-500/10"
+                              : "border-cyan-500/20 bg-slate-900/30 hover:bg-cyan-500/5")
+                          }
                           onClick={() => toggleTable(table)}
                         >
                           <Checkbox
                             checked={isChecked}
                             onCheckedChange={() => toggleTable(table)}
-                            className="pointer-events-none"
+                            className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500 pointer-events-none"
                           />
-                          <span className="font-mono text-xs">{table}</span>
+                          <span className="font-mono text-xs text-cyan-100">{table}</span>
                           {table === "history" && isChecked && (
-                            <Calendar className="w-3 h-3 ml-auto text-muted-foreground" />
+                            <Calendar className="w-3 h-3 ml-auto text-cyan-400/50" />
                           )}
                         </div>
 
                         {/* Date range — only for history table */}
                         {table === "history" && isChecked && (
                           <div
-                            className="ml-1 pl-3 border-l-2 border-primary/30 space-y-1 pb-1"
+                            className="ml-1 pl-3 border-l-2 border-cyan-400/30 space-y-1 pb-1"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <p className="text-[10px] text-muted-foreground">
+                            <p className="text-[10px] text-cyan-300/50">
                               Date range filter (optional)
                             </p>
                             <div className="flex gap-1.5 items-center">
@@ -678,9 +684,9 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                                     from: e.target.value,
                                   }))
                                 }
-                                className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs"
+                                className="flex-1 rounded-none border border-cyan-500/30 bg-slate-900/50 px-2 py-1 text-xs text-cyan-100"
                               />
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-cyan-400/50">
                                 →
                               </span>
                               <input
@@ -692,12 +698,12 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                                     to: e.target.value,
                                   }))
                                 }
-                                className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs"
+                                className="flex-1 rounded-none border border-cyan-500/30 bg-slate-900/50 px-2 py-1 text-xs text-cyan-100"
                               />
                             </div>
                             {(historyRange.from || historyRange.to) &&
                               !(historyRange.from && historyRange.to) && (
-                                <p className="text-[10px] text-red-500">
+                                <p className="text-[10px] text-red-400">
                                   Both dates required, or clear both to update
                                   all history.
                                 </p>
@@ -709,7 +715,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                   })}
                 </div>
 
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-cyan-300/50">
                   {selectedTables.size} of {SUPABASE_TABLES.length} Supabase
                   tables selected
                 </p>
@@ -717,19 +723,19 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
               {/* Actor info */}
               {actorName && (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-cyan-300/50">
                   Acting as{" "}
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-cyan-100">
                     {actorName}
                   </span>
                   {actorReferenceId && (
-                    <span className="text-zinc-400">
+                    <span className="text-cyan-400/50">
                       {" "}
                       ({actorReferenceId})
                     </span>
                   )}
-                  {" — "}changes will be logged to Firestore{" "}
-                  <span className="font-mono text-[10px]">activity_logs</span>
+                  {" — "}changes will be logged to{" "}
+                  <span className="font-mono text-[10px] text-cyan-400">activity_logs</span>
                 </p>
               )}
             </>
@@ -737,29 +743,29 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
           {/* ── Config summary (running/done) ─────────────────────────────────── */}
           {phase !== "config" && (
-            <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap gap-2 text-[11px] text-cyan-300/50">
               {tsmEnabled && (
                 <span>
-                  <span className="font-medium text-foreground">TSM:</span>{" "}
+                  <span className="font-medium text-cyan-100">TSM:</span>{" "}
                   {tsmSelection}
                 </span>
               )}
               {managerEnabled && (
                 <span>
-                  <span className="font-medium text-foreground">Manager:</span>{" "}
+                  <span className="font-medium text-cyan-100">Manager:</span>{" "}
                   {managerSelection}
                 </span>
               )}
-              <span>·</span>
+              <span className="text-cyan-500/50">·</span>
               <span>
-                <span className="font-medium text-foreground">Tables:</span>{" "}
+                <span className="font-medium text-cyan-100">Tables:</span>{" "}
                 {Array.from(selectedTables).join(", ")}
               </span>
               {historyRange.from && historyRange.to && (
                 <>
-                  <span>·</span>
+                  <span className="text-cyan-500/50">·</span>
                   <span>
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium text-cyan-100">
                       History:
                     </span>{" "}
                     {historyRange.from} → {historyRange.to}
@@ -773,20 +779,20 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
           {(phase === "running" || phase === "done") && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium flex items-center gap-1.5">
-                  Transfer log
+                <label className="text-xs font-bold uppercase text-cyan-400/70 tracking-wider flex items-center gap-1.5">
+                  Transfer Log
                   {phase === "running" && (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
                   )}
                 </label>
                 {phase === "done" && (
-                  <span className="text-xs flex items-center gap-1">
+                  <span className="text-xs flex items-center gap-1 text-cyan-300">
                     {summary.failed === 0 ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                     ) : (
-                      <XCircle className="w-3.5 h-3.5 text-red-500" />
+                      <XCircle className="w-3.5 h-3.5 text-red-400" />
                     )}
-                    {summary.succeeded}/{summary.total} succeeded
+                    {summary.succeeded}/{summary.total} completed
                   </span>
                 )}
               </div>
@@ -802,6 +808,7 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                   variant="outline"
                   onClick={() => handleOpenChange(false)}
                   disabled={isLoading}
+                  className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
                 >
                   Cancel
                 </Button>
@@ -813,21 +820,27 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
                     (managerEnabled && !managerSelection) ||
                     salesUsers.length === 0
                   }
+                  className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
                 >
-                  Transfer{" "}
+                  Initiate Transfer{" "}
                   {salesUsers.length > 0 &&
-                    `(${salesUsers.length} × ${[tsmEnabled, managerEnabled].filter(Boolean).length} field${[tsmEnabled, managerEnabled].filter(Boolean).length > 1 ? "s" : ""})`}
+                    "(" + salesUsers.length + " × " + [tsmEnabled, managerEnabled].filter(Boolean).length + " field" + ([tsmEnabled, managerEnabled].filter(Boolean).length > 1 ? "s" : "") + ")"}
                 </Button>
               </>
             )}
             {phase === "running" && (
-              <Button variant="outline" disabled>
+              <Button variant="outline" disabled className="border-cyan-500/30 text-cyan-400 rounded-none">
                 <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                Transferring…
+                Processing...
               </Button>
             )}
             {phase === "done" && (
-              <Button onClick={() => handleOpenChange(false)}>Close</Button>
+              <Button 
+                onClick={() => handleOpenChange(false)}
+                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
+              >
+                Close
+              </Button>
             )}
           </div>
         </div>
