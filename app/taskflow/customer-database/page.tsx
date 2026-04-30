@@ -158,7 +158,7 @@ interface ComboOption {
   status?: string;
 }
 
-const INACTIVE_STATUSES = ["Terminated", "Resigned", "Inactive"];
+const INACTIVE_STATUSES = ["Terminated", "Resigned"];
 const AUDIT_PAGE = "Customer Database";
 
 // ─── Safe JSON ────────────────────────────────────────────────────────────────
