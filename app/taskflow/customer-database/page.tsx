@@ -155,10 +155,8 @@ interface UserRecord {
 interface ComboOption {
   value: string;
   label: string;
-  status?: string;
 }
 
-const INACTIVE_STATUSES = ["Terminated", "Resigned"];
 const AUDIT_PAGE = "Customer Database";
 
 // ─── Safe JSON ────────────────────────────────────────────────────────────────
@@ -290,20 +288,6 @@ function Combobox({
                   )}
                 />
                 <span className="truncate">{opt.label}</span>
-                {opt.status && INACTIVE_STATUSES.includes(opt.status) && (
-                  <span
-                    className={cn(
-                      "ml-auto text-[9px] font-bold px-1 py-0.5 rounded-full leading-none",
-                      opt.status === "Terminated"
-                        ? "bg-red-100 text-red-700"
-                        : opt.status === "Resigned"
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-gray-100 text-gray-600",
-                    )}
-                  >
-                    {opt.status}
-                  </span>
-                )}
               </CommandItem>
             ))}
           </CommandGroup>
@@ -825,8 +809,7 @@ export default function AccountPage() {
   // ── Fetch / loading state ───────────────────────────────────────────────────
   const [isFiltering, setIsFiltering] = useState(false);
 
-  // ── ReferenceID → user record map — fetched once after customers load ────────
-  // Single MongoDB query covers all roles; used for table display + filter labels.
+  // ── ReferenceID → user record map ────────────────────────────────────────────
   const [refIdUserMap, setRefIdUserMap] = useState<Map<string, UserRecord>>(
     new Map(),
   );
@@ -863,7 +846,7 @@ export default function AccountPage() {
   }, [currentActor]);
   const preTransferSnapshotRef = useRef<Customer[]>([]);
 
-  // ── Automated audit logging (after ref is defined) ──────────────────────────
+  // ── Automated audit logging ──────────────────────────────────────────────────
   const { logCreate, logDelete, logTransfer, logAutoGenerate, logUpdate } =
     useAuditLogging(currentActorRef.current);
 
@@ -919,11 +902,7 @@ export default function AccountPage() {
     }
   }, []);
 
-  // ── Resolve display names for all referenceIDs in the loaded customer set ────
-  // Fires whenever the customer list changes. Collects every unique referenceid,
-  // tsm, and manager value, then fetches matching user records from MongoDB via
-  // the generic /api/UserManagement/Fetch endpoint. The resulting map is used
-  // for table column display and as fallback labels in filter comboboxes.
+  // ── Resolve display names for all referenceIDs ────────────────────────────
   useEffect(() => {
     if (customers.length === 0) return;
 
@@ -1086,7 +1065,6 @@ export default function AccountPage() {
             .map((u: any) => ({
               value: u.ReferenceID,
               label: `${u.Firstname} ${u.Lastname}`,
-              status: u.Status ?? "Active",
             }))
             .sort((a: ComboOption, b: ComboOption) =>
               a.label.localeCompare(b.label),
@@ -1115,7 +1093,7 @@ export default function AccountPage() {
     [search, filterType, filterStatus, filterTSA, filterTSM, filterManager],
   );
 
-  // ── Derived: filter options from customer data (alphabetically sorted) ──────
+  // ── Derived: filter options from customer data ──────────────────────────────
   const typeOptions = useMemo(() => {
     const types = [
       ...new Set(customers.map((c) => c.type_client).filter(Boolean)),
@@ -1130,8 +1108,7 @@ export default function AccountPage() {
     return ["all", ...statuses];
   }, [customers]);
 
-  // ── Filter combobox options — derived from customer data, names from refIdUserMap ──
-  // The map is a fallback: if a user record wasn't found, the raw refId is shown.
+  // ── Filter combobox options — no status field ─────────────────────────────
   const filterTsaOptions = useMemo<ComboOption[]>(() => {
     const seen = new Map<string, ComboOption>();
     for (const c of customers) {
@@ -1141,7 +1118,6 @@ export default function AccountPage() {
       seen.set(key.toLowerCase(), {
         value: key,
         label: user?.name || key,
-        status: user?.status,
       });
     }
     return [
@@ -1161,7 +1137,6 @@ export default function AccountPage() {
       seen.set(key.toLowerCase(), {
         value: key,
         label: user?.name || key,
-        status: user?.status,
       });
     }
     return [
@@ -1181,7 +1156,6 @@ export default function AccountPage() {
       seen.set(key.toLowerCase(), {
         value: key,
         label: user?.name || key,
-        status: user?.status,
       });
     }
     return [
@@ -1775,9 +1749,9 @@ export default function AccountPage() {
             </p>
           </div>
 
-          {/* ── Sci-Fi Two-column layout ── */}
+          {/* ── Two-column layout ── */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 px-4 pb-8 items-start">
-            {/* ═══ LEFT: Import + Filter (Sci-Fi Panel) ═══ */}
+            {/* ═══ LEFT: Import + Filter ═══ */}
             <div className="lg:col-span-4 sticky top-4 space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
               {/* ── Import Form Card ── */}
               <Card className="sci-fi-panel rounded-xl border-cyan-500/30">
@@ -2042,7 +2016,7 @@ export default function AccountPage() {
                 </CardHeader>
 
                 <CardContent className="pt-4 px-4 space-y-3">
-                  {/* Manager Filter — flat combobox from customer data */}
+                  {/* Manager Filter */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase opacity-60">
                       Manager
@@ -2058,7 +2032,7 @@ export default function AccountPage() {
                     />
                   </div>
 
-                  {/* TSM Filter — flat combobox from customer data */}
+                  {/* TSM Filter */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase opacity-60">
                       Sales Manager
@@ -2074,7 +2048,7 @@ export default function AccountPage() {
                     />
                   </div>
 
-                  {/* TSA Filter — flat combobox from customer data */}
+                  {/* TSA Filter */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase opacity-60">
                       Sales Associate
@@ -2508,106 +2482,17 @@ export default function AccountPage() {
                               <TableCell>{c.region}</TableCell>
 
                               <TableCell className="capitalize">
-                                {(() => {
-                                  const key = c.referenceid
-                                    ?.trim()
-                                    .toLowerCase();
-                                  const user = refIdUserMap.get(key ?? "");
-                                  const label =
-                                    user?.name || c.referenceid || "-";
-                                  const isInactive =
-                                    user &&
-                                    INACTIVE_STATUSES.includes(
-                                      user.status ?? "",
-                                    );
-                                  return (
-                                    <span className="flex items-center gap-1 flex-wrap">
-                                      {label}
-                                      {isInactive && (
-                                        <span
-                                          className={cn(
-                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
-                                            user?.status === "Terminated"
-                                              ? "bg-red-100 text-red-700"
-                                              : user?.status === "Resigned"
-                                                ? "bg-orange-100 text-orange-700"
-                                                : "bg-gray-100 text-gray-600",
-                                          )}
-                                        >
-                                          {user?.status}
-                                        </span>
-                                      )}
-                                    </span>
-                                  );
-                                })()}
+                                {refIdUserMap.get(c.referenceid?.trim().toLowerCase() ?? "")?.name || c.referenceid || "-"}
                               </TableCell>
 
                               <TableCell className="capitalize">
-                                {(() => {
-                                  const key = (c.tsm ?? "")
-                                    .trim()
-                                    .toLowerCase();
-                                  const user = refIdUserMap.get(key);
-                                  const label = user?.name || c.tsm || "-";
-                                  const isInactive =
-                                    user &&
-                                    INACTIVE_STATUSES.includes(
-                                      user.status ?? "",
-                                    );
-                                  return (
-                                    <span className="flex items-center gap-1 flex-wrap">
-                                      {label}
-                                      {isInactive && (
-                                        <span
-                                          className={cn(
-                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
-                                            user?.status === "Terminated"
-                                              ? "bg-red-100 text-red-700"
-                                              : user?.status === "Resigned"
-                                                ? "bg-orange-100 text-orange-700"
-                                                : "bg-gray-100 text-gray-600",
-                                          )}
-                                        >
-                                          {user?.status}
-                                        </span>
-                                      )}
-                                    </span>
-                                  );
-                                })()}
+                                {refIdUserMap.get((c.tsm ?? "").trim().toLowerCase())?.name || c.tsm || "-"}
                               </TableCell>
+
                               <TableCell className="capitalize">
-                                {(() => {
-                                  const key = (c.manager ?? "")
-                                    .trim()
-                                    .toLowerCase();
-                                  const user = refIdUserMap.get(key);
-                                  const label = user?.name || c.manager || "-";
-                                  const isInactive =
-                                    user &&
-                                    INACTIVE_STATUSES.includes(
-                                      user.status ?? "",
-                                    );
-                                  return (
-                                    <span className="flex items-center gap-1 flex-wrap">
-                                      {label}
-                                      {isInactive && (
-                                        <span
-                                          className={cn(
-                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
-                                            user?.status === "Terminated"
-                                              ? "bg-red-100 text-red-700"
-                                              : user?.status === "Resigned"
-                                                ? "bg-orange-100 text-orange-700"
-                                                : "bg-gray-100 text-gray-600",
-                                          )}
-                                        >
-                                          {user?.status}
-                                        </span>
-                                      )}
-                                    </span>
-                                  );
-                                })()}
+                                {refIdUserMap.get((c.manager ?? "").trim().toLowerCase())?.name || c.manager || "-"}
                               </TableCell>
+
                               <TableCell>
                                 {new Date(c.date_created).toLocaleDateString()}
                               </TableCell>
