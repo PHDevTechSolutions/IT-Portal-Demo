@@ -30,6 +30,7 @@ import { Calendar } from "@/components/taskflow/customer-database/calendar";
 import { AuditDialog } from "@/components/taskflow/customer-database/audit-dialog";
 import { DeleteDialog } from "@/components/taskflow/customer-database/delete";
 import { TransferDialog } from "@/components/taskflow/customer-database/transfer";
+import { OthersDialog } from "@/components/taskflow/customer-database/others-dialog";
 import { SciFiThreeColumn, SciFiPanel } from "@/components/ui/sci-fi/layout";
 import { toast } from "sonner";
 import {
@@ -53,6 +54,7 @@ import {
   Hash,
   SlidersHorizontal,
   Terminal,
+  Settings,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -828,6 +830,9 @@ export default function AccountPage() {
   const [tsms, setTsms] = useState<ComboOption[]>([]);
   const [managers, setManagers] = useState<ComboOption[]>([]);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+
+  // ── Others state ────────────────────────────────────────────────────────────
+  const [showOthersDialog, setShowOthersDialog] = useState(false);
 
   // ── Auto-generate state ─────────────────────────────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -2206,6 +2211,16 @@ export default function AccountPage() {
 
                   <Download data={filtered} filename="CustomerDatabase" />
 
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowOthersDialog(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Others
+                  </Button>
+
                   {selectedIds.size > 0 && (
                     <>
                       <Button
@@ -2566,6 +2581,13 @@ export default function AccountPage() {
         tsms={tsms}
         managers={managers}
         onSuccessAction={handleTransferSuccess}
+      />
+
+      {/* OthersDialog */}
+      <OthersDialog
+        open={showOthersDialog}
+        onOpenChange={setShowOthersDialog}
+        setAccountsAction={(updateFn) => setCustomers((prev) => updateFn(prev))}
       />
     </ProtectedPageWrapper>
   );

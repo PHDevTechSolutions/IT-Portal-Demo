@@ -138,11 +138,11 @@ async function create(
 export async function POST(req: Request) {
   try {
     const Xchire_body = await req.json();
-    const { referenceid, tsm, data } = Xchire_body;
+    const { data } = Xchire_body;
 
-    if (!referenceid || !tsm || !data || data.length === 0) {
+    if (!Array.isArray(data) || data.length === 0) {
       return NextResponse.json(
-        { success: false, error: "Missing referenceid, tsm, or data." },
+        { success: false, error: "Missing data." },
         { status: 400 }
       );
     }
