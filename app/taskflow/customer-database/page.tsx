@@ -159,6 +159,7 @@ interface ComboOption {
   label: string;
 }
 
+const INACTIVE_STATUSES = ["Terminated", "Resigned", "Inactive"];
 const AUDIT_PAGE = "Customer Database";
 
 // ─── Safe JSON ────────────────────────────────────────────────────────────────
@@ -528,152 +529,179 @@ function EditCustomerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Edit Customer</DialogTitle>
+      <DialogContent className="max-w-5xl w-full bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0">
+        {/* Header */}
+        <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-slate-800/60">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-sm bg-cyan-500/10 border border-cyan-500/30">
+              <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+            <div>
+              <DialogTitle className="text-sm font-bold uppercase tracking-widest text-cyan-400">
+                Edit Customer
+              </DialogTitle>
+              <p className="text-[11px] text-slate-500 mt-0.5">{form.company_name || "—"}</p>
+            </div>
+          </div>
         </DialogHeader>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm max-h-[60vh] overflow-y-auto p-1">
-          <Input
-            placeholder="Account Reference Number"
-            value={form.account_reference_number ?? ""}
-            onChange={(e) => handleChange("account_reference_number", e.target.value)}
-          />
-          <Input
-            placeholder="Company Name"
-            value={form.company_name ?? ""}
-            onChange={(e) => handleChange("company_name", e.target.value)}
-          />
-          <Input
-            placeholder="Company Group"
-            value={form.company_group ?? ""}
-            onChange={(e) => handleChange("company_group", e.target.value)}
-          />
-          <Input
-            placeholder="Contact Person"
-            value={form.contact_person ?? ""}
-            onChange={(e) => handleChange("contact_person", e.target.value)}
-          />
-          <Input
-            placeholder="Contact Number"
-            value={form.contact_number ?? ""}
-            onChange={(e) => handleChange("contact_number", e.target.value)}
-          />
-          <Input
-            placeholder="Email Address"
-            value={form.email_address ?? ""}
-            onChange={(e) => handleChange("email_address", e.target.value)}
-          />
-          <Input
-            placeholder="Address"
-            value={form.address ?? ""}
-            onChange={(e) => handleChange("address", e.target.value)}
-          />
-          <Input
-            placeholder="Delivery Address"
-            value={form.delivery_address ?? ""}
-            onChange={(e) => handleChange("delivery_address", e.target.value)}
-          />
-          <Input
-            placeholder="Region"
-            value={form.region ?? ""}
-            onChange={(e) => handleChange("region", e.target.value)}
-          />
-          <Input
-            placeholder="Province"
-            value={form.province ?? ""}
-            onChange={(e) => handleChange("province", e.target.value)}
-          />
-          <Input
-            placeholder="City"
-            value={form.city ?? ""}
-            onChange={(e) => handleChange("city", e.target.value)}
-          />
-          <Input
-            placeholder="Industry"
-            value={form.industry ?? ""}
-            onChange={(e) => handleChange("industry", e.target.value)}
-          />
-          <Input
-            placeholder="Gender"
-            value={form.gender ?? ""}
-            onChange={(e) => handleChange("gender", e.target.value)}
-          />
-          <Input
-            placeholder="Type"
-            value={form.type ?? ""}
-            onChange={(e) => handleChange("type", e.target.value)}
-          />
-          <Input
-            placeholder="Type Client"
-            value={form.type_client ?? ""}
-            onChange={(e) => handleChange("type_client", e.target.value)}
-          />
-          <Input
-            placeholder="Status"
-            value={form.status ?? ""}
-            onChange={(e) => handleChange("status", e.target.value)}
-          />
-          <Input
-            placeholder="Remarks"
-            value={form.remarks ?? ""}
-            onChange={(e) => handleChange("remarks", e.target.value)}
-          />
-          <Input
-            placeholder="Next Available Date"
-            value={form.next_available_date ?? ""}
-            onChange={(e) => handleChange("next_available_date", e.target.value)}
-          />
-          <Input
-            placeholder="Date Created"
-            value={form.date_created ?? ""}
-            onChange={(e) => handleChange("date_created", e.target.value)}
-          />
-          <Input
-            placeholder="Date Updated"
-            value={form.date_updated ?? ""}
-            onChange={(e) => handleChange("date_updated", e.target.value)}
-          />
-          <Input
-            placeholder="Date Transferred"
-            value={form.date_transferred ?? ""}
-            onChange={(e) => handleChange("date_transferred", e.target.value)}
-          />
-          <Input
-            placeholder="Date Approved"
-            value={form.date_approved ?? ""}
-            onChange={(e) => handleChange("date_approved", e.target.value)}
-          />
-          <Input
-            placeholder="Date Removed"
-            value={form.date_removed ?? ""}
-            onChange={(e) => handleChange("date_removed", e.target.value)}
-          />
-          <Input
-            placeholder="Transfer To"
-            value={form.transfer_to ?? ""}
-            onChange={(e) => handleChange("transfer_to", e.target.value)}
-          />
-          <Input
-            placeholder="Reference ID (TSA)"
-            value={form.referenceid ?? ""}
-            onChange={(e) => handleChange("referenceid", e.target.value)}
-          />
-          <Input
-            placeholder="TSM"
-            value={form.tsm ?? ""}
-            onChange={(e) => handleChange("tsm", e.target.value)}
-          />
-          <Input
-            placeholder="Manager"
-            value={form.manager ?? ""}
-            onChange={(e) => handleChange("manager", e.target.value)}
-          />
+
+        {/* Body */}
+        <div className="overflow-y-auto max-h-[65vh] px-6 py-4 space-y-5">
+
+          {/* Section: Identity */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Company Info</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                { label: "Account Ref. No.", key: "account_reference_number" },
+                { label: "Company Name", key: "company_name" },
+                { label: "Company Group", key: "company_group" },
+                { label: "Industry", key: "industry" },
+                { label: "Type Client", key: "type_client" },
+                { label: "Type", key: "type" },
+              ].map(({ label, key }) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase text-slate-500">{label}</label>
+                  <Input
+                    value={(form as any)[key] ?? ""}
+                    onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section: Contact */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Contact Details</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                { label: "Contact Person", key: "contact_person" },
+                { label: "Contact Number", key: "contact_number" },
+                { label: "Email Address", key: "email_address" },
+                { label: "Gender", key: "gender" },
+              ].map(({ label, key }) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase text-slate-500">{label}</label>
+                  <Input
+                    value={(form as any)[key] ?? ""}
+                    onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section: Location */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Location</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                { label: "Address", key: "address" },
+                { label: "Delivery Address", key: "delivery_address" },
+                { label: "Region", key: "region" },
+                { label: "Province", key: "province" },
+                { label: "City", key: "city" },
+              ].map(({ label, key }) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase text-slate-500">{label}</label>
+                  <Input
+                    value={(form as any)[key] ?? ""}
+                    onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section: Status & Remarks */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Status & Notes</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                { label: "Status", key: "status" },
+                { label: "Remarks", key: "remarks" },
+                { label: "Next Available Date", key: "next_available_date" },
+              ].map(({ label, key }) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase text-slate-500">{label}</label>
+                  <Input
+                    value={(form as any)[key] ?? ""}
+                    onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section: Assignment */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Assignment</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                { label: "Reference ID (TSA)", key: "referenceid" },
+                { label: "TSM", key: "tsm" },
+                { label: "Manager", key: "manager" },
+                { label: "Transfer To", key: "transfer_to" },
+              ].map(({ label, key }) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase text-slate-500">{label}</label>
+                  <Input
+                    value={(form as any)[key] ?? ""}
+                    onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section: Dates */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Dates</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                { label: "Date Created", key: "date_created" },
+                { label: "Date Updated", key: "date_updated" },
+                { label: "Date Transferred", key: "date_transferred" },
+                { label: "Date Approved", key: "date_approved" },
+                { label: "Date Removed", key: "date_removed" },
+              ].map(({ label, key }) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase text-slate-500">{label}</label>
+                  <Input
+                    value={(form as any)[key] ?? ""}
+                    onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+
+        {/* Footer */}
+        <DialogFooter className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-end gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+          >
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>Save Changes</Button>
+          <Button
+            onClick={handleSubmit}
+            className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5"
+          >
+            Save Changes
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -832,6 +860,8 @@ export default function AccountPage() {
 
   // ── Others state ────────────────────────────────────────────────────────────
   const [showOthersDialog, setShowOthersDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showFilterDialog, setShowFilterDialog] = useState(false);
 
   // ── Auto-generate state ─────────────────────────────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1695,544 +1725,171 @@ export default function AccountPage() {
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <ProtectedPageWrapper>
-      <SidebarProvider>
+      <SidebarProvider className="dark">
         <AppSidebar />
-        <SidebarInset>
+        <SidebarInset className="bg-slate-950 text-slate-100 flex flex-col h-svh overflow-hidden">
           {/* Header */}
-          <header className="flex h-16 shrink-0 items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
+          <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4 border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-sm">
+            <SidebarTrigger className="-ml-1 text-slate-400 hover:text-cyan-400" />
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => router.push("/dashboard")}
+              className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 text-xs hidden sm:flex"
             >
               Home
             </Button>
-            <Separator orientation="vertical" className="h-4" />
+            <Separator orientation="vertical" className="h-4 bg-slate-700 hidden sm:block" />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
+                  <BreadcrumbLink href="#" className="text-slate-500 hover:text-cyan-400 text-xs hidden sm:block">Taskflow</BreadcrumbLink>
                 </BreadcrumbItem>
-                <BreadcrumbSeparator />
+                <BreadcrumbSeparator className="text-slate-600 hidden sm:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Customer Database</BreadcrumbPage>
+                  <BreadcrumbPage className="text-cyan-400 text-xs font-semibold tracking-wide">Customer Database</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </header>
 
-          {/* Page title */}
-          <div className="px-4 pb-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Customer Database
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {isFetching ? (
-                "Loading…"
-              ) : (
-                <>
-                  <span className="font-semibold text-foreground">
-                    {filtered.length}
-                  </span>{" "}
-                  customer{filtered.length !== 1 ? "s" : ""}
-                </>
-              )}
-            </p>
-          </div>
-
-          {/* ── Two-column layout ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 px-4 pb-8 items-start">
-            {/* ═══ LEFT: Import + Filter ═══ */}
-            <div className="lg:col-span-4 sticky top-4 space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
-              {/* ── Import Form Card ── */}
-              <Card className="sci-fi-panel rounded-xl border-cyan-500/30">
-                <CardHeader className="border-b border-cyan-500/30 px-4 py-3 bg-cyan-500/10">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-cyan-400">
-                      <Upload className="w-4 h-4 text-cyan-400" /> Import Customer Database
-                    </CardTitle>
-                    {(importFile || importSelectedManager) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 rounded-lg text-[9px] uppercase font-bold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
-                        disabled={isImportLoading}
-                        onClick={() => {
-                          setImportFile(null);
-                          setImportOriginalFileName(null);
-                          setImportPreviewData([]);
-                          setImportFailedRows([]);
-                          setImportSelectedManager("");
-                          setImportSelectedTSM("");
-                          setImportSelectedTSA("");
-                          setParseLog([]);
-                        }}
-                      >
-                        <RotateCcw className="mr-1 h-3 w-3" /> Reset
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-
-                <CardContent className="pt-4 px-4 space-y-3">
-                  {/* Manager */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Manager
-                    </label>
-                    <Combobox
-                      options={importManagerOptions}
-                      value={importSelectedManager}
-                      onValueChange={setImportSelectedManager}
-                      placeholder="Select Manager…"
-                      disabled={isImportLoading}
-                    />
-                  </div>
-
-                  {/* TSM */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Territory Sales Manager
-                    </label>
-                    <Combobox
-                      options={importTsmOptions}
-                      value={importSelectedTSM}
-                      onValueChange={setImportSelectedTSM}
-                      placeholder="Select TSM…"
-                      disabled={isImportLoading || !importSelectedManager}
-                      emptyText={
-                        !importSelectedManager
-                          ? "Select a Manager first."
-                          : "No TSMs found."
-                      }
-                    />
-                  </div>
-
-                  {/* TSA */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Territory Sales Associate{" "}
-                      <span className="text-destructive">*</span>
-                    </label>
-                    <Combobox
-                      options={importTsaOptions}
-                      value={importSelectedTSA}
-                      onValueChange={setImportSelectedTSA}
-                      placeholder="Select TSA…"
-                      disabled={isImportLoading || !importSelectedTSM}
-                      emptyText={
-                        !importSelectedManager
-                          ? "Select a Manager first."
-                          : !importSelectedTSM
-                            ? "Select a TSM first."
-                            : "No TSAs found."
-                      }
-                    />
-                  </div>
-
-                  {/* Dropzone */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Excel File <span className="text-destructive">*</span>
-                    </label>
-                    <DropZone
-                      file={importFile}
-                      fileName={importOriginalFileName}
-                      onFileSelect={handleFileSelect}
-                      onClear={() => {
-                        setImportFile(null);
-                        setImportOriginalFileName(null);
-                        setImportPreviewData([]);
-                        setParseLog([]);
-                      }}
-                      disabled={isImportLoading}
-                    />
-                  </div>
-
-                  {/* Parse Console */}
-                  {parseLog.length > 0 && (
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase opacity-60 flex items-center gap-1.5">
-                        <Terminal className="w-3 h-3" /> Parse Output
-                        {isParsing && (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        )}
-                      </label>
-                      <div className="rounded-none border border-zinc-700 bg-zinc-950 overflow-hidden">
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border-b border-zinc-800">
-                          <span className="w-2 h-2 rounded-full bg-red-500" />
-                          <span className="w-2 h-2 rounded-full bg-yellow-500" />
-                          <span className="w-2 h-2 rounded-full bg-green-500" />
-                          <span className="font-mono text-[10px] text-zinc-500 ml-1 select-none">
-                            parser — bash
-                          </span>
-                        </div>
-                        <div className="px-3 py-2 font-mono text-[10px] space-y-0.5 max-h-36 overflow-y-auto">
-                          {parseLog.map((line, i) => (
-                            <div
-                              key={i}
-                              className={cn(
-                                "leading-relaxed",
-                                parseLogColor(line.type),
-                              )}
-                            >
-                              {line.msg}
-                            </div>
-                          ))}
-                          {isParsing && (
-                            <span className="inline-block w-1.5 h-3 bg-emerald-400 animate-pulse align-middle" />
-                          )}
-                          <div ref={parseLogEndRef} />
-                        </div>
-                      </div>
-                    </div>
+          {/* Page title + toolbar — shrink-0 so they never scroll away */}
+          <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800 space-y-3">
+            {/* Title row */}
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-cyan-400 leading-tight">
+                  Customer Database
+                </h1>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {isFetching ? "Loading…" : (
+                    <><span className="font-semibold text-slate-300">{filtered.length}</span> customer{filtered.length !== 1 ? "s" : ""}</>
                   )}
-
-                  {/* Preview */}
-                  {importPreviewData.length > 0 && (
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase opacity-60">
-                        Preview ({importPreviewData.length} rows)
-                      </label>
-                      <div className="overflow-auto max-h-44 border rounded-none text-[10px]">
-                        <table className="w-full whitespace-nowrap">
-                          <thead className="bg-muted/50 sticky top-0">
-                            <tr>
-                              {[
-                                "Company",
-                                "Contact",
-                                "Email",
-                                "Type",
-                                "Region",
-                                "Status",
-                              ].map((h) => (
-                                <th
-                                  key={h}
-                                  className="px-2 py-1.5 text-left font-semibold text-muted-foreground uppercase tracking-wider"
-                                >
-                                  {h}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y">
-                            {importPreviewData.slice(0, 20).map((row, i) => (
-                              <tr key={i} className="hover:bg-muted/30">
-                                <td className="px-2 py-1 truncate max-w-[100px]">
-                                  {row.company_name}
-                                </td>
-                                <td className="px-2 py-1 truncate max-w-[80px]">
-                                  {row.contact_person}
-                                </td>
-                                <td className="px-2 py-1 truncate max-w-[100px]">
-                                  {row.email_address}
-                                </td>
-                                <td className="px-2 py-1">{row.type_client}</td>
-                                <td className="px-2 py-1">{row.region}</td>
-                                <td className="px-2 py-1">{row.status}</td>
-                              </tr>
-                            ))}
-                            {importPreviewData.length > 20 && (
-                              <tr>
-                                <td
-                                  colSpan={6}
-                                  className="px-2 py-1.5 text-center text-muted-foreground italic"
-                                >
-                                  +{importPreviewData.length - 20} more rows
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex gap-2">
-                    {importFailedRows.length > 0 && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleDownloadFailed}
-                        className="rounded-none text-xs flex-1 gap-1"
-                      >
-                        <DownloadIcon className="h-3.5 w-3.5" />
-                        Failed ({importFailedRows.length})
-                      </Button>
-                    )}
-                    <Button
-                      onClick={handleImportUpload}
-                      disabled={
-                        isImportLoading || !importFile || !importSelectedTSA
-                      }
-                      className="rounded-none uppercase font-bold text-[10px] h-10 tracking-widest gap-2 flex-1"
-                    >
-                      {isImportLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />{" "}
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4" /> Upload
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* ── Filter Panel Card ── */}
-              <Card className="rounded-none shadow-none border-foreground/10">
-                <CardHeader className="border-b px-4 py-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                      <SlidersHorizontal className="w-4 h-4" /> Filters
-                      {hasActiveFilters && (
-                        <span className="w-2 h-2 rounded-full bg-primary" />
-                      )}
-                    </CardTitle>
-                    {hasActiveFilters && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 rounded-none text-[9px] uppercase font-bold text-muted-foreground"
-                        onClick={handleResetFilters}
-                      >
-                        <RotateCcw className="mr-1 h-3 w-3" /> Reset
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-
-                <CardContent className="pt-4 px-4 space-y-3">
-                  {/* Manager Filter */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Manager
-                    </label>
-                    <Combobox
-                      options={filterManagerOptions}
-                      value={filterManager}
-                      onValueChange={(v) => {
-                        setFilterManager(v || "all");
-                        setPage(1);
-                      }}
-                      placeholder="All Managers"
-                    />
-                  </div>
-
-                  {/* TSM Filter */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Sales Manager
-                    </label>
-                    <Combobox
-                      options={filterTsmOptions}
-                      value={filterTSM}
-                      onValueChange={(v) => {
-                        setFilterTSM(v || "all");
-                        setPage(1);
-                      }}
-                      placeholder="All TSM"
-                    />
-                  </div>
-
-                  {/* TSA Filter */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Sales Associate
-                    </label>
-                    <Combobox
-                      options={filterTsaOptions}
-                      value={filterTSA}
-                      onValueChange={(v) => {
-                        setFilterTSA(v || "all");
-                        setPage(1);
-                      }}
-                      placeholder="All TSA"
-                    />
-                  </div>
-
-                  {/* Type Filter */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Client Type
-                    </label>
-                    <Select
-                      value={filterType}
-                      onValueChange={(v) => {
-                        setFilterType(v);
-                        setPage(1);
-                      }}
-                    >
-                      <SelectTrigger className="h-9 text-xs rounded-none">
-                        <SelectValue placeholder="All Types" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {typeOptions.map((t) => (
-                          <SelectItem
-                            key={t}
-                            value={t}
-                            className="text-xs capitalize"
-                          >
-                            {t === "all" ? "All Types" : t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Sort Order */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Sort Order
-                    </label>
-                    <Select
-                      value={sortOrder}
-                      onValueChange={(v) => setSortOrder(v as "asc" | "desc")}
-                    >
-                      <SelectTrigger className="h-9 text-xs rounded-none">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="desc" className="text-xs">
-                          Latest First
-                        </SelectItem>
-                        <SelectItem value="asc" className="text-xs">
-                          Oldest First
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Rows per page */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Rows per Page
-                    </label>
-                    <Select
-                      value={rowsPerPage.toString()}
-                      onValueChange={(v) => {
-                        setRowsPerPage(Number(v));
-                        setPage(1);
-                      }}
-                    >
-                      <SelectTrigger className="h-9 text-xs rounded-none">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[20, 50, 100, 1000, 12000, 30000].map((n) => (
-                          <SelectItem
-                            key={n}
-                            value={n.toString()}
-                            className="text-xs"
-                          >
-                            {n}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              </Card>
+                </p>
+              </div>
+              <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] shrink-0">
+                Total: {totalCount}
+              </Badge>
             </div>
 
-            {/* ═══ RIGHT: Table ═══ */}
-            <div className="lg:col-span-8 space-y-4">
-              {/* Toolbar */}
-              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3">
-                {/* Search */}
-                <div className="relative w-full sm:max-w-xs">
-                  <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search customers…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8 w-full pr-8"
-                  />
-                  {isFiltering && (
-                    <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-muted-foreground" />
-                  )}
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Calendar
-                    startDate={startDate}
-                    endDate={endDate}
-                    setStartDateAction={setStartDate}
-                    setEndDateAction={setEndDate}
-                  />
-
-                  <Download data={filtered} filename="CustomerDatabase" />
-
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowOthersDialog(true)}
-                    className="flex items-center gap-2"
-                  >
-                    <Settings className="h-4 w-4" />
-                    Others
-                  </Button>
-
-                  {selectedIds.size > 0 && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleOpenTransferDialog}
-                      >
-                        <ArrowRight className="w-4 h-4 mr-1" /> Transfer
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleAutoGenerate}
-                        disabled={isGenerating}
-                      >
-                        <Hash className="w-4 h-4 mr-1" />
-                        {isGenerating
-                          ? "Generating…"
-                          : `Auto-ID (${selectedIds.size})`}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={handleBulkDelete}
-                      >
-                        Delete ({selectedIds.size})
-                      </Button>
-                    </>
-                  )}
-
-                  {!isAuditView ? (
-                    <Audit
-                      customers={customers}
-                      setAuditedAction={setAudited}
-                      setDuplicateIdsAction={setDuplicateIds}
-                      setIsAuditViewAction={setIsAuditView}
-                    />
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={handleReturn}>
-                      Return to List
-                    </Button>
-                  )}
-                </div>
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[160px] max-w-xs">
+                <Search className="absolute left-2 top-2.5 size-3.5 text-slate-500" />
+                <Input
+                  placeholder="Search customers…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-7 h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/50 rounded-none"
+                />
+                {isFiltering && (
+                  <Loader2 className="absolute right-2 top-2.5 size-3.5 animate-spin text-slate-500" />
+                )}
               </div>
 
-              {/* Audit summary bar */}
-              {isAuditView && (
-                <div className="flex flex-col gap-2 bg-muted/50 rounded-none px-4 py-2 border border-border text-[13px]">
+              {/* Action buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Calendar
+                  startDate={startDate}
+                  endDate={endDate}
+                  setStartDateAction={setStartDate}
+                  setEndDateAction={setEndDate}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFilterDialog(true)}
+                  className={cn(
+                    "bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider",
+                    hasActiveFilters && "border-cyan-500/40 text-cyan-400 bg-cyan-500/5",
+                  )}
+                >
+                  <SlidersHorizontal className="size-4 mr-1" />
+                  Filters
+                  {hasActiveFilters && (
+                    <span className="ml-1 w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowImportDialog(true)}
+                  className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                >
+                  <Upload className="size-4 mr-1" /> Import
+                </Button>
+                <Download data={filtered} filename="CustomerDatabase" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowOthersDialog(true)}
+                  className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                >
+                  <Settings className="size-4 mr-1" /> Others
+                </Button>
+                {selectedIds.size > 0 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleOpenTransferDialog}
+                      className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                    >
+                      <ArrowRight className="size-4 mr-1" /> Transfer
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleAutoGenerate}
+                      disabled={isGenerating}
+                      className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider border"
+                    >
+                      <Hash className="size-4 mr-1" />
+                      {isGenerating ? "Generating…" : `Auto-ID (${selectedIds.size})`}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleBulkDelete}
+                      className="bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-none h-9 text-xs uppercase tracking-wider border"
+                    >
+                      Delete ({selectedIds.size})
+                    </Button>
+                  </>
+                )}
+                {!isAuditView ? (
+                  <Audit
+                    customers={customers}
+                    setAuditedAction={setAudited}
+                    setDuplicateIdsAction={setDuplicateIds}
+                    setIsAuditViewAction={setIsAuditView}
+                  />
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReturn}
+                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                  >
+                    Return to List
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Scrollable table area ── */}
+          <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-4 pb-3 min-h-0">
+            {/* Audit summary bar */}
+            {isAuditView && (
+              <div className="shrink-0 flex flex-col gap-2 bg-slate-800/50 rounded-none px-3 py-2 border border-slate-700 text-[12px] mb-2">
                   <div className="flex justify-between items-center flex-wrap gap-2">
                     <div
-                      className="font-medium cursor-pointer select-none underline text-red-600"
+                      className="font-medium cursor-pointer select-none underline text-red-400"
                       onClick={() => setShowAuditDialog(true)}
                     >
                       🧾 Audit Summary:{" "}
-                      <span className="font-semibold text-red-600">
+                      <span className="font-semibold text-red-400">
                         {audited.length}
                       </span>{" "}
                       total issues found
@@ -2336,56 +1993,51 @@ export default function AccountPage() {
                 }}
               />
 
-              {/* Table */}
-              <div>
-                <div className="flex justify-start mb-2">
-                  <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
-                </div>
-
-                <div className="overflow-auto min-h-[200px] border border-border rounded-none">
+              {/* Table — flex-1 so it fills remaining height, overflow-auto for horizontal+vertical scroll */}
+              <div className="flex-1 overflow-auto min-h-0 border border-slate-700/50 rounded-none bg-slate-900/40">
                   {isFetching ? (
-                    <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
-                      <Loader2 className="size-6 animate-spin" />
+                    <div className="py-10 text-center flex flex-col items-center gap-2 text-slate-500 text-xs">
+                      <Loader2 className="size-6 animate-spin text-cyan-500" />
                       <span>Loading customers…</span>
                     </div>
                   ) : current.length > 0 ? (
                     <Table className="whitespace-nowrap text-[12px] min-w-full">
-                      <TableHeader className="bg-muted sticky top-0 z-10">
+                      <TableHeader className="bg-slate-800/80 sticky top-0 z-10 border-b border-slate-700/50">
                         <TableRow>
-                          <TableHead className="w-8 text-center px-2">
+                          <TableHead className="w-8 text-center px-2 text-slate-400">
                             <input
                               type="checkbox"
                               checked={selectAll}
                               onChange={handleSelectAll}
                             />
                           </TableHead>
-                          <TableHead className="text-center px-2">Actions</TableHead>
-                          <TableHead className="min-w-[180px]">Company</TableHead>
-                          <TableHead className="min-w-[120px]">Company Group</TableHead>
-                          <TableHead className="min-w-[130px]">Contact Person</TableHead>
-                          <TableHead className="min-w-[120px]">Contact No.</TableHead>
-                          <TableHead className="min-w-[180px]">Email</TableHead>
-                          <TableHead className="min-w-[100px]">Type Client</TableHead>
-                          <TableHead className="min-w-[80px]">Type</TableHead>
-                          <TableHead className="min-w-[100px]">Status</TableHead>
-                          <TableHead className="min-w-[80px]">Industry</TableHead>
-                          <TableHead className="min-w-[60px]">Gender</TableHead>
-                          <TableHead className="min-w-[200px]">Address</TableHead>
-                          <TableHead className="min-w-[200px]">Delivery Address</TableHead>
-                          <TableHead className="min-w-[100px]">Region</TableHead>
-                          <TableHead className="min-w-[100px]">Province</TableHead>
-                          <TableHead className="min-w-[100px]">City</TableHead>
-                          <TableHead className="min-w-[120px]">Remarks</TableHead>
-                          <TableHead className="min-w-[120px]">TSA</TableHead>
-                          <TableHead className="min-w-[120px]">TSM</TableHead>
-                          <TableHead className="min-w-[120px]">Manager</TableHead>
-                          <TableHead className="min-w-[100px]">Transfer To</TableHead>
-                          <TableHead className="min-w-[100px]">Date Created</TableHead>
-                          <TableHead className="min-w-[100px]">Date Updated</TableHead>
-                          <TableHead className="min-w-[100px]">Next Available</TableHead>
-                          <TableHead className="min-w-[100px]">Date Transferred</TableHead>
-                          <TableHead className="min-w-[100px]">Date Approved</TableHead>
-                          <TableHead className="min-w-[100px]">Date Removed</TableHead>
+                          <TableHead className="text-center px-2 text-slate-400">Actions</TableHead>
+                          <TableHead className="min-w-[180px] text-slate-400">Company</TableHead>
+                          <TableHead className="min-w-[120px] text-slate-400">Company Group</TableHead>
+                          <TableHead className="min-w-[130px] text-slate-400">Contact Person</TableHead>
+                          <TableHead className="min-w-[120px] text-slate-400">Contact No.</TableHead>
+                          <TableHead className="min-w-[180px] text-slate-400">Email</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Type Client</TableHead>
+                          <TableHead className="min-w-[80px] text-slate-400">Type</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Status</TableHead>
+                          <TableHead className="min-w-[80px] text-slate-400">Industry</TableHead>
+                          <TableHead className="min-w-[60px] text-slate-400">Gender</TableHead>
+                          <TableHead className="min-w-[200px] text-slate-400">Address</TableHead>
+                          <TableHead className="min-w-[200px] text-slate-400">Delivery Address</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Region</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Province</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">City</TableHead>
+                          <TableHead className="min-w-[120px] text-slate-400">Remarks</TableHead>
+                          <TableHead className="min-w-[120px] text-slate-400">TSA</TableHead>
+                          <TableHead className="min-w-[120px] text-slate-400">TSM</TableHead>
+                          <TableHead className="min-w-[120px] text-slate-400">Manager</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Transfer To</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Date Created</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Date Updated</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Next Available</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Date Transferred</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Date Approved</TableHead>
+                          <TableHead className="min-w-[100px] text-slate-400">Date Removed</TableHead>
                         </TableRow>
                       </TableHeader>
 
@@ -2404,14 +2056,14 @@ export default function AccountPage() {
                             const label = user?.name || refId || "-";
                             const isInactive = user && INACTIVE_STATUSES.includes(user.status ?? "");
                             return (
-                              <span className="flex items-center gap-1 flex-wrap">
+                              <span className="flex items-center gap-1 flex-wrap text-slate-300">
                                 {label}
                                 {isInactive && (
                                   <span className={cn(
                                     "text-[9px] font-semibold px-1 py-0.5 rounded-full leading-none",
-                                    user?.status === "Terminated" ? "bg-red-100 text-red-700"
-                                      : user?.status === "Resigned" ? "bg-orange-100 text-orange-700"
-                                      : "bg-gray-100 text-gray-600",
+                                    user?.status === "Terminated" ? "bg-red-900/60 text-red-300"
+                                      : user?.status === "Resigned" ? "bg-orange-900/60 text-orange-300"
+                                      : "bg-slate-700 text-slate-400",
                                   )}>
                                     {user?.status}
                                   </span>
@@ -2427,9 +2079,9 @@ export default function AccountPage() {
                             <TableRow
                               key={c.id}
                               className={cn(
-                                "hover:bg-muted/40 transition-colors",
-                                isParked && "opacity-60",
-                                isSelected && "bg-primary/5",
+                                "border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors text-slate-300",
+                                isParked && "opacity-50",
+                                isSelected && "bg-cyan-500/5 border-l-2 border-l-cyan-500/50",
                               )}
                             >
                               <TableCell className="text-center px-2">
@@ -2444,7 +2096,7 @@ export default function AccountPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-7 text-[11px] px-2 rounded-sm"
+                                  className="h-7 text-[11px] px-2 rounded-sm bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400"
                                   onClick={() => {
                                     setEditingCustomer(c);
                                     setShowEditDialog(true);
@@ -2457,14 +2109,14 @@ export default function AccountPage() {
                               {/* Company */}
                               <TableCell className="font-medium">
                                 <div className={cn(
-                                  "uppercase leading-tight",
+                                  "uppercase leading-tight text-slate-200",
                                   (isDuplicate || isMissingType || isMissingStatus) &&
                                     "line-through decoration-red-500 decoration-2",
                                 )}>
                                   {c.company_name || "—"}
                                 </div>
                                 {c.account_reference_number && (
-                                  <div className="text-[10px] text-muted-foreground normal-case mt-0.5">
+                                  <div className="text-[10px] text-slate-500 normal-case mt-0.5">
                                     {c.account_reference_number}
                                   </div>
                                 )}
@@ -2600,16 +2252,15 @@ export default function AccountPage() {
                       </TableBody>
                     </Table>
                   ) : (
-                    <div className="py-10 text-center text-xs text-muted-foreground">
+                    <div className="py-10 text-center text-xs text-slate-500">
                       No customers found.
                     </div>
                   )}
-                </div>
               </div>
 
-              {/* Pagination + rows info */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
+              {/* Pagination */}
+              <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-2 pt-2">
+                <p className="text-xs text-slate-500">
                   Showing{" "}
                   {displayData.length === 0 ? 0 : (page - 1) * rowsPerPage + 1}–
                   {Math.min(page * rowsPerPage, displayData.length)} of{" "}
@@ -2622,7 +2273,6 @@ export default function AccountPage() {
                 />
               </div>
             </div>
-          </div>
         </SidebarInset>
       </SidebarProvider>
 
@@ -2662,6 +2312,338 @@ export default function AccountPage() {
         onOpenChange={setShowOthersDialog}
         setAccountsAction={(updateFn) => setCustomers((prev) => updateFn(prev))}
       />
+
+      {/* Import Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-slate-800/60">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-sm bg-cyan-500/10 border border-cyan-500/30">
+                <Upload className="w-4 h-4 text-cyan-400" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-cyan-400">
+                  Import Customer Database
+                </DialogTitle>
+                <p className="text-[11px] text-slate-500 mt-0.5">Upload an Excel file to import customers</p>
+              </div>
+              {(importFile || importSelectedManager) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-7 rounded-sm text-[9px] uppercase font-bold text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
+                  disabled={isImportLoading}
+                  onClick={() => {
+                    setImportFile(null);
+                    setImportOriginalFileName(null);
+                    setImportPreviewData([]);
+                    setImportFailedRows([]);
+                    setImportSelectedManager("");
+                    setImportSelectedTSM("");
+                    setImportSelectedTSA("");
+                    setParseLog([]);
+                  }}
+                >
+                  <RotateCcw className="mr-1 h-3 w-3" /> Reset
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="px-6 py-4 space-y-4 overflow-y-auto max-h-[70vh]">
+            {/* Manager */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Manager</label>
+              <Combobox
+                options={importManagerOptions}
+                value={importSelectedManager}
+                onValueChange={setImportSelectedManager}
+                placeholder="Select Manager…"
+                disabled={isImportLoading}
+                className="bg-slate-800 border-slate-700 text-slate-200 rounded-none"
+              />
+            </div>
+
+            {/* TSM */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Territory Sales Manager</label>
+              <Combobox
+                options={importTsmOptions}
+                value={importSelectedTSM}
+                onValueChange={setImportSelectedTSM}
+                placeholder="Select TSM…"
+                disabled={isImportLoading || !importSelectedManager}
+                emptyText={!importSelectedManager ? "Select a Manager first." : "No TSMs found."}
+                className="bg-slate-800 border-slate-700 text-slate-200 rounded-none"
+              />
+            </div>
+
+            {/* TSA */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">
+                Territory Sales Associate <span className="text-red-400">*</span>
+              </label>
+              <Combobox
+                options={importTsaOptions}
+                value={importSelectedTSA}
+                onValueChange={setImportSelectedTSA}
+                placeholder="Select TSA…"
+                disabled={isImportLoading || !importSelectedTSM}
+                emptyText={!importSelectedManager ? "Select a Manager first." : !importSelectedTSM ? "Select a TSM first." : "No TSAs found."}
+                className="bg-slate-800 border-slate-700 text-slate-200 rounded-none"
+              />
+            </div>
+
+            {/* Dropzone */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">
+                Excel File <span className="text-red-400">*</span>
+              </label>
+              <DropZone
+                file={importFile}
+                fileName={importOriginalFileName}
+                onFileSelect={handleFileSelect}
+                onClear={() => {
+                  setImportFile(null);
+                  setImportOriginalFileName(null);
+                  setImportPreviewData([]);
+                  setParseLog([]);
+                }}
+                disabled={isImportLoading}
+              />
+            </div>
+
+            {/* Parse Console */}
+            {parseLog.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-1.5">
+                  <Terminal className="w-3 h-3" /> Parse Output
+                  {isParsing && <Loader2 className="w-3 h-3 animate-spin" />}
+                </label>
+                <div className="rounded-none border border-zinc-700 bg-zinc-950 overflow-hidden">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border-b border-zinc-800">
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                    <span className="w-2 h-2 rounded-full bg-green-500" />
+                    <span className="font-mono text-[10px] text-zinc-500 ml-1 select-none">parser — bash</span>
+                  </div>
+                  <div className="px-3 py-2 font-mono text-[10px] space-y-0.5 max-h-36 overflow-y-auto">
+                    {parseLog.map((line, i) => (
+                      <div key={i} className={cn("leading-relaxed", parseLogColor(line.type))}>
+                        {line.msg}
+                      </div>
+                    ))}
+                    {isParsing && <span className="inline-block w-1.5 h-3 bg-emerald-400 animate-pulse align-middle" />}
+                    <div ref={parseLogEndRef} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Preview */}
+            {importPreviewData.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase text-slate-500">
+                  Preview ({importPreviewData.length} rows)
+                </label>
+                <div className="overflow-auto max-h-44 border border-slate-700 rounded-none text-[10px]">
+                  <table className="w-full whitespace-nowrap">
+                    <thead className="bg-slate-800 sticky top-0">
+                      <tr>
+                        {["Company", "Contact", "Email", "Type", "Region", "Status"].map((h) => (
+                          <th key={h} className="px-2 py-1.5 text-left font-semibold text-slate-400 uppercase tracking-wider">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {importPreviewData.slice(0, 20).map((row, i) => (
+                        <tr key={i} className="hover:bg-slate-800/40 text-slate-300">
+                          <td className="px-2 py-1 truncate max-w-[100px]">{row.company_name}</td>
+                          <td className="px-2 py-1 truncate max-w-[80px]">{row.contact_person}</td>
+                          <td className="px-2 py-1 truncate max-w-[100px]">{row.email_address}</td>
+                          <td className="px-2 py-1">{row.type_client}</td>
+                          <td className="px-2 py-1">{row.region}</td>
+                          <td className="px-2 py-1">{row.status}</td>
+                        </tr>
+                      ))}
+                      {importPreviewData.length > 20 && (
+                        <tr>
+                          <td colSpan={6} className="px-2 py-1.5 text-center text-slate-500 italic">
+                            +{importPreviewData.length - 20} more rows
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-between gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setShowImportDialog(false)}
+              className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+            >
+              Close
+            </Button>
+            <div className="flex gap-2">
+              {importFailedRows.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDownloadFailed}
+                  className="h-8 text-xs rounded-none bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 gap-1"
+                >
+                  <DownloadIcon className="h-3.5 w-3.5" />
+                  Failed ({importFailedRows.length})
+                </Button>
+              )}
+              <Button
+                onClick={handleImportUpload}
+                disabled={isImportLoading || !importFile || !importSelectedTSA}
+                className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5 gap-2 uppercase tracking-wider"
+              >
+                {isImportLoading ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                ) : (
+                  <><Upload className="h-3.5 w-3.5" /> Upload</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Filter Dialog */}
+      <Dialog open={showFilterDialog} onOpenChange={setShowFilterDialog}>
+        <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-slate-800/60">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-sm bg-slate-700/60 border border-slate-600">
+                  <SlidersHorizontal className="w-4 h-4 text-slate-300" />
+                </div>
+                <div>
+                  <DialogTitle className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                    Filters
+                  </DialogTitle>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Narrow down the customer list</p>
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetFilters}
+                  className="h-7 rounded-sm text-[9px] uppercase font-bold text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
+                >
+                  <RotateCcw className="mr-1 h-3 w-3" /> Reset
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="px-6 py-4 space-y-4">
+            {/* Manager */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Manager</label>
+              <Combobox
+                options={filterManagerOptions}
+                value={filterManager}
+                onValueChange={(v) => { setFilterManager(v || "all"); setPage(1); }}
+                placeholder="All Managers"
+                className="bg-slate-800 border-slate-700 text-slate-200 rounded-none"
+              />
+            </div>
+
+            {/* TSM */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Sales Manager (TSM)</label>
+              <Combobox
+                options={filterTsmOptions}
+                value={filterTSM}
+                onValueChange={(v) => { setFilterTSM(v || "all"); setPage(1); }}
+                placeholder="All TSM"
+                className="bg-slate-800 border-slate-700 text-slate-200 rounded-none"
+              />
+            </div>
+
+            {/* TSA */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Sales Associate (TSA)</label>
+              <Combobox
+                options={filterTsaOptions}
+                value={filterTSA}
+                onValueChange={(v) => { setFilterTSA(v || "all"); setPage(1); }}
+                placeholder="All TSA"
+                className="bg-slate-800 border-slate-700 text-slate-200 rounded-none"
+              />
+            </div>
+
+            {/* Type */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Client Type</label>
+              <Select value={filterType} onValueChange={(v) => { setFilterType(v); setPage(1); }}>
+                <SelectTrigger className="h-9 text-xs rounded-none bg-slate-800 border-slate-700 text-slate-200">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                  {typeOptions.map((t) => (
+                    <SelectItem key={t} value={t} className="text-xs capitalize focus:bg-cyan-500/10 focus:text-cyan-400">
+                      {t === "all" ? "All Types" : t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sort Order */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Sort Order</label>
+              <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "asc" | "desc")}>
+                <SelectTrigger className="h-9 text-xs rounded-none bg-slate-800 border-slate-700 text-slate-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                  <SelectItem value="desc" className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400">Latest First</SelectItem>
+                  <SelectItem value="asc" className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400">Oldest First</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Rows per page */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Rows per Page</label>
+              <Select value={rowsPerPage.toString()} onValueChange={(v) => { setRowsPerPage(Number(v)); setPage(1); }}>
+                <SelectTrigger className="h-9 text-xs rounded-none bg-slate-800 border-slate-700 text-slate-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                  {[20, 50, 100, 1000, 12000, 30000].map((n) => (
+                    <SelectItem key={n} value={n.toString()} className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400">
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex justify-end">
+            <Button
+              onClick={() => setShowFilterDialog(false)}
+              className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5 uppercase tracking-wider"
+            >
+              Apply
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </ProtectedPageWrapper>
   );
 }

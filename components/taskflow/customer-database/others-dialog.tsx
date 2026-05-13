@@ -578,110 +578,123 @@ export function OthersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Upload and Transfer Matched Users</DialogTitle>
+      <DialogContent className="max-w-5xl bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0 max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-slate-800/60 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-sm bg-cyan-500/10 border border-cyan-500/30">
+              <Upload className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div>
+              <DialogTitle className="text-sm font-bold uppercase tracking-widest text-cyan-400">
+                Upload & Transfer Matched Users
+              </DialogTitle>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Match Excel rows against the database and transfer to TSA / TSM / Manager
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Transfer to TSA</label>
-              <Select value={tsaSelection} onValueChange={setTsaSelection}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select TSA" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tsas.map((u) => (
-                    <SelectItem key={u.value} value={u.value}>
-                      {u.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Transfer to TSM</label>
-              <Select value={tsmSelection} onValueChange={setTsmSelection}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select TSM" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tsms.map((u) => (
-                    <SelectItem key={u.value} value={u.value}>
-                      {u.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Transfer to Manager</label>
-              <Select value={managerSelection} onValueChange={setManagerSelection}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Manager" />
-                </SelectTrigger>
-                <SelectContent>
-                  {managers.map((u) => (
-                    <SelectItem key={u.value} value={u.value}>
-                      {u.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* Assignment selects */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">
+              Transfer Assignment
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                { label: "Transfer to TSA", options: tsas, value: tsaSelection, onChange: setTsaSelection, placeholder: "Select TSA" },
+                { label: "Transfer to TSM", options: tsms, value: tsmSelection, onChange: setTsmSelection, placeholder: "Select TSM" },
+                { label: "Transfer to Manager", options: managers, value: managerSelection, onChange: setManagerSelection, placeholder: "Select Manager" },
+              ].map(({ label, options, value, onChange, placeholder }) => (
+                <div key={label} className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase text-slate-500">{label}</label>
+                  <Select value={value} onValueChange={onChange}>
+                    <SelectTrigger className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none focus:border-cyan-500/50">
+                      <SelectValue placeholder={placeholder} />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                      {options.map((u) => (
+                        <SelectItem key={u.value} value={u.value} className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400">
+                          {u.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-            <Input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFilePick(file);
-              }}
-              disabled={isMatching || isTransferring}
-              className="max-w-md"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={resetMatchedData}
-              disabled={isMatching || isTransferring}
-            >
-              Clear File
-            </Button>
-            {(isMatching || isTransferring) && (
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Processing...
-              </span>
+          {/* File upload */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">
+              Excel File
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFilePick(file);
+                }}
+                disabled={isMatching || isTransferring}
+                className="max-w-sm h-8 text-xs bg-slate-800 border-slate-700 text-slate-300 rounded-none file:text-cyan-400 file:bg-transparent file:border-0 file:text-xs file:font-semibold"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={resetMatchedData}
+                disabled={isMatching || isTransferring}
+                className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+              >
+                Clear
+              </Button>
+              {(isMatching || isTransferring) && (
+                <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
+                  Processing…
+                </span>
+              )}
+            </div>
+
+            {fileName && (
+              <p className="text-[11px] text-slate-500 mt-1.5">
+                File: <span className="font-medium text-slate-300">{fileName}</span>
+              </p>
             )}
           </div>
 
-          {fileName && (
-            <div className="text-xs text-muted-foreground">
-              File: <span className="font-medium text-foreground">{fileName}</span>
-            </div>
-          )}
-
+          {/* Stats row */}
           {(matchedRowsCount > 0 || unmatchedRowsCount > 0) && (
-            <div className="text-xs">
-              Excel rows: <span className="font-semibold">{uploadRows.length}</span> | Matched rows:{" "}
-              <span className="font-semibold">{matchedRowsCount}</span> | Unmatched rows:{" "}
-              <span className="font-semibold">{unmatchedRowsCount}</span> | Unique matched records:{" "}
-              <span className="font-semibold">{matchedRecords.length}</span>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { label: "Total Rows", value: uploadRows.length },
+                { label: "Matched", value: matchedRowsCount, color: "text-emerald-400" },
+                { label: "Unmatched", value: unmatchedRowsCount, color: "text-amber-400" },
+                { label: "DB Records", value: matchedRecords.length, color: "text-cyan-400" },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="rounded-none border border-slate-700 bg-slate-800/60 px-3 py-2 text-center min-w-[80px]">
+                  <div className={`text-lg font-bold tabular-nums ${color ?? "text-slate-200"}`}>{value}</div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wide">{label}</div>
+                </div>
+              ))}
             </div>
           )}
 
-          <div className="border rounded-sm overflow-auto max-h-[45vh]">
-            <Table>
-              <TableHeader className="sticky top-0 bg-muted z-10">
+          {/* Table */}
+          <div className="border border-slate-700/50 rounded-none overflow-auto max-h-[40vh] bg-slate-900/40">
+            <Table className="whitespace-nowrap text-[12px] min-w-full">
+              <TableHeader className="bg-slate-800/80 sticky top-0 z-10 border-b border-slate-700/50">
                 <TableRow>
-                  <TableHead className="w-10 text-center">
+                  <TableHead className="w-10 text-center px-2 text-slate-400">
                     <input
                       type="checkbox"
                       checked={allChecked}
@@ -689,22 +702,22 @@ export function OthersDialog({
                       disabled={uploadRows.length === 0}
                     />
                   </TableHead>
-                  <TableHead className="w-16">Row</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Contact Person</TableHead>
-                  <TableHead>Contact Number</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Delivery Address</TableHead>
-                  <TableHead>Type Client</TableHead>
-                  <TableHead>Match</TableHead>
-                  <TableHead>DB Status</TableHead>
+                  <TableHead className="w-14 text-slate-400">Row</TableHead>
+                  <TableHead className="min-w-[160px] text-slate-400">Company</TableHead>
+                  <TableHead className="min-w-[130px] text-slate-400">Contact Person</TableHead>
+                  <TableHead className="min-w-[120px] text-slate-400">Contact No.</TableHead>
+                  <TableHead className="min-w-[160px] text-slate-400">Email</TableHead>
+                  <TableHead className="min-w-[160px] text-slate-400">Address</TableHead>
+                  <TableHead className="min-w-[160px] text-slate-400">Delivery Address</TableHead>
+                  <TableHead className="min-w-[100px] text-slate-400">Type Client</TableHead>
+                  <TableHead className="min-w-[80px] text-slate-400">Match</TableHead>
+                  <TableHead className="min-w-[80px] text-slate-400">DB Status</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="text-[11px]">
                 {uploadRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={11} className="text-center text-slate-500 py-10">
                       No rows yet. Upload a file to display all Excel rows.
                     </TableCell>
                   </TableRow>
@@ -714,64 +727,69 @@ export function OthersDialog({
                     const firstMatched = isMatched
                       ? matchedRecordMap.get(row.matchedAccountIds[0])
                       : null;
+                    const isSelected = selectedRowIndexes.has(row.rowIndex);
                     return (
-                    <TableRow key={row.rowIndex}>
-                      <TableCell className="text-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedRowIndexes.has(row.rowIndex)}
-                          onChange={() => toggleSelectRow(row.rowIndex)}
-                        />
-                      </TableCell>
-                      <TableCell>{row.rowIndex}</TableCell>
-                      <TableCell>{row.source.company_name}</TableCell>
-                      <TableCell>{row.source.contact_person}</TableCell>
-                      <TableCell>{row.source.contact_number}</TableCell>
-                      <TableCell>{row.source.email_address}</TableCell>
-                      <TableCell>{row.source.address}</TableCell>
-                      <TableCell>{row.source.delivery_address}</TableCell>
-                      <TableCell>{row.source.type_client}</TableCell>
-                      <TableCell className={row.matched ? "text-emerald-600" : "text-amber-600"}>
-                        {row.matched ? "Matched" : "Unmatched"}
-                      </TableCell>
-                      <TableCell
-                        className={
-                          toKey(firstMatched?.status) === "active"
-                            ? "text-emerald-600"
-                            : ""
-                        }
+                      <TableRow
+                        key={row.rowIndex}
+                        className={`border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors text-slate-300 ${isSelected ? "bg-cyan-500/5" : ""}`}
                       >
-                        {firstMatched?.status || "-"}
-                      </TableCell>
-                    </TableRow>
-                  )})
+                        <TableCell className="text-center px-2">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectRow(row.rowIndex)}
+                          />
+                        </TableCell>
+                        <TableCell className="text-slate-500">{row.rowIndex}</TableCell>
+                        <TableCell className="font-medium text-slate-200 uppercase">{row.source.company_name}</TableCell>
+                        <TableCell className="capitalize">{row.source.contact_person}</TableCell>
+                        <TableCell>{row.source.contact_number}</TableCell>
+                        <TableCell className="text-slate-400">{row.source.email_address}</TableCell>
+                        <TableCell className="text-slate-400">{row.source.address}</TableCell>
+                        <TableCell className="text-slate-400">{row.source.delivery_address}</TableCell>
+                        <TableCell>{row.source.type_client}</TableCell>
+                        <TableCell>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${row.matched ? "bg-emerald-900/60 text-emerald-300" : "bg-amber-900/60 text-amber-300"}`}>
+                            {row.matched ? "Matched" : "Unmatched"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className={toKey(firstMatched?.status) === "active" ? "text-emerald-400" : "text-slate-500"}>
+                            {firstMatched?.status || "—"}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
         </div>
 
-        <DialogFooter className="mt-4 flex justify-between gap-2">
+        {/* Footer */}
+        <DialogFooter className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 shrink-0 flex items-center justify-between gap-2">
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={isMatching || isTransferring}
+            className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700"
           >
             Cancel
           </Button>
           <Button
             onClick={handleTransfer}
             disabled={isMatching || isTransferring || selectedRows.length === 0}
-            className="gap-2"
+            className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5 gap-2"
           >
             {isTransferring ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Transferring...
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Transferring…
               </>
             ) : (
               <>
-                <Upload className="h-4 w-4" />
+                <Upload className="h-3.5 w-3.5" />
                 Transfer Selected ({selectedRows.length})
               </>
             )}

@@ -299,60 +299,60 @@ export function DuplicateGroupCard({ group }: { group: DuplicateGroup }) {
   return (
     <div
       className={cn(
-        "rounded-lg border p-4 text-sm space-y-3",
+        "rounded-none border p-4 text-sm space-y-3",
         isCross
-          ? "border-orange-300 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40"
-          : "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40",
+          ? "border-orange-500/30 bg-orange-950/30"
+          : "border-red-500/30 bg-red-950/30",
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           {isCross ? (
-            <GitMerge className="size-4 text-orange-500 shrink-0 mt-0.5" />
+            <GitMerge className="size-4 text-orange-400 shrink-0 mt-0.5" />
           ) : (
-            <Users className="size-4 text-red-500 shrink-0 mt-0.5" />
+            <Users className="size-4 text-red-400 shrink-0 mt-0.5" />
           )}
           <Badge
             variant="secondary"
             className={cn(
               "text-[11px] font-semibold",
               isCross
-                ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-                : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+                ? "bg-orange-900/60 text-orange-300"
+                : "bg-red-900/60 text-red-300",
             )}
           >
             {isCross ? "Cross-TSA" : "Same-TSA"} Duplicate
           </Badge>
         </div>
-        <Badge variant="outline" className="text-[11px] shrink-0">
+        <Badge variant="outline" className="text-[11px] shrink-0 border-slate-600 text-slate-400">
           {group.customers.length} records
         </Badge>
       </div>
-      <p className="text-[11px] text-muted-foreground italic">
+      <p className="text-[11px] text-slate-500 italic">
         {group.matchReason}
       </p>
       <div className="space-y-2">
         {group.customers.map((c, i) => (
           <div
             key={c.id}
-            className="rounded-md border px-3 py-2 text-[12px] space-y-0.5 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700"
+            className="rounded-none border px-3 py-2 text-[12px] space-y-0.5 bg-slate-900 border-slate-700"
           >
             <div className="flex items-center gap-2 flex-wrap">
               {i > 0 && (
-                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">
                   ↳ duplicate
                 </span>
               )}
-              <span className="font-semibold uppercase text-foreground">
+              <span className="font-semibold uppercase text-slate-200">
                 {c.company_name}
               </span>
               {c.account_reference_number && (
-                <span className="text-muted-foreground font-mono text-[11px]">
+                <span className="text-slate-500 font-mono text-[11px]">
                   {c.account_reference_number}
                 </span>
               )}
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-muted-foreground">
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-slate-500">
               <span>{c.contact_person || "—"}</span>
               <span>{c.email_address || "—"}</span>
               <span className="text-[11px] font-mono">
@@ -381,16 +381,16 @@ function IssueBadgeCard({
   return (
     <div
       className={cn(
-        "rounded-lg border px-4 py-3 flex items-center gap-3",
+        "rounded-none border px-4 py-3 flex items-center gap-3",
         colorClass,
       )}
     >
       {icon}
       <div>
-        <div className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">
+        <div className="text-[11px] text-slate-400 uppercase tracking-wide font-medium">
           {label}
         </div>
-        <div className="text-2xl font-bold tabular-nums">{count}</div>
+        <div className="text-2xl font-bold tabular-nums text-slate-200">{count}</div>
       </div>
     </div>
   );
@@ -650,40 +650,40 @@ export function AuditDialog({
           <IssueBadgeCard
             label="Dup Groups"
             count={duplicateGroups.length}
-            icon={<Users className="size-5 text-red-500" />}
-            colorClass="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40"
+            icon={<Users className="size-5 text-red-400" />}
+            colorClass="border-red-500/30 bg-red-950/30"
           />
           <IssueBadgeCard
             label="Dup Records"
             count={duplicateIds.size}
             icon={<XCircle className="size-5 text-red-400" />}
-            colorClass="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40"
+            colorClass="border-red-500/30 bg-red-950/30"
           />
           <IssueBadgeCard
             label="Missing Type"
             count={missingType.length}
-            icon={<AlertTriangle className="size-5 text-amber-500" />}
-            colorClass="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
+            icon={<AlertTriangle className="size-5 text-amber-400" />}
+            colorClass="border-amber-500/30 bg-amber-950/30"
           />
           <IssueBadgeCard
             label="Missing Status"
             count={missingStatus.length}
-            icon={<AlertTriangle className="size-5 text-amber-500" />}
-            colorClass="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
+            icon={<AlertTriangle className="size-5 text-amber-400" />}
+            colorClass="border-amber-500/30 bg-amber-950/30"
           />
         </div>
         <ScrollArea className="flex-1 min-h-0 pr-1">
           {!hasAnyIssue ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-              <CheckCircle2 className="size-10 text-emerald-500" />
-              <p className="text-sm font-medium">No issues found</p>
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500">
+              <CheckCircle2 className="size-10 text-emerald-400" />
+              <p className="text-sm font-medium text-slate-300">No issues found</p>
               <p className="text-xs">The customer database looks clean.</p>
             </div>
           ) : (
             <div className="space-y-3 pb-2">
               {duplicateGroups.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground px-0.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 px-0.5">
                     Duplicate Groups ({duplicateGroups.length})
                   </p>
                   {duplicateGroups.map((g) => (
@@ -693,8 +693,8 @@ export function AuditDialog({
               )}
               {(missingType.length > 0 || missingStatus.length > 0) && (
                 <div className="space-y-2">
-                  {duplicateGroups.length > 0 && <Separator className="my-2" />}
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground px-0.5">
+                  {duplicateGroups.length > 0 && <Separator className="my-2 bg-slate-700" />}
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 px-0.5">
                     Data Issues
                   </p>
                   {[
@@ -704,11 +704,11 @@ export function AuditDialog({
                     list.length > 0 ? (
                       <div
                         key={label}
-                        className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-4 space-y-2"
+                        className="rounded-none border border-amber-500/30 bg-amber-950/30 p-4 space-y-2"
                       >
                         <div className="flex items-center gap-2">
-                          <AlertTriangle className="size-4 text-amber-500" />
-                          <span className="text-sm font-medium">
+                          <AlertTriangle className="size-4 text-amber-400" />
+                          <span className="text-sm font-medium text-amber-300">
                             {label} ({list.length})
                           </span>
                         </div>
@@ -716,18 +716,18 @@ export function AuditDialog({
                           {list.slice(0, 6).map((c) => (
                             <div
                               key={c.id}
-                              className="text-[12px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded px-3 py-1.5"
+                              className="text-[12px] bg-slate-900 border border-slate-700 rounded-none px-3 py-1.5"
                             >
-                              <span className="font-semibold uppercase">
+                              <span className="font-semibold uppercase text-slate-200">
                                 {c.company_name}
                               </span>{" "}
-                              <span className="text-muted-foreground">
+                              <span className="text-slate-500">
                                 — {c.contact_person || "—"}
                               </span>
                             </div>
                           ))}
                           {list.length > 6 && (
-                            <p className="text-[11px] text-muted-foreground pl-1">
+                            <p className="text-[11px] text-slate-500 pl-1">
                               + {list.length - 6} more
                             </p>
                           )}
@@ -861,68 +861,60 @@ export function AuditDialog({
     return (
       <div className="flex flex-col h-full gap-6">
         <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center">
-          <div className="size-16 rounded-2xl bg-blue-100 dark:bg-blue-950 flex items-center justify-center">
-            <CheckCircle2 className="size-8 text-blue-500" />
+          <div className="size-16 rounded-sm bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+            <CheckCircle2 className="size-8 text-cyan-400" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold">Send to Customer Audits?</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">
+            <h3 className="text-base font-bold uppercase tracking-widest text-cyan-100">Send to Customer Audits?</h3>
+            <p className="text-xs text-slate-400 max-w-sm">
               Flagged records will be sent to the{" "}
-              <span className="font-medium text-foreground">
+              <span className="font-medium text-cyan-400">
                 Customer Audits
               </span>{" "}
               page for review and resolution.
             </p>
           </div>
-          <div className="rounded-xl border bg-muted/50 p-5 w-full max-w-sm space-y-3 text-sm text-left">
+          <div className="rounded-none border border-slate-700 bg-slate-800/60 p-5 w-full max-w-sm space-y-3 text-sm text-left">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Total flagged</span>
-              <span className="font-semibold tabular-nums">{total}</span>
+              <span className="text-slate-400">Total flagged</span>
+              <span className="font-semibold tabular-nums text-slate-200">{total}</span>
             </div>
             {dupeGroups > 0 && (
               <>
-                <Separator />
+                <Separator className="bg-slate-700" />
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Duplicate groups
-                  </span>
-                  <span className="font-semibold tabular-nums">
-                    {dupeGroups}
-                  </span>
+                  <span className="text-slate-400">Duplicate groups</span>
+                  <span className="font-semibold tabular-nums text-slate-200">{dupeGroups}</span>
                 </div>
                 {sameTsa > 0 && (
                   <div className="flex justify-between pl-4 text-[12px]">
-                    <span className="text-muted-foreground">↳ Same-TSA</span>
-                    <span className="tabular-nums">{sameTsa}</span>
+                    <span className="text-slate-500">↳ Same-TSA</span>
+                    <span className="tabular-nums text-slate-300">{sameTsa}</span>
                   </div>
                 )}
                 {crossTsa > 0 && (
                   <div className="flex justify-between pl-4 text-[12px]">
-                    <span className="text-muted-foreground">↳ Cross-TSA</span>
-                    <span className="tabular-nums">{crossTsa}</span>
+                    <span className="text-slate-500">↳ Cross-TSA</span>
+                    <span className="tabular-nums text-slate-300">{crossTsa}</span>
                   </div>
                 )}
               </>
             )}
             {auditResult.missingType.length > 0 && (
               <>
-                <Separator />
+                <Separator className="bg-slate-700" />
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Missing type</span>
-                  <span className="font-semibold tabular-nums">
-                    {auditResult.missingType.length}
-                  </span>
+                  <span className="text-slate-400">Missing type</span>
+                  <span className="font-semibold tabular-nums text-slate-200">{auditResult.missingType.length}</span>
                 </div>
               </>
             )}
             {auditResult.missingStatus.length > 0 && (
               <>
-                <Separator />
+                <Separator className="bg-slate-700" />
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Missing status</span>
-                  <span className="font-semibold tabular-nums">
-                    {auditResult.missingStatus.length}
-                  </span>
+                  <span className="text-slate-400">Missing status</span>
+                  <span className="font-semibold tabular-nums text-slate-200">{auditResult.missingStatus.length}</span>
                 </div>
               </>
             )}
