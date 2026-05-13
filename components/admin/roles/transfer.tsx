@@ -307,6 +307,9 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
     }
 
     const tables = Array.from(selectedTables);
+    console.log("[TransferDialog] selectedTables Set:", selectedTables);
+    console.log("[TransferDialog] tables array to send:", tables);
+    
     const dateRange =
       selectedTables.has("history") && historyRange.from && historyRange.to
         ? historyRange

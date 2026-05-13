@@ -56,7 +56,11 @@ export function Audit<
 
   return (
     <>
-      <Button variant="destructive" onClick={() => setOpen(true)}>
+      <Button
+        variant="outline"
+        onClick={() => setOpen(true)}
+        className="bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 rounded-none h-9 text-xs uppercase tracking-wider"
+      >
         <ShieldAlert className="size-4 mr-1" /> Audit
       </Button>
 

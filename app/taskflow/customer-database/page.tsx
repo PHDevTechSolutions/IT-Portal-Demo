@@ -806,7 +806,6 @@ export default function AccountPage() {
   const [filterTSM, setFilterTSM] = useState("all");
   const [filterManager, setFilterManager] = useState("all");
   const [filterType, setFilterType] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -952,7 +951,7 @@ export default function AccountPage() {
             map.set(key, {
               referenceId: refId,
               name: `${u.Firstname ?? ""} ${u.Lastname ?? ""}`.trim() || refId,
-              status: u.Status ?? "Active",
+              status: u.Status ?? "",
             });
           }
         }
@@ -1108,11 +1107,11 @@ export default function AccountPage() {
       toast.info("Filter updated.");
     }, 600);
     return () => clearTimeout(timer);
-  }, [search, filterType, filterStatus]);
+  }, [search, filterType]);
 
   useEffect(
     () => setPage(1),
-    [search, filterType, filterStatus, filterTSA, filterTSM, filterManager],
+    [search, filterType, filterTSA, filterTSM, filterManager],
   );
 
   // ── Derived: filter options from customer data (alphabetically sorted) ──────
@@ -1123,12 +1122,6 @@ export default function AccountPage() {
     return ["all", ...types];
   }, [customers]);
 
-  const statusOptions = useMemo(() => {
-    const statuses = [
-      ...new Set(customers.map((c) => c.status).filter(Boolean)),
-    ].sort();
-    return ["all", ...statuses];
-  }, [customers]);
 
   // ── Filter combobox options — derived from customer data, names from refIdUserMap ──
   // The map is a fallback: if a user record wasn't found, the raw refId is shown.
@@ -1210,9 +1203,6 @@ export default function AccountPage() {
         filterType === "all" ? true : c.type_client === filterType,
       )
       .filter((c) =>
-        filterStatus === "all" ? true : c.status === filterStatus,
-      )
-      .filter((c) =>
         filterTSA === "all"
           ? true
           : c.referenceid?.trim().toLowerCase() ===
@@ -1248,7 +1238,6 @@ export default function AccountPage() {
     customers,
     search,
     filterType,
-    filterStatus,
     filterTSA,
     filterTSM,
     filterManager,
@@ -1699,7 +1688,6 @@ export default function AccountPage() {
     setFilterTSM("all");
     setFilterManager("all");
     setFilterType("all");
-    setFilterStatus("all");
     setStartDate("");
     setEndDate("");
     setSortOrder("desc");
@@ -1712,7 +1700,6 @@ export default function AccountPage() {
     filterTSM !== "all" ||
     filterManager !== "all" ||
     filterType !== "all" ||
-    filterStatus !== "all" ||
     !!startDate ||
     !!endDate ||
     sortOrder !== "desc" ||
@@ -2119,35 +2106,6 @@ export default function AccountPage() {
                     </Select>
                   </div>
 
-                  {/* Status Filter */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase opacity-60">
-                      Status
-                    </label>
-                    <Select
-                      value={filterStatus}
-                      onValueChange={(v) => {
-                        setFilterStatus(v);
-                        setPage(1);
-                      }}
-                    >
-                      <SelectTrigger className="h-9 text-xs rounded-none">
-                        <SelectValue placeholder="All Statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {statusOptions.map((s) => (
-                          <SelectItem
-                            key={s}
-                            value={s}
-                            className="text-xs capitalize"
-                          >
-                            {s === "all" ? "All Statuses" : s}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   {/* Sort Order */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase opacity-60">
@@ -2395,40 +2353,54 @@ export default function AccountPage() {
                   <Badge variant="outline">{`Total: ${totalCount}`}</Badge>
                 </div>
 
-                <div className="overflow-auto min-h-[200px] border border-border rounded-none flex items-center justify-center">
+                <div className="overflow-auto min-h-[200px] border border-border rounded-none">
                   {isFetching ? (
                     <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
                       <Loader2 className="size-6 animate-spin" />
                       <span>Loading customers…</span>
                     </div>
                   ) : current.length > 0 ? (
-                    <Table className="whitespace-nowrap text-[13px] min-w-full">
+                    <Table className="whitespace-nowrap text-[12px] min-w-full">
                       <TableHeader className="bg-muted sticky top-0 z-10">
                         <TableRow>
-                          <TableHead className="w-8 text-center">
+                          <TableHead className="w-8 text-center px-2">
                             <input
                               type="checkbox"
                               checked={selectAll}
                               onChange={handleSelectAll}
                             />
                           </TableHead>
-                          <TableHead className="text-center">Actions</TableHead>
-                          <TableHead>Company</TableHead>
-                          <TableHead>Contact</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Area</TableHead>
-                          <TableHead>TSA</TableHead>
-                          <TableHead>TSM</TableHead>
-                          <TableHead>Manager</TableHead>
-                          <TableHead>Date Created</TableHead>
-                          <TableHead>Date Updated</TableHead>
-                          <TableHead>Next Available</TableHead>
+                          <TableHead className="text-center px-2">Actions</TableHead>
+                          <TableHead className="min-w-[180px]">Company</TableHead>
+                          <TableHead className="min-w-[120px]">Company Group</TableHead>
+                          <TableHead className="min-w-[130px]">Contact Person</TableHead>
+                          <TableHead className="min-w-[120px]">Contact No.</TableHead>
+                          <TableHead className="min-w-[180px]">Email</TableHead>
+                          <TableHead className="min-w-[100px]">Type Client</TableHead>
+                          <TableHead className="min-w-[80px]">Type</TableHead>
+                          <TableHead className="min-w-[100px]">Status</TableHead>
+                          <TableHead className="min-w-[80px]">Industry</TableHead>
+                          <TableHead className="min-w-[60px]">Gender</TableHead>
+                          <TableHead className="min-w-[200px]">Address</TableHead>
+                          <TableHead className="min-w-[200px]">Delivery Address</TableHead>
+                          <TableHead className="min-w-[100px]">Region</TableHead>
+                          <TableHead className="min-w-[100px]">Province</TableHead>
+                          <TableHead className="min-w-[100px]">City</TableHead>
+                          <TableHead className="min-w-[120px]">Remarks</TableHead>
+                          <TableHead className="min-w-[120px]">TSA</TableHead>
+                          <TableHead className="min-w-[120px]">TSM</TableHead>
+                          <TableHead className="min-w-[120px]">Manager</TableHead>
+                          <TableHead className="min-w-[100px]">Transfer To</TableHead>
+                          <TableHead className="min-w-[100px]">Date Created</TableHead>
+                          <TableHead className="min-w-[100px]">Date Updated</TableHead>
+                          <TableHead className="min-w-[100px]">Next Available</TableHead>
+                          <TableHead className="min-w-[100px]">Date Transferred</TableHead>
+                          <TableHead className="min-w-[100px]">Date Approved</TableHead>
+                          <TableHead className="min-w-[100px]">Date Removed</TableHead>
                         </TableRow>
                       </TableHeader>
 
-                      <TableBody className="text-[12px]">
+                      <TableBody className="text-[11px]">
                         {current.map((c) => {
                           const isMissingType = !c.type_client?.trim();
                           const isMissingStatus = !c.status?.trim();
@@ -2437,12 +2409,41 @@ export default function AccountPage() {
                           const isParked =
                             c.status?.trim().toLowerCase() === "park";
 
+                          const renderUserCell = (refId: string | undefined, fallback: string | undefined) => {
+                            const key = (refId ?? "").trim().toLowerCase();
+                            const user = refIdUserMap.get(key);
+                            const label = user?.name || refId || "-";
+                            const isInactive = user && INACTIVE_STATUSES.includes(user.status ?? "");
+                            return (
+                              <span className="flex items-center gap-1 flex-wrap">
+                                {label}
+                                {isInactive && (
+                                  <span className={cn(
+                                    "text-[9px] font-semibold px-1 py-0.5 rounded-full leading-none",
+                                    user?.status === "Terminated" ? "bg-red-100 text-red-700"
+                                      : user?.status === "Resigned" ? "bg-orange-100 text-orange-700"
+                                      : "bg-gray-100 text-gray-600",
+                                  )}>
+                                    {user?.status}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          };
+
+                          const fmtDate = (d?: string | null) =>
+                            d ? new Date(d).toLocaleDateString() : "—";
+
                           return (
                             <TableRow
                               key={c.id}
-                              className={isParked ? "opacity-60" : ""}
+                              className={cn(
+                                "hover:bg-muted/40 transition-colors",
+                                isParked && "opacity-60",
+                                isSelected && "bg-primary/5",
+                              )}
                             >
-                              <TableCell className="text-center">
+                              <TableCell className="text-center px-2">
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
@@ -2450,10 +2451,11 @@ export default function AccountPage() {
                                 />
                               </TableCell>
 
-                              <TableCell className="text-center">
+                              <TableCell className="text-center px-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  className="h-7 text-[11px] px-2 rounded-sm"
                                   onClick={() => {
                                     setEditingCustomer(c);
                                     setShowEditDialog(true);
@@ -2463,163 +2465,145 @@ export default function AccountPage() {
                                 </Button>
                               </TableCell>
 
-                              <TableCell className="uppercase whitespace-normal break-words max-w-[250px]">
-                                <span
-                                  className={
-                                    isDuplicate ||
-                                    isMissingType ||
-                                    isMissingStatus
-                                      ? "line-through underline decoration-red-500 decoration-2"
-                                      : ""
-                                  }
-                                >
-                                  {c.company_name}
-                                  <br />
-                                  <span className="text-[10px] normal-case">
+                              {/* Company */}
+                              <TableCell className="font-medium">
+                                <div className={cn(
+                                  "uppercase leading-tight",
+                                  (isDuplicate || isMissingType || isMissingStatus) &&
+                                    "line-through decoration-red-500 decoration-2",
+                                )}>
+                                  {c.company_name || "—"}
+                                </div>
+                                {c.account_reference_number && (
+                                  <div className="text-[10px] text-muted-foreground normal-case mt-0.5">
                                     {c.account_reference_number}
-                                  </span>
-                                </span>
+                                  </div>
+                                )}
                               </TableCell>
 
-                              <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
-                                {c.contact_person}
+                              {/* Company Group */}
+                              <TableCell className="text-muted-foreground">
+                                {c.company_group || "—"}
                               </TableCell>
 
-                              <TableCell className="whitespace-normal break-words max-w-[250px]">
-                                {c.email_address}
+                              {/* Contact Person */}
+                              <TableCell className="capitalize">
+                                {c.contact_person || "—"}
                               </TableCell>
 
+                              {/* Contact Number */}
                               <TableCell>
-                                <span
-                                  className={
-                                    isMissingType
-                                      ? "line-through underline decoration-red-500 decoration-2"
-                                      : ""
-                                  }
-                                >
+                                {c.contact_number || "—"}
+                              </TableCell>
+
+                              {/* Email */}
+                              <TableCell className="text-muted-foreground">
+                                {c.email_address || "—"}
+                              </TableCell>
+
+                              {/* Type Client */}
+                              <TableCell>
+                                <span className={isMissingType ? "line-through decoration-red-500 decoration-2" : ""}>
                                   {c.type_client || "—"}
                                 </span>
                               </TableCell>
 
-                              <TableCell className="text-center">
+                              {/* Type */}
+                              <TableCell className="text-muted-foreground">
+                                {c.type || "—"}
+                              </TableCell>
+
+                              {/* Status */}
+                              <TableCell>
                                 <StatusBadge status={c.status} />
                               </TableCell>
 
-                              <TableCell>{c.region}</TableCell>
-
-                              <TableCell className="capitalize">
-                                {(() => {
-                                  const key = c.referenceid
-                                    ?.trim()
-                                    .toLowerCase();
-                                  const user = refIdUserMap.get(key ?? "");
-                                  const label =
-                                    user?.name || c.referenceid || "-";
-                                  const isInactive =
-                                    user &&
-                                    INACTIVE_STATUSES.includes(
-                                      user.status ?? "",
-                                    );
-                                  return (
-                                    <span className="flex items-center gap-1 flex-wrap">
-                                      {label}
-                                      {isInactive && (
-                                        <span
-                                          className={cn(
-                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
-                                            user?.status === "Terminated"
-                                              ? "bg-red-100 text-red-700"
-                                              : user?.status === "Resigned"
-                                                ? "bg-orange-100 text-orange-700"
-                                                : "bg-gray-100 text-gray-600",
-                                          )}
-                                        >
-                                          {user?.status}
-                                        </span>
-                                      )}
-                                    </span>
-                                  );
-                                })()}
+                              {/* Industry */}
+                              <TableCell className="text-muted-foreground">
+                                {c.industry || "—"}
                               </TableCell>
 
+                              {/* Gender */}
+                              <TableCell className="text-muted-foreground capitalize">
+                                {c.gender || "—"}
+                              </TableCell>
+
+                              {/* Address */}
+                              <TableCell className="max-w-[200px] whitespace-normal break-words text-muted-foreground">
+                                {c.address || "—"}
+                              </TableCell>
+
+                              {/* Delivery Address */}
+                              <TableCell className="max-w-[200px] whitespace-normal break-words text-muted-foreground">
+                                {c.delivery_address || "—"}
+                              </TableCell>
+
+                              {/* Region */}
+                              <TableCell>{c.region || "—"}</TableCell>
+
+                              {/* Province */}
+                              <TableCell className="text-muted-foreground">
+                                {c.province || "—"}
+                              </TableCell>
+
+                              {/* City */}
+                              <TableCell className="text-muted-foreground">
+                                {c.city || "—"}
+                              </TableCell>
+
+                              {/* Remarks */}
+                              <TableCell className="max-w-[120px] whitespace-normal break-words text-muted-foreground">
+                                {c.remarks || "—"}
+                              </TableCell>
+
+                              {/* TSA */}
                               <TableCell className="capitalize">
-                                {(() => {
-                                  const key = (c.tsm ?? "")
-                                    .trim()
-                                    .toLowerCase();
-                                  const user = refIdUserMap.get(key);
-                                  const label = user?.name || c.tsm || "-";
-                                  const isInactive =
-                                    user &&
-                                    INACTIVE_STATUSES.includes(
-                                      user.status ?? "",
-                                    );
-                                  return (
-                                    <span className="flex items-center gap-1 flex-wrap">
-                                      {label}
-                                      {isInactive && (
-                                        <span
-                                          className={cn(
-                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
-                                            user?.status === "Terminated"
-                                              ? "bg-red-100 text-red-700"
-                                              : user?.status === "Resigned"
-                                                ? "bg-orange-100 text-orange-700"
-                                                : "bg-gray-100 text-gray-600",
-                                          )}
-                                        >
-                                          {user?.status}
-                                        </span>
-                                      )}
-                                    </span>
-                                  );
-                                })()}
+                                {renderUserCell(c.referenceid, c.referenceid)}
                               </TableCell>
+
+                              {/* TSM */}
                               <TableCell className="capitalize">
-                                {(() => {
-                                  const key = (c.manager ?? "")
-                                    .trim()
-                                    .toLowerCase();
-                                  const user = refIdUserMap.get(key);
-                                  const label = user?.name || c.manager || "-";
-                                  const isInactive =
-                                    user &&
-                                    INACTIVE_STATUSES.includes(
-                                      user.status ?? "",
-                                    );
-                                  return (
-                                    <span className="flex items-center gap-1 flex-wrap">
-                                      {label}
-                                      {isInactive && (
-                                        <span
-                                          className={cn(
-                                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
-                                            user?.status === "Terminated"
-                                              ? "bg-red-100 text-red-700"
-                                              : user?.status === "Resigned"
-                                                ? "bg-orange-100 text-orange-700"
-                                                : "bg-gray-100 text-gray-600",
-                                          )}
-                                        >
-                                          {user?.status}
-                                        </span>
-                                      )}
-                                    </span>
-                                  );
-                                })()}
+                                {renderUserCell(c.tsm, c.tsm)}
                               </TableCell>
-                              <TableCell>
-                                {new Date(c.date_created).toLocaleDateString()}
+
+                              {/* Manager */}
+                              <TableCell className="capitalize">
+                                {renderUserCell(c.manager, c.manager)}
                               </TableCell>
-                              <TableCell>
-                                {new Date(c.date_updated).toLocaleDateString()}
+
+                              {/* Transfer To */}
+                              <TableCell className="text-muted-foreground">
+                                {c.transfer_to || "—"}
                               </TableCell>
-                              <TableCell>
-                                {c.next_available_date
-                                  ? new Date(
-                                      c.next_available_date,
-                                    ).toLocaleDateString()
-                                  : "-"}
+
+                              {/* Date Created */}
+                              <TableCell className="text-muted-foreground">
+                                {fmtDate(c.date_created)}
+                              </TableCell>
+
+                              {/* Date Updated */}
+                              <TableCell className="text-muted-foreground">
+                                {fmtDate(c.date_updated)}
+                              </TableCell>
+
+                              {/* Next Available */}
+                              <TableCell className="text-muted-foreground">
+                                {fmtDate(c.next_available_date)}
+                              </TableCell>
+
+                              {/* Date Transferred */}
+                              <TableCell className="text-muted-foreground">
+                                {fmtDate(c.date_transferred)}
+                              </TableCell>
+
+                              {/* Date Approved */}
+                              <TableCell className="text-muted-foreground">
+                                {fmtDate(c.date_approved)}
+                              </TableCell>
+
+                              {/* Date Removed */}
+                              <TableCell className="text-muted-foreground">
+                                {fmtDate(c.date_removed)}
                               </TableCell>
                             </TableRow>
                           );

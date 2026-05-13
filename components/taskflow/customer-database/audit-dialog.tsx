@@ -617,13 +617,17 @@ export function AuditDialog({
         </ScrollArea>
       </div>
       <div className="flex justify-end gap-2 shrink-0">
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <Button
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+        >
           Cancel
         </Button>
         <Button
           disabled={!isDone}
           onClick={() => setPhase("results")}
-          className="gap-1.5"
+          className="gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
         >
           View Results <ChevronRight className="size-4" />
         </Button>
@@ -741,6 +745,7 @@ export function AuditDialog({
             variant="ghost"
             size="sm"
             onClick={() => setPhase("terminal")}
+            className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
           >
             ← Back to Log
           </Button>
@@ -750,16 +755,23 @@ export function AuditDialog({
               size="sm"
               onClick={() => auditResult && exportAuditDialogToPDF(auditResult, customers)}
               disabled={!auditResult || auditResult.allAffectedCustomers.length === 0}
-              className="gap-1.5"
+              className="gap-1.5 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 rounded-none"
             >
               <FileDown className="size-4" />
               Export PDF
             </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+            >
               Close
             </Button>
             {hasAnyIssue && (
-              <Button onClick={() => setPhase("confirm")} className="gap-1.5">
+              <Button
+                onClick={() => setPhase("confirm")}
+                className="gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
+              >
                 Review & Proceed <ArrowRight className="size-4" />
               </Button>
             )}
@@ -917,14 +929,26 @@ export function AuditDialog({
           </div>
         </div>
         <div className="flex justify-between gap-2 shrink-0">
-          <Button variant="ghost" size="sm" onClick={() => setPhase("results")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPhase("results")}
+            className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
+          >
             ← Back to Results
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+            >
               Cancel
             </Button>
-            <Button onClick={handleConfirm} className="gap-1.5">
+            <Button
+              onClick={handleConfirm}
+              className="gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
+            >
               Confirm — Go to Audits <ArrowRight className="size-4" />
             </Button>
           </div>
@@ -942,15 +966,15 @@ export function AuditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[82vh] flex flex-col gap-0 p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b">
+      <DialogContent className="max-w-2xl h-[82vh] flex flex-col gap-0 p-0 overflow-hidden bg-slate-900/95 border-cyan-500/30 rounded-none">
+        <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-cyan-500/30 bg-cyan-500/10">
           <div className="flex items-center gap-3">
-            <div className="size-8 rounded-lg bg-zinc-900 dark:bg-zinc-800 flex items-center justify-center">
-              <Terminal className="size-4 text-emerald-400" />
+            <div className="size-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+              <Terminal className="size-4 text-cyan-400" />
             </div>
             <div>
-              <DialogTitle className="text-base">{titles[phase]}</DialogTitle>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <DialogTitle className="text-base text-cyan-100 tracking-wider uppercase">{titles[phase]}</DialogTitle>
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 {phase === "terminal" &&
                   "Scanning customer database for issues..."}
                 {phase === "results" &&
@@ -965,10 +989,10 @@ export function AuditDialog({
                   className={cn(
                     "size-2 rounded-full transition-colors",
                     phase === p
-                      ? "bg-primary"
+                      ? "bg-cyan-400"
                       : i < phaseOrder.indexOf(phase)
-                        ? "bg-primary/40"
-                        : "bg-zinc-200 dark:bg-zinc-700",
+                        ? "bg-cyan-400/40"
+                        : "bg-slate-700",
                   )}
                 />
               ))}

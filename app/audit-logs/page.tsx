@@ -8,7 +8,7 @@ import {
   collection,
   query,
   orderBy,
-  onSnapshot,
+  getDocs,
   Timestamp,
   limit,
 } from "firebase/firestore";
@@ -470,6 +470,7 @@ export default function CustomerAuditLogsPage() {
   const [systemAuditLogs, setSystemAuditLogs] = useState<UnifiedLog[]>([]);
   const [auditTrailLogs, setAuditTrailLogs] = useState<UnifiedLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
   const [filterAction, setFilterAction] = useState<string>("all");
   const [filterSource, setFilterSource] = useState<string>("all");
@@ -486,205 +487,162 @@ export default function CustomerAuditLogsPage() {
   
   // ── Bulk Selection ───────────────────────────────────────────────────────
   const [selectedLogs, setSelectedLogs] = useState<Set<string>>(new Set());
-  const [newLogsCount, setNewLogsCount] = useState(0);
-  const lastViewedTimestamp = useRef<number>(Date.now());
 
-  // ── Live Firestore: taskflow_customer_audit_logs ──────────────────────────
-  useEffect(() => {
-    const q = query(
-      collection(db, "taskflow_customer_audit_logs"),
-      orderBy("timestamp", "desc"),
-      limit(500),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const items: UnifiedLog[] = snap.docs.map((d) => ({
+  // ── fetchAllLogs: one-time getDocs fetch for all four collections ─────────
+  const fetchAllLogs = useCallback(async () => {
+    setError(false);
+    setLoading(true);
+
+    // Primary collection — failure is fatal
+    let primaryDocs: UnifiedLog[] = [];
+    try {
+      const q = query(
+        collection(db, "taskflow_customer_audit_logs"),
+        orderBy("timestamp", "desc"),
+        limit(500),
+      );
+      const snap = await getDocs(q);
+      primaryDocs = snap.docs.map((d) => ({
         id: d.id,
         source: "customer_audit" as const,
         ...(d.data() as Omit<UnifiedLog, "id" | "source">),
       }));
-      
-      // Count new logs since last view
-      const newCount = items.filter(
-        (item) => (item.timestamp?.toMillis?.() || 0) > lastViewedTimestamp.current
-      ).length;
-      if (newCount > 0) {
-        setNewLogsCount((prev) => prev + newCount);
-      }
-      
-      setCustomerAuditLogs(items);
+    } catch (err) {
+      console.error("[taskflow_customer_audit_logs] getDocs failed:", err);
+      setError(true);
       setLoading(false);
-    });
-    return () => unsub();
-  }, []);
+      return;
+    }
 
-  // ── Live Firestore: activity_logs ─────────────────────────────────────────
-  useEffect(() => {
-    const q = query(
-      collection(db, "activity_logs"),
-      orderBy("date_created", "desc"),
-      limit(500),
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items: UnifiedLog[] = snap.docs.map((d) => {
-          const data = d.data();
-          // Normalise action — activity_logs stores "status" as the action-like field
-          // with values like "transfer", "login", "logout"
-          const rawAction = (data.action ?? data.status ?? "other") as string;
-          const action: AnyAction =
-            rawAction === "transfer"
-              ? "transfer"
-              : rawAction === "login"
-                ? "login"
-                : rawAction === "logout"
-                  ? "logout"
-                  : "other";
+    // Optional collections — failures are silent
+    const [activityResult, systemResult, trailsResult] = await Promise.allSettled([
+      getDocs(query(collection(db, "activity_logs"), orderBy("date_created", "desc"), limit(500))),
+      getDocs(query(collection(db, "systemAudits"), orderBy("timestamp", "desc"), limit(500))),
+      getDocs(query(collection(db, "audit_trails"), orderBy("timestamp", "desc"), limit(500))),
+    ]);
 
-          // Build a unified actor from activity_logs fields
-          // The collection stores: actorName, actorEmail, actorReferenceID
-          // (PascalCase legacy fields: email, userId are also present from login logs)
-          const actor: AuditActor = {
-            name: data.actorName ?? null,
-            email: data.actorEmail ?? data.email ?? null,
-            referenceId: data.actorReferenceID ?? data.ReferenceID ?? null,
-            uid: data.userId ?? null,
-            role: null,
-          };
+    // Normalise activity_logs (same logic as existing onSnapshot handler)
+    const activityDocs: UnifiedLog[] =
+      activityResult.status === "fulfilled"
+        ? activityResult.value.docs.map((d) => {
+            const data = d.data();
+            // Normalise action — activity_logs stores "status" as the action-like field
+            // with values like "transfer", "login", "logout"
+            const rawAction = (data.action ?? data.status ?? "other") as string;
+            const action: AnyAction =
+              rawAction === "transfer"
+                ? "transfer"
+                : rawAction === "login"
+                  ? "login"
+                  : rawAction === "logout"
+                    ? "logout"
+                    : "other";
 
-          return {
-            id: d.id,
-            source: "activity_logs" as const,
-            action,
-            actor,
-            timestamp: data.date_created ?? data.timestamp ?? null,
-            // activity_logs PascalCase fields
-            ReferenceID: data.ReferenceID ?? null,
-            TSM: data.TSM ?? null,
-            Manager: data.Manager ?? null,
-            previousTSM: data.previousTSM ?? null,
-            previousManager: data.previousManager ?? null,
-            // customer_audit compat fields — not present, but keep typed
-            transfer: null,
-            changes: null,
-            context: null,
-            customerName: data.ReferenceID ?? null,
-          } satisfies UnifiedLog;
-        });
-        setActivityLogs(items);
-      },
-      (err) => {
-        // activity_logs collection may not exist yet — that's fine
-        if (err.code !== "not-found") {
-          console.warn(
-            "[activity_logs] Firestore listener error:",
-            err.message,
-          );
-        }
-      },
-    );
-    return () => unsub();
-  }, []);
-
-  // ── Live Firestore: audit_trails ─────────────────────────────────────────
-  useEffect(() => {
-    const q = query(
-      collection(db, "audit_trails"),
-      orderBy("timestamp", "desc"),
-      limit(500),
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items: UnifiedLog[] = snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            source: "audit_trails" as const,
-            action: (data.action ?? "other") as AnyAction,
-            actor: {
-              name: data.fullName ?? `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim() ?? null,
-              email: data.email ?? null,
-              referenceId: data.referenceId ?? null,
-              role: data.role ?? null,
-              uid: null,
-            },
-            timestamp: data.timestamp ?? data.createdAt ?? null,
-            changes: data.changes ?? null,
-            details: data.details ?? null,
-            message: data.message ?? null,
-            ipAddress: data.ipAddress ?? null,
-            userAgent: data.userAgent ?? null,
-            entityName: data.entityname ?? data.entityName ?? null,
-            entityId: data.entityId ?? null,
-            entityType: data.entityType ?? null,
-            department: data.department ?? null,
-          } satisfies UnifiedLog;
-        });
-        setAuditTrailLogs(items);
-      },
-      (err) => {
-        if (err.code !== "not-found") {
-          console.warn("[audit_trails] Firestore listener error:", err.message);
-        }
-      },
-    );
-    return () => unsub();
-  }, []);
-
-  // ── Live Firestore: systemAudits ─────────────────────────────────────────
-  useEffect(() => {
-    const q = query(
-      collection(db, "systemAudits"),
-      orderBy("timestamp", "desc"),
-      limit(500),
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const items: UnifiedLog[] = snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            source: "system_audit" as const,
-            action: (data.action ?? "other") as AnyAction,
-            resourceId: data.resourceId ?? null,
-            resourceName: data.resourceName ?? null,
-            resourceType: data.resourceType ?? null,
-            module: data.module ?? null,
-            page: data.page ?? null,
-            actor: {
-              uid: data.actorUid ?? null,
+            // Build a unified actor from activity_logs fields
+            // The collection stores: actorName, actorEmail, actorReferenceID
+            // (PascalCase legacy fields: email, userId are also present from login logs)
+            const actor: AuditActor = {
               name: data.actorName ?? null,
-              email: data.actorEmail ?? null,
-              role: data.actorRole ?? null,
-              referenceId: data.actorReferenceId ?? null,
-            },
-            timestamp: data.timestamp ?? null,
-            affectedCount: data.affectedCount ?? 1,
-            changes: data.changes ?? null,
-            transfer: data.transfer ?? null,
-            metadata: data.metadata ?? null,
-            context: {
-              source: data.source ?? null,
+              email: data.actorEmail ?? data.email ?? null,
+              referenceId: data.actorReferenceID ?? data.ReferenceID ?? null,
+              uid: data.userId ?? null,
+              role: null,
+            };
+
+            return {
+              id: d.id,
+              source: "activity_logs" as const,
+              action,
+              actor,
+              timestamp: data.date_created ?? data.timestamp ?? null,
+              // activity_logs PascalCase fields
+              ReferenceID: data.ReferenceID ?? null,
+              TSM: data.TSM ?? null,
+              Manager: data.Manager ?? null,
+              previousTSM: data.previousTSM ?? null,
+              previousManager: data.previousManager ?? null,
+              // customer_audit compat fields — not present, but keep typed
+              transfer: null,
+              changes: null,
+              context: null,
+              customerName: data.ReferenceID ?? null,
+            } satisfies UnifiedLog;
+          })
+        : [];
+
+    // Normalise systemAudits (same logic as existing onSnapshot handler)
+    const systemDocs: UnifiedLog[] =
+      systemResult.status === "fulfilled"
+        ? systemResult.value.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              source: "system_audit" as const,
+              action: (data.action ?? "other") as AnyAction,
+              resourceId: data.resourceId ?? null,
+              resourceName: data.resourceName ?? null,
+              resourceType: data.resourceType ?? null,
+              module: data.module ?? null,
               page: data.page ?? null,
-            },
-          } satisfies UnifiedLog;
-        });
-        setSystemAuditLogs(items);
-      },
-      (err) => {
-        // systemAudits collection may not exist yet — that's fine
-        if (err.code !== "not-found") {
-          console.warn(
-            "[systemAudits] Firestore listener error:",
-            err.message,
-          );
-        }
-      },
-    );
-    return () => unsub();
+              actor: {
+                uid: data.actorUid ?? null,
+                name: data.actorName ?? null,
+                email: data.actorEmail ?? null,
+                role: data.actorRole ?? null,
+                referenceId: data.actorReferenceId ?? null,
+              },
+              timestamp: data.timestamp ?? null,
+              affectedCount: data.affectedCount ?? 1,
+              changes: data.changes ?? null,
+              transfer: data.transfer ?? null,
+              metadata: data.metadata ?? null,
+              context: {
+                source: data.source ?? null,
+                page: data.page ?? null,
+              },
+            } satisfies UnifiedLog;
+          })
+        : [];
+
+    // Normalise audit_trails (same logic as existing onSnapshot handler)
+    const trailsDocs: UnifiedLog[] =
+      trailsResult.status === "fulfilled"
+        ? trailsResult.value.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              source: "audit_trails" as const,
+              action: (data.action ?? "other") as AnyAction,
+              actor: {
+                name: data.fullName ?? `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim() ?? null,
+                email: data.email ?? null,
+                referenceId: data.referenceId ?? null,
+                role: data.role ?? null,
+                uid: null,
+              },
+              timestamp: data.timestamp ?? data.createdAt ?? null,
+              changes: data.changes ?? null,
+              details: data.details ?? null,
+              message: data.message ?? null,
+              ipAddress: data.ipAddress ?? null,
+              userAgent: data.userAgent ?? null,
+              entityName: data.entityname ?? data.entityName ?? null,
+              entityId: data.entityId ?? null,
+              entityType: data.entityType ?? null,
+              department: data.department ?? null,
+            } satisfies UnifiedLog;
+          })
+        : [];
+
+    setCustomerAuditLogs(primaryDocs);
+    setActivityLogs(activityDocs);
+    setSystemAuditLogs(systemDocs);
+    setAuditTrailLogs(trailsDocs);
+    setLoading(false);
   }, []);
+
+  // ── Mount: fetch all collections once ────────────────────────────────────
+  useEffect(() => { fetchAllLogs(); }, [fetchAllLogs]);
 
   // ── Merge + sort all collections ─────────────────────────────────────────
   const allLogs = useMemo<UnifiedLog[]>(() => {
@@ -860,11 +818,6 @@ export default function CustomerAuditLogsPage() {
     exportAuditLogsToCSV(selected);
   };
 
-  const clearNewLogsBadge = () => {
-    setNewLogsCount(0);
-    lastViewedTimestamp.current = Date.now();
-  };
-
   const clearFilters = () => {
     setSearch("");
     setFilterAction("all");
@@ -1009,7 +962,7 @@ export default function CustomerAuditLogsPage() {
                     Audit Logs
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Real-time activity trail from{" "}
+                    Activity logs fetched on demand from{" "}
                     <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
                       taskflow_customer_audit_logs
                     </span>{" "}
@@ -1047,26 +1000,11 @@ export default function CustomerAuditLogsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* New Logs Badge */}
-                  {newLogsCount > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 text-xs bg-primary/10 border-primary/30"
-                      onClick={clearNewLogsBadge}
-                    >
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                      </span>
-                      {newLogsCount} new
-                    </Button>
-                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-2 text-xs"
-                    onClick={() => window.location.reload()}
+                    onClick={fetchAllLogs}
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                     Refresh
@@ -1236,6 +1174,33 @@ export default function CustomerAuditLogsPage() {
 
               {activeView === "logs" ? (
                 <>
+                  {/* Error state */}
+                  {error && (
+                    <Card className="border-destructive/50 bg-destructive/5">
+                      <CardContent className="p-6 flex flex-col items-center gap-4 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <p className="text-base font-semibold text-destructive">
+                            Failed to load audit logs
+                          </p>
+                          <p className="text-sm text-muted-foreground max-w-md">
+                            The primary audit log collection could not be fetched. Click{" "}
+                            <span className="font-medium text-foreground">Refresh</span> to try again.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 text-xs"
+                          onClick={fetchAllLogs}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Refresh
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {!error && <>
                   {/* Filter bar */}
                   <Card>
                 <CardContent className="p-4">
@@ -1739,6 +1704,7 @@ export default function CustomerAuditLogsPage() {
                   )}
                 </CardContent>
               </Card>
+                  </>}
                 </>
               ) : (
                 /* Analytics Dashboard */

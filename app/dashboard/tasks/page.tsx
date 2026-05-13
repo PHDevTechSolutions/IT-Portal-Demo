@@ -45,7 +45,7 @@ function TasksContent() {
     <ProtectedPageWrapper>
       <AppSidebar />
       <SidebarInset>
-        <header className="relative flex h-auto min-h-[56px] items-center gap-2 justify-between px-2 md:px-4 py-2 flex-wrap bg-slate-950/95 backdrop-blur-xl border-b border-cyan-500/30 overflow-hidden">
+        <header className="relative flex h-auto min-h-[56px] items-center gap-2 justify-between px-2 md:px-4 py-2 flex-wrap bg-slate-950 border-b overflow-hidden">
           {/* Corner brackets */}
           <div className="absolute bottom-0 left-0 w-3 h-3 border-l border-b border-cyan-500/50" />
           <div className="absolute bottom-0 right-0 w-3 h-3 border-r border-b border-cyan-500/50" />

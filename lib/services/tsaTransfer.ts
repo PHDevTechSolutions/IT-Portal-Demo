@@ -44,7 +44,7 @@ function getNeon() {
 }
 
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL_IT;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_IT;
   if (!url || !key)
     throw new Error(
@@ -185,24 +185,71 @@ async function updateSupabaseTable(
   historyDateRange?: HistoryDateRange,
 ): Promise<TableResult> {
   const supabase = getSupabase();
-
-  // Start building the query
-  let query = supabase
-    .from(table)
-    .update({ [field]: newSupervisorReferenceId })
-    .ilike("referenceid", tsaReferenceId); // case-insensitive match
-
-  // Apply date range filter only for the history table
-  if (table === "history" && historyDateRange?.from && historyDateRange?.to) {
-    query = (query as any)
-      .gte("date_created", `${historyDateRange.from}T00:00:00`)
-      .lte("date_created", `${historyDateRange.to}T23:59:59`);
+  
+  // Use lowercase column names directly since user confirmed all columns are lowercase
+  const refCol = "referenceid";
+  const fieldCol = field; // "tsm" or "manager"
+  
+  console.log(`[tsaTransfer] Updating ${table}: refId=${tsaReferenceId}, field=${fieldCol}, newValue=${newSupervisorReferenceId}`);
+  
+  try {
+    // First check if any rows match
+    const { count: rowCount, error: countError } = await supabase
+      .from(table)
+      .select(refCol, { count: "exact", head: true })
+      .eq(refCol, tsaReferenceId);
+    
+    if (countError) {
+      console.error(`[tsaTransfer] Error counting rows in ${table}:`, countError.message);
+      return { updated: 0, error: `Cannot query ${table}: ${countError.message}` };
+    }
+    
+    if (!rowCount || rowCount === 0) {
+      console.warn(`[tsaTransfer] No rows in ${table} with ${refCol}=${tsaReferenceId}`);
+      return { updated: 0, error: `No rows match reference ID "${tsaReferenceId}"` };
+    }
+    
+    console.log(`[tsaTransfer] Found ${rowCount} rows in ${table} to update`);
+    
+    // Build and execute update query
+    let query = supabase
+      .from(table)
+      .update({ [fieldCol]: newSupervisorReferenceId })
+      .eq(refCol, tsaReferenceId);
+    
+    // Apply date range filter only for the history table
+    if (table === "history" && historyDateRange?.from && historyDateRange?.to) {
+      query = (query as any)
+        .gte("date_created", `${historyDateRange.from}T00:00:00`)
+        .lte("date_created", `${historyDateRange.to}T23:59:59`);
+    }
+    
+    const { error: updateError } = await query;
+    
+    if (updateError) {
+      console.error(`[tsaTransfer] Update error in ${table}:`, updateError.message);
+      return { updated: 0, error: updateError.message };
+    }
+    
+    // Verify the update by counting rows with new value
+    const { count: updatedCount, error: verifyError } = await supabase
+      .from(table)
+      .select(refCol, { count: "exact", head: true })
+      .eq(refCol, tsaReferenceId)
+      .eq(fieldCol, newSupervisorReferenceId);
+    
+    if (verifyError) {
+      console.log(`[tsaTransfer] Update succeeded but verification failed: ${verifyError.message}`);
+      return { updated: rowCount }; // Assume all were updated if we can't verify
+    }
+    
+    console.log(`[tsaTransfer] SUCCESS: Updated ${updatedCount}/${rowCount} rows in ${table}`);
+    return { updated: updatedCount || 0 };
+    
+  } catch (err: any) {
+    console.error(`[tsaTransfer] Exception in ${table}:`, err.message);
+    return { updated: 0, error: err.message };
   }
-
-  const { data, error } = await query;
-
-  if (error) return { updated: 0, error: error.message };
-  return { updated: (data as any[] | null)?.length ?? -1 };
 }
 
 /**
@@ -218,9 +265,45 @@ async function updateSupabase(
   historyDateRange?: HistoryDateRange,
 ): Promise<Record<string, TableResult>> {
   // Determine which tables to update
-  const tablesToUpdate: string[] = selectedTables
-    ? SUPABASE_TABLES.filter((t) => selectedTables.includes(t))
-    : [...SUPABASE_TABLES];
+  console.log(`[tsaTransfer] RAW selectedTables:`, JSON.stringify(selectedTables));
+  console.log(`[tsaTransfer] selectedTables type:`, typeof selectedTables);
+  console.log(`[tsaTransfer] selectedTables isArray:`, Array.isArray(selectedTables));
+  console.log(`[tsaTransfer] selectedTables length:`, selectedTables?.length);
+  
+  let tablesToUpdate: string[];
+  
+  if (!selectedTables || selectedTables.length === 0) {
+    console.log(`[tsaTransfer] No selectedTables provided, updating ALL tables`);
+    tablesToUpdate = [...SUPABASE_TABLES];
+  } else {
+    // Use selectedTables directly - just normalize case
+    const normalizedInput = selectedTables.map(t => String(t).trim().toLowerCase());
+    const normalizedSupabase = SUPABASE_TABLES.map(t => t.toLowerCase());
+    
+    console.log(`[tsaTransfer] normalizedInput:`, JSON.stringify(normalizedInput));
+    console.log(`[tsaTransfer] normalizedSupabase:`, JSON.stringify(normalizedSupabase));
+    
+    // Find intersection: tables that are both in SUPABASE_TABLES and selectedTables
+    tablesToUpdate = SUPABASE_TABLES.filter((t) => {
+      const tLower = t.toLowerCase();
+      const isSelected = normalizedInput.includes(tLower);
+      const isValidTable = normalizedSupabase.includes(tLower);
+      console.log(`[tsaTransfer] Table "${t}" - isSelected: ${isSelected}, isValidTable: ${isValidTable}`);
+      return isSelected && isValidTable;
+    });
+    
+    // If after filtering we get empty array, try accepting selectedTables as-is
+    if (tablesToUpdate.length === 0 && selectedTables.length > 0) {
+      console.log(`[tsaTransfer] WARNING: No tables matched after filtering. Trying direct match...`);
+      const validTables = SUPABASE_TABLES.map(t => t.toLowerCase());
+      tablesToUpdate = selectedTables.filter(t => {
+        const tLower = t.toLowerCase();
+        return validTables.includes(tLower as any) || SUPABASE_TABLES.includes(t as any);
+      });
+    }
+  }
+  
+  console.log(`[tsaTransfer] FINAL tablesToUpdate:`, JSON.stringify(tablesToUpdate));
 
   const out: Record<string, TableResult> = {};
 
@@ -271,6 +354,8 @@ export async function transferTSA(
     selectedTables,
     historyDateRange,
   } = input;
+
+  console.log(`[transferTSA] START - received selectedTables:`, JSON.stringify(selectedTables));
 
   const emptyLog = (mongodb: TransferResult["log"]["mongodb"] = "failed") => ({
     tsaReferenceId,

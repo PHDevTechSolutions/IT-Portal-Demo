@@ -530,7 +530,7 @@ export default function AccountPage() {
                     <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "linear-gradient(rgba(6,182,212,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,0.5) 1px, transparent 1px)", backgroundSize: "50px 50px" }} />
                   </div>
                   <div className="relative z-10 w-full">
-                    <header className="flex h-16 items-center gap-2 px-4 border-b border-cyan-500/20 bg-slate-900/50 backdrop-blur-sm">
+                    <header className="flex h-16 items-center gap-2 px-4 border-b border-cyan-500/20 bg-slate-950">
                       <SidebarTrigger className="-ml-1 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20" />
                       <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">Home</Button>
                       <Separator orientation="vertical" className="h-4 bg-cyan-500/30 hidden sm:block" />

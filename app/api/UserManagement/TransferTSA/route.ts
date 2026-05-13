@@ -55,6 +55,9 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log("[TransferTSA API] received selectedTables:", selectedTables);
+    console.log("[TransferTSA API] type:", typeof selectedTables, Array.isArray(selectedTables));
+    
     const result = await transferTSA({
       tsaReferenceId: tsaReferenceId.trim(),
       field: field as TransferField,

@@ -41,7 +41,7 @@ interface Customer {
   next_available_date?: string;
 }
 
-// Fetch customers with caching - only Active status
+// Fetch all customers with caching
 async function fetchCustomers(): Promise<Customer[]> {
   const res = await fetch(
     "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch",
@@ -49,12 +49,7 @@ async function fetchCustomers(): Promise<Customer[]> {
   );
   if (!res.ok) throw new Error("Failed to fetch customers");
   const data = await res.json();
-  const allCustomers = Array.isArray(data) ? data : data.data ?? [];
-  
-  // Filter only Active customers (case-insensitive)
-  return allCustomers.filter((c: Customer) => 
-    c.status?.toLowerCase() === "active"
-  );
+  return Array.isArray(data) ? data : data.data ?? [];
 }
 
 // Hook to get customers with automatic caching

@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { ArrowRight, UserCog } from "lucide-react";
 
 export interface TransferSuccessPayload {
   tsa?: { toId: string; toName: string } | null;
@@ -176,18 +177,28 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChangeAction}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md bg-slate-900/95 border-cyan-500/30 rounded-none">
         <DialogHeader>
-          <DialogTitle>Transfer Selected Users</DialogTitle>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+              <UserCog className="size-5 text-cyan-400" />
+            </div>
+            <div>
+              <DialogTitle className="text-cyan-100 tracking-wider uppercase">Transfer Selected Users</DialogTitle>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Move customers between TSA/TSM/Manager
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
           <div>
-            <label className="block mb-1 font-medium text-xs">
+            <label className="block mb-1 text-[11px] font-bold uppercase text-slate-400">
               Transfer to TSA
             </label>
             <Select value={tsaSelection} onValueChange={setTsaSelection}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-slate-300 rounded-none h-9 text-xs focus:border-cyan-500/50">
                 <SelectValue placeholder="Select TSA" />
               </SelectTrigger>
               <SelectContent>
@@ -205,11 +216,11 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
           </div>
 
           <div>
-            <label className="block mb-1 font-medium text-xs">
+            <label className="block mb-1 text-[11px] font-bold uppercase text-slate-400">
               Transfer to TSM
             </label>
             <Select value={tsmSelection} onValueChange={setTsmSelection}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-slate-300 rounded-none h-9 text-xs focus:border-cyan-500/50">
                 <SelectValue placeholder="Select TSM" />
               </SelectTrigger>
               <SelectContent>
@@ -227,14 +238,14 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
           </div>
 
           <div>
-            <label className="block mb-1 font-medium text-xs">
+            <label className="block mb-1 text-[11px] font-bold uppercase text-slate-400">
               Transfer to Manager
             </label>
             <Select
               value={managerSelection}
               onValueChange={setManagerSelection}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full bg-slate-900 border-slate-700 text-slate-300 rounded-none h-9 text-xs focus:border-cyan-500/50">
                 <SelectValue placeholder="Select Manager" />
               </SelectTrigger>
               <SelectContent>
@@ -253,10 +264,19 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
         </div>
 
         <DialogFooter className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChangeAction(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChangeAction(false)}
+            className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+          >
             Cancel
           </Button>
-          <Button onClick={handleConfirm}>Confirm</Button>
+          <Button
+            onClick={handleConfirm}
+            className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none gap-1"
+          >
+            Confirm <ArrowRight className="size-4" />
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

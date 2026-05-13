@@ -872,7 +872,7 @@ export default function ITPermissionsPage() {
                 {/* Main Content */}
                 <div className="relative z-10 w-full">
                   {/* Header */}
-                  <header className="flex h-16 items-center gap-2 px-4 border-b border-cyan-500/20 bg-slate-900/50 backdrop-blur-sm">
+                  <header className="flex h-16 items-center gap-2 px-4 border-b border-cyan-500/20 bg-slate-950">
                     <SidebarTrigger className="-ml-1 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20" />
                     <Separator orientation="vertical" className="h-4 bg-cyan-500/30" />
                     <Breadcrumb>

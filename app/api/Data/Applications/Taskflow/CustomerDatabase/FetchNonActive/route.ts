@@ -13,7 +13,6 @@ export async function GET() {
         // Fetch only non-Active accounts (case-insensitive)
         const Xchire_fetch = await Xchire_sql`
             SELECT * FROM accounts 
-            WHERE LOWER(status) != 'active' 
             ORDER BY date_created DESC;
         `;
 
