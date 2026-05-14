@@ -927,248 +927,186 @@ export default function CustomerAuditLogsPage() {
   return (
     <ProtectedPageWrapper>
       <TooltipProvider delayDuration={0}>
-        <SidebarProvider>
+        <SidebarProvider className="dark">
           <AppSidebar />
-          <SidebarInset>
-            {/* Header */}
-            <header className="flex h-auto min-h-[56px] items-center gap-2 px-2 md:px-4 py-2 flex-wrap">
-              <SidebarTrigger className="-ml-1 touch-button" />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push("/dashboard")}
-              >
+          <SidebarInset className="bg-slate-950 text-slate-100 flex flex-col h-svh overflow-hidden">
+            {/* ── Header ── */}
+            <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4 border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-sm">
+              <SidebarTrigger className="-ml-1 text-slate-400 hover:text-cyan-400" />
+              <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}
+                className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 text-xs hidden sm:flex">
                 Home
               </Button>
-              <Separator orientation="vertical" className="h-4 hidden sm:block" />
-              <Breadcrumb className="hidden sm:flex">
+              <Separator orientation="vertical" className="h-4 bg-slate-700 hidden sm:block" />
+              <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbLink href="#">Admin</BreadcrumbLink>
+                    <BreadcrumbLink href="#" className="text-slate-500 hover:text-cyan-400 text-xs hidden sm:block">Admin</BreadcrumbLink>
                   </BreadcrumbItem>
-                  <BreadcrumbSeparator />
+                  <BreadcrumbSeparator className="text-slate-600 hidden sm:block" />
                   <BreadcrumbItem>
-                    <BreadcrumbPage>Audit Logs</BreadcrumbPage>
+                    <BreadcrumbPage className="text-cyan-400 text-xs font-semibold tracking-wide">Audit Logs</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
             </header>
 
-            <main className="p-6 md:p-10 space-y-6">
-              {/* Page heading */}
-              <div className="flex items-center justify-between">
+            {/* ── Title + Stats + Toolbar (shrink-0, never scrolls) ── */}
+            <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800 space-y-3">
+              {/* Title row */}
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h2 className="text-2xl font-semibold tracking-tight">
-                    Audit Logs
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Activity logs fetched on demand from{" "}
-                    <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
-                      taskflow_customer_audit_logs
-                    </span>{" "}
-                    +{" "}
-                    <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
-                      activity_logs
-                    </span>{" "}
-                    +{" "}
-                    <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
-                      systemAudits
-                    </span>{" "}
-                    +{" "}
-                    <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
-                      audit_trails
-                    </span>
-                    {!loading && (
-                      <>
-                        {" "}
-                        —{" "}
-                        <span className="font-semibold text-foreground">
-                          {filtered.length}
-                        </span>{" "}
-                        events
-                      </>
-                    )}
-                    {/* Current user indicator */}
-                    {currentUser.name && (
-                      <span className="ml-2 text-muted-foreground">
-                        · Viewing as{" "}
-                        <span className="font-semibold text-foreground">
-                          {currentUser.name}
-                        </span>
-                      </span>
-                    )}
+                  <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-cyan-400 leading-tight">Audit Logs</h1>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {loading ? "Loading…" : <><span className="font-semibold text-slate-300">{filtered.length}</span> events</>}
+                    {currentUser.name && <span className="ml-2">· <span className="text-slate-400">{currentUser.name}</span></span>}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 text-xs"
-                    onClick={fetchAllLogs}
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Refresh
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={fetchAllLogs}
+                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider gap-1">
+                    <RefreshCw className="h-3.5 w-3.5" /> Refresh
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 text-xs"
-                    onClick={() => exportAuditLogsToCSV(filtered)}
-                    disabled={filtered.length === 0}
-                  >
-                    <FileSpreadsheet className="h-3.5 w-3.5" />
-                    Export CSV
+                  <Button variant="outline" size="sm" onClick={() => exportAuditLogsToCSV(filtered)} disabled={filtered.length === 0}
+                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider gap-1">
+                    <FileSpreadsheet className="h-3.5 w-3.5" /> CSV
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 text-xs"
-                    onClick={() => exportAuditLogsToPDF(filtered)}
-                    disabled={filtered.length === 0}
-                  >
-                    <FileDown className="h-3.5 w-3.5" />
-                    Export PDF
+                  <Button variant="outline" size="sm" onClick={() => exportAuditLogsToPDF(filtered)} disabled={filtered.length === 0}
+                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider gap-1">
+                    <FileDown className="h-3.5 w-3.5" /> PDF
                   </Button>
                 </div>
               </div>
 
-              {/* Stats row */}
-              <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+              {/* Stats pills */}
+              <div className="flex flex-wrap gap-2">
                 {[
-                  {
-                    label: "Total",
-                    value: stats.total,
-                    icon: <Activity className="h-4 w-4" />,
-                    color: "text-foreground",
-                    bg: "bg-muted/50 border",
-                  },
-                  {
-                    label: "Transferred",
-                    value: stats.transfers,
-                    icon: <ArrowRight className="h-4 w-4" />,
-                    color: ACTION_CONFIG.transfer.color,
-                    bg: ACTION_CONFIG.transfer.bg,
-                  },
-                  {
-                    label: "Created",
-                    value: stats.creates,
-                    icon: <Plus className="h-4 w-4" />,
-                    color: ACTION_CONFIG.create.color,
-                    bg: ACTION_CONFIG.create.bg,
-                  },
-                  {
-                    label: "Updated",
-                    value: stats.updates,
-                    icon: <Pencil className="h-4 w-4" />,
-                    color: ACTION_CONFIG.update.color,
-                    bg: ACTION_CONFIG.update.bg,
-                  },
-                  {
-                    label: "Deleted",
-                    value: stats.deletes,
-                    icon: <Trash2 className="h-4 w-4" />,
-                    color: ACTION_CONFIG.delete.color,
-                    bg: ACTION_CONFIG.delete.bg,
-                  },
-                  {
-                    label: "Auto-ID",
-                    value: stats.autoids,
-                    icon: <Hash className="h-4 w-4" />,
-                    color: ACTION_CONFIG.autoid.color,
-                    bg: ACTION_CONFIG.autoid.bg,
-                  },
-                  {
-                    label: "Sessions",
-                    value: stats.logins,
-                    icon: <LogIn className="h-4 w-4" />,
-                    color: ACTION_CONFIG.login.color,
-                    bg: ACTION_CONFIG.login.bg,
-                  },
-                ].map((stat) => (
-                  <Card key={stat.label} className={cn("border", stat.bg)}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={cn("text-xs font-medium", stat.color)}>
-                          {stat.label}
-                        </span>
-                        <span className={stat.color}>{stat.icon}</span>
-                      </div>
-                      <p
-                        className={cn(
-                          "text-2xl font-bold tabular-nums",
-                          stat.color,
-                        )}
-                      >
-                        {loading ? "—" : stat.value.toLocaleString()}
-                      </p>
-                    </CardContent>
-                  </Card>
+                  { label: "Total",       value: stats.total,     color: "text-slate-300",   border: "border-slate-700" },
+                  { label: "Transferred", value: stats.transfers, color: "text-violet-400",  border: "border-violet-500/30" },
+                  { label: "Created",     value: stats.creates,   color: "text-emerald-400", border: "border-emerald-500/30" },
+                  { label: "Updated",     value: stats.updates,   color: "text-blue-400",    border: "border-blue-500/30" },
+                  { label: "Deleted",     value: stats.deletes,   color: "text-red-400",     border: "border-red-500/30" },
+                  { label: "Auto-ID",     value: stats.autoids,   color: "text-amber-400",   border: "border-amber-500/30" },
+                  { label: "Sessions",    value: stats.logins,    color: "text-green-400",   border: "border-green-500/30" },
+                ].map((s) => (
+                  <div key={s.label} className={`rounded-none border ${s.border} bg-slate-800/60 px-3 py-1.5 text-center min-w-[64px]`}>
+                    <div className={`text-base font-bold tabular-nums ${s.color}`}>{loading ? "—" : s.value.toLocaleString()}</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wide">{s.label}</div>
+                  </div>
                 ))}
               </div>
 
-              {/* View Tabs */}
-              <div className="flex items-center gap-2 border-b">
-                <button
-                  onClick={() => setActiveView("logs")}
-                  className={cn(
-                    "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-                    activeView === "logs"
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <DatabaseBackup className="inline-block mr-2 h-4 w-4" />
-                  Logs
-                </button>
-                <button
-                  onClick={() => setActiveView("analytics")}
-                  className={cn(
-                    "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-                    activeView === "analytics"
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Activity className="inline-block mr-2 h-4 w-4" />
-                  Analytics
-                </button>
+              {/* Toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[180px] max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                  <Input className="pl-7 h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/50 rounded-none"
+                    placeholder="Search by name, email, ReferenceID…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                  {search && <button onClick={() => setSearch("")} className="absolute right-2 top-2.5 text-slate-500 hover:text-slate-300"><X className="h-3.5 w-3.5" /></button>}
+                </div>
+                <Select value={filterSource} onValueChange={setFilterSource}>
+                  <SelectTrigger className="h-9 w-[150px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><SelectValue placeholder="Source" /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                    <SelectItem value="all" className="text-xs">All Sources</SelectItem>
+                    <SelectItem value="customer_audit" className="text-xs">customer_audit</SelectItem>
+                    <SelectItem value="activity_logs" className="text-xs">activity_logs</SelectItem>
+                    <SelectItem value="system_audit" className="text-xs">system_audit</SelectItem>
+                    <SelectItem value="audit_trails" className="text-xs">audit_trails</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterAction} onValueChange={setFilterAction}>
+                  <SelectTrigger className="h-9 w-[140px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><SelectValue placeholder="Action" /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                    <SelectItem value="all" className="text-xs">All Actions</SelectItem>
+                    <SelectItem value="transfer" className="text-xs">Transferred</SelectItem>
+                    <SelectItem value="create" className="text-xs">Created</SelectItem>
+                    <SelectItem value="update" className="text-xs">Updated</SelectItem>
+                    <SelectItem value="delete" className="text-xs">Deleted</SelectItem>
+                    <SelectItem value="autoid" className="text-xs">Auto-ID</SelectItem>
+                    <SelectItem value="login" className="text-xs">Login</SelectItem>
+                    <SelectItem value="logout" className="text-xs">Logout</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterDate} onValueChange={setFilterDate}>
+                  <SelectTrigger className="h-9 w-[130px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><SelectValue placeholder="Date" /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                    <SelectItem value="all" className="text-xs">All Time</SelectItem>
+                    <SelectItem value="today" className="text-xs">Today</SelectItem>
+                    <SelectItem value="week" className="text-xs">Last 7 Days</SelectItem>
+                    <SelectItem value="month" className="text-xs">Last 30 Days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className={cn("h-9 text-xs rounded-none bg-slate-800 border-slate-700 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 gap-1", (dateRange.from || dateRange.to) && "border-cyan-500/40 text-cyan-400 bg-cyan-500/5")}>
+                      <CalendarIcon className="h-3.5 w-3.5" />
+                      {dateRange.from ? (dateRange.to ? `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, yy")}` : format(dateRange.from, "MMM d, yyyy")) : "Date range"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-slate-900 border-slate-700" align="start">
+                    <Calendar initialFocus mode="range" defaultMonth={dateRange.from}
+                      selected={{ from: dateRange.from, to: dateRange.to }}
+                      onSelect={(r) => setDateRange({ from: r?.from, to: r?.to })}
+                      numberOfMonths={2} />
+                  </PopoverContent>
+                </Popover>
+                {uniqueActors.length > 0 && (
+                  <Select value={filterActor} onValueChange={setFilterActor}>
+                    <SelectTrigger className="h-9 w-[160px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><Users className="mr-1 h-3 w-3" /><SelectValue placeholder="Actor" /></SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                      <SelectItem value="all" className="text-xs">All Actors</SelectItem>
+                      {uniqueActors.map(([key, actor]) => (
+                        <SelectItem key={key} value={key} className="text-xs">{actor.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {uniqueModules.length > 0 && (
+                  <Select value={filterModule} onValueChange={setFilterModule}>
+                    <SelectTrigger className="h-9 w-[150px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><Layers className="mr-1 h-3 w-3" /><SelectValue placeholder="Module" /></SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                      <SelectItem value="all" className="text-xs">All Modules</SelectItem>
+                      {uniqueModules.map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {/* View toggle */}
+                <div className="flex items-center border border-slate-700 rounded-none overflow-hidden ml-auto">
+                  {(["logs", "analytics"] as const).map((v) => (
+                    <button key={v} onClick={() => setActiveView(v)}
+                      className={cn("px-3 h-9 text-xs uppercase tracking-wider font-medium transition-colors",
+                        activeView === v ? "bg-cyan-600 text-white" : "bg-slate-800 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10")}>
+                      {v === "logs" ? <><DatabaseBackup className="inline-block mr-1 h-3.5 w-3.5" />Logs</> : <><Activity className="inline-block mr-1 h-3.5 w-3.5" />Analytics</>}
+                    </button>
+                  ))}
+                </div>
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters}
+                    className="h-9 text-xs rounded-none text-slate-400 hover:text-red-400 hover:bg-red-500/10 gap-1">
+                    <X className="h-3.5 w-3.5" /> Clear
+                  </Button>
+                )}
               </div>
+            </div>
 
-              {/* Bulk Selection Bar */}
+            {/* ── Scrollable content ── */}
+            <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-4 pb-3 min-h-0 pt-3">
+            <main className="flex-1 overflow-hidden flex flex-col min-h-0">
+              {/* removed old heading — now in shrink-0 bar above */}
+
+              {/* Bulk selection bar */}
               {activeView === "logs" && selectedLogs.size > 0 && (
-                <div className="flex items-center justify-between p-3 bg-primary/5 border rounded-lg">
+                <div className="shrink-0 flex items-center justify-between px-3 py-2 mb-2 bg-cyan-500/5 border border-cyan-500/20 rounded-none">
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium">
+                    <span className="text-xs font-medium text-slate-300">
                       {selectedLogs.size} log{selectedLogs.size > 1 ? "s" : ""} selected
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={selectAllVisible}
-                    >
-                      Select all visible
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={clearSelection}
-                    >
-                      Clear
-                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400 hover:text-cyan-400" onClick={selectAllVisible}>Select all visible</Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400 hover:text-red-400" onClick={clearSelection}>Clear</Button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1"
-                      onClick={exportSelectedLogs}
-                    >
-                      <FileSpreadsheet className="h-3 w-3" />
-                      Export Selected
-                    </Button>
-                  </div>
+                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1 bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-none" onClick={exportSelectedLogs}>
+                    <FileSpreadsheet className="h-3 w-3" /> Export Selected
+                  </Button>
                 </div>
               )}
 
@@ -1176,232 +1114,27 @@ export default function CustomerAuditLogsPage() {
                 <>
                   {/* Error state */}
                   {error && (
-                    <Card className="border-destructive/50 bg-destructive/5">
-                      <CardContent className="p-6 flex flex-col items-center gap-4 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <p className="text-base font-semibold text-destructive">
-                            Failed to load audit logs
-                          </p>
-                          <p className="text-sm text-muted-foreground max-w-md">
-                            The primary audit log collection could not be fetched. Click{" "}
-                            <span className="font-medium text-foreground">Refresh</span> to try again.
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-2 text-xs"
-                          onClick={fetchAllLogs}
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          Refresh
-                        </Button>
-                      </CardContent>
-                    </Card>
+                    <div className="flex flex-col items-center gap-4 py-16 text-center">
+                      <p className="text-sm font-semibold text-red-400">Failed to load audit logs</p>
+                      <p className="text-xs text-slate-500 max-w-md">The primary collection could not be fetched.</p>
+                      <Button variant="outline" size="sm" className="gap-2 text-xs bg-slate-800 border-slate-600 text-slate-300 rounded-none" onClick={fetchAllLogs}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Refresh
+                      </Button>
+                    </div>
                   )}
 
                   {!error && <>
-                  {/* Filter bar */}
-                  <Card>
-                <CardContent className="p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 min-w-[220px]">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        className="pl-9 h-9 text-sm"
-                        placeholder="Search by name, email, ReferenceID, TSM…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                      />
-                      {search && (
-                        <button
-                          onClick={() => setSearch("")}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Source filter */}
-                    <Select
-                      value={filterSource}
-                      onValueChange={setFilterSource}
-                    >
-                      <SelectTrigger className="h-9 w-[170px] text-xs">
-                        <SelectValue placeholder="Source" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Sources</SelectItem>
-                        <SelectItem value="customer_audit">
-                          customer_audit
-                        </SelectItem>
-                        <SelectItem value="activity_logs">
-                          activity_logs
-                        </SelectItem>
-                        <SelectItem value="system_audit">
-                          system_audit
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    {/* Action filter */}
-                    <Select
-                      value={filterAction}
-                      onValueChange={setFilterAction}
-                    >
-                      <SelectTrigger className="h-9 w-[150px] text-xs">
-                        <SelectValue placeholder="Action" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Actions</SelectItem>
-                        <SelectItem value="transfer">Transferred</SelectItem>
-                        <SelectItem value="create">Created</SelectItem>
-                        <SelectItem value="update">Updated</SelectItem>
-                        <SelectItem value="delete">Deleted</SelectItem>
-                        <SelectItem value="autoid">Auto-ID</SelectItem>
-                        <SelectItem value="login">Login</SelectItem>
-                        <SelectItem value="logout">Logout</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    {/* Date filter */}
-                    <Select value={filterDate} onValueChange={setFilterDate}>
-                      <SelectTrigger className="h-9 w-[140px] text-xs">
-                        <SelectValue placeholder="Date Range" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Time</SelectItem>
-                        <SelectItem value="today">Today</SelectItem>
-                        <SelectItem value="week">Last 7 Days</SelectItem>
-                        <SelectItem value="month">Last 30 Days</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    {/* Date Range Picker */}
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            "h-9 w-[240px] justify-start text-left font-normal text-xs",
-                            !dateRange.from && !dateRange.to && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                          {dateRange.from ? (
-                            dateRange.to ? (
-                              <>
-                                {format(dateRange.from, "LLL dd, y")} -{" "}
-                                {format(dateRange.to, "LLL dd, y")}
-                              </>
-                            ) : (
-                              format(dateRange.from, "LLL dd, y")
-                            )
-                          ) : (
-                            <span>Pick a date range</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          initialFocus
-                          mode="range"
-                          defaultMonth={dateRange.from}
-                          selected={{
-                            from: dateRange.from,
-                            to: dateRange.to,
-                          }}
-                          onSelect={(range) => {
-                            setDateRange({
-                              from: range?.from,
-                              to: range?.to,
-                            });
-                          }}
-                          numberOfMonths={2}
-                        />
-                      </PopoverContent>
-                    </Popover>
-
-                    {/* Actor filter */}
-                    {uniqueActors.length > 0 && (
-                      <Select
-                        value={filterActor}
-                        onValueChange={setFilterActor}
-                      >
-                        <SelectTrigger className="h-9 w-[180px] text-xs">
-                          <Users className="mr-2 h-3 w-3" />
-                          <SelectValue placeholder="Actor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Actors</SelectItem>
-                          {uniqueActors.map(([key, actor]) => (
-                            <SelectItem key={key} value={key}>
-                              {actor.name}
-                              {actor.email && actor.email !== actor.name && (
-                                <span className="ml-1 text-muted-foreground">({actor.email})</span>
-                              )}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-
-                    {/* Module filter */}
-                    {uniqueModules.length > 0 && (
-                      <Select
-                        value={filterModule}
-                        onValueChange={setFilterModule}
-                      >
-                        <SelectTrigger className="h-9 w-[180px] text-xs">
-                          <Layers className="mr-2 h-3 w-3" />
-                          <SelectValue placeholder="Module" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Modules</SelectItem>
-                          {uniqueModules.map((module) => (
-                            <SelectItem key={module} value={module}>
-                              {module}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-
-                    {hasFilters && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-9 gap-2 text-xs text-muted-foreground"
-                        onClick={clearFilters}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Clear
-                      </Button>
-                    )}
-
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {loading ? "Loading…" : `${filtered.length} events`}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Table */}
-              <Card>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b bg-muted/30">
-                          <th className="px-4 py-3 w-[40px]">
+                  {/* Table */}
+                  <div className="flex-1 overflow-auto min-h-0 border border-slate-700/50 rounded-none bg-slate-900/40">
+                    <table className="w-full whitespace-nowrap text-[12px] min-w-full">
+                      <thead className="bg-slate-800/80 sticky top-0 z-10 border-b border-slate-700/50">
+                        <tr>
+                          <th className="px-3 py-3 w-[40px] text-slate-400">
                             <input
                               type="checkbox"
                               checked={paginated.length > 0 && paginated.every(log => selectedLogs.has(`${log.source}-${log.id}`))}
                               onChange={() => {
                                 if (paginated.every(log => selectedLogs.has(`${log.source}-${log.id}`))) {
-                                  // Deselect all visible
                                   setSelectedLogs(prev => {
                                     const newSet = new Set(prev);
                                     paginated.forEach(log => newSet.delete(`${log.source}-${log.id}`));
@@ -1411,34 +1144,23 @@ export default function CustomerAuditLogsPage() {
                                   selectAllVisible();
                                 }
                               }}
-                              className="h-4 w-4 rounded border-gray-300"
+                              className="h-4 w-4 rounded border-slate-600"
                             />
                           </th>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[200px]">
-                            Actor
-                          </th>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[120px]">
-                            Action
-                          </th>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Subject / Detail
-                          </th>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[170px]">
-                            Time
-                          </th>
-                          <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-[60px]">
-                            View
-                          </th>
+                          <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-[180px]">Actor</th>
+                          <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-[110px]">Action</th>
+                          <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-[220px]">Subject / Detail</th>
+                          <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-[160px]">Time</th>
+                          <th className="text-center px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider w-[50px]">View</th>
                         </tr>
                       </thead>
-
-                      <tbody className="divide-y">
+                      <tbody>
                         {loading ? (
                           Array.from({ length: 8 }).map((_, i) => (
-                            <tr key={i} className="animate-pulse">
-                              {Array.from({ length: 5 }).map((_, j) => (
-                                <td key={j} className="px-4 py-3">
-                                  <div className="h-4 bg-muted rounded w-full" />
+                            <tr key={i} className="animate-pulse border-b border-slate-800/60">
+                              {Array.from({ length: 6 }).map((_, j) => (
+                                <td key={j} className="px-3 py-3">
+                                  <div className="h-4 bg-slate-800 rounded w-full" />
                                 </td>
                               ))}
                             </tr>
@@ -1446,18 +1168,12 @@ export default function CustomerAuditLogsPage() {
                         ) : paginated.length === 0 ? (
                           <tr>
                             <td colSpan={6} className="text-center py-16">
-                              <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                              <div className="flex flex-col items-center gap-3 text-slate-500">
                                 <DatabaseBackup className="h-10 w-10 opacity-20" />
-                                <p className="text-sm font-medium">
-                                  No logs found
-                                </p>
+                                <p className="text-sm font-medium">No logs found</p>
                                 {hasFilters && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={clearFilters}
-                                    className="text-xs"
-                                  >
+                                  <Button variant="outline" size="sm" onClick={clearFilters}
+                                    className="text-xs bg-slate-800 border-slate-600 text-slate-300 rounded-none">
                                     Clear filters
                                   </Button>
                                 )}
@@ -1467,170 +1183,92 @@ export default function CustomerAuditLogsPage() {
                         ) : (
                           paginated.map((log) => {
                             const cfg = getActionCfg(log.action);
-                            const isBulk =
-                              log.context?.bulk || (log.affectedCount ?? 0) > 1;
-                            const actorDisplay =
-                              log.actor?.name ||
-                              log.actor?.email ||
-                              log.actor?.referenceId ||
-                              "Unknown";
+                            const isBulk = log.context?.bulk || (log.affectedCount ?? 0) > 1;
+                            const actorDisplay = log.actor?.name || log.actor?.email || log.actor?.referenceId || "Unknown";
 
                             return (
                               <tr
                                 key={`${log.source}-${log.id}`}
                                 className={cn(
-                                  "hover:bg-muted/30 transition-colors",
-                                  selectedLogs.has(`${log.source}-${log.id}`) && "bg-primary/5"
+                                  "border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors text-slate-300",
+                                  selectedLogs.has(`${log.source}-${log.id}`) && "bg-cyan-500/5",
                                 )}
                               >
                                 {/* Checkbox */}
-                                <td className="px-4 py-3">
-                                  <input
-                                    type="checkbox"
+                                <td className="px-3 py-2.5">
+                                  <input type="checkbox"
                                     checked={selectedLogs.has(`${log.source}-${log.id}`)}
                                     onChange={() => toggleLogSelection(`${log.source}-${log.id}`)}
-                                    className="h-4 w-4 rounded border-gray-300"
-                                  />
+                                    className="h-4 w-4 rounded border-slate-600" />
                                 </td>
                                 {/* Actor */}
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2.5">
-                                    <div
-                                      className={cn(
-                                        "w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold",
-                                        avatarColor(
-                                          log.actor?.name || log.actor?.email,
-                                        ),
-                                      )}
-                                    >
-                                      {getInitials(
-                                        log.actor?.name || log.actor?.email,
-                                      )}
+                                <td className="px-3 py-2.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className={cn("w-7 h-7 rounded-full bg-gradient-to-br flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold", avatarColor(log.actor?.name || log.actor?.email))}>
+                                      {getInitials(log.actor?.name || log.actor?.email)}
                                     </div>
                                     <div className="min-w-0">
-                                      <p className="text-xs font-semibold truncate leading-tight">
-                                        {actorDisplay}
-                                      </p>
-                                      {log.actor?.email &&
-                                        log.actor.email !== actorDisplay && (
-                                          <p className="text-[10px] text-muted-foreground truncate leading-tight">
-                                            {log.actor.email}
-                                          </p>
-                                        )}
+                                      <p className="text-xs font-semibold truncate leading-tight text-slate-200">{actorDisplay}</p>
+                                      {log.actor?.email && log.actor.email !== actorDisplay && (
+                                        <p className="text-[10px] text-slate-500 truncate leading-tight">{log.actor.email}</p>
+                                      )}
                                       <SourceBadge source={log.source} />
                                     </div>
                                   </div>
                                 </td>
-
                                 {/* Action */}
-                                <td className="px-4 py-3">
+                                <td className="px-3 py-2.5">
                                   <div className="flex flex-col gap-1">
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        "gap-1 text-[11px] font-semibold border w-fit",
-                                        cfg.bg,
-                                        cfg.color,
-                                      )}
-                                    >
-                                      {cfg.icon}
-                                      {cfg.label}
+                                    <Badge variant="outline" className={cn("gap-1 text-[11px] font-semibold border w-fit", cfg.bg, cfg.color)}>
+                                      {cfg.icon}{cfg.label}
                                     </Badge>
-                                    {isBulk && (
-                                      <span className="text-[10px] text-muted-foreground font-medium">
-                                        Bulk · {log.affectedCount ?? "?"}{" "}
-                                        records
-                                      </span>
-                                    )}
+                                    {isBulk && <span className="text-[10px] text-slate-500 font-medium">Bulk · {log.affectedCount ?? "?"} records</span>}
                                   </div>
                                 </td>
-
-                                {/* Subject / detail */}
-                                <td className="px-4 py-3">
+                                {/* Subject */}
+                                <td className="px-3 py-2.5">
                                   {log.action === "transfer" ? (
                                     <TransferPill log={log} />
                                   ) : log.action === "update" && log.changes ? (
                                     <div className="min-w-0">
                                       {(log.customerName || log.resourceName) && (
-                                        <p className="text-xs font-medium truncate uppercase mb-0.5">
-                                          {log.customerName || log.resourceName}
-                                        </p>
+                                        <p className="text-xs font-medium truncate uppercase mb-0.5 text-slate-200">{log.customerName || log.resourceName}</p>
                                       )}
-                                      <p className="text-[10px] text-muted-foreground">
-                                        {Object.keys(log.changes).join(", ")}{" "}
-                                        changed
-                                      </p>
+                                      <p className="text-[10px] text-slate-500">{Object.keys(log.changes).join(", ")} changed</p>
                                     </div>
                                   ) : log.source === "system_audit" && log.resourceName ? (
                                     <div className="min-w-0">
-                                      <p className="text-xs font-medium truncate uppercase mb-0.5">
-                                        {log.resourceName}
-                                      </p>
-                                      {log.module && (
-                                        <p className="text-[10px] text-muted-foreground">
-                                          Module: {log.module}
-                                        </p>
-                                      )}
+                                      <p className="text-xs font-medium truncate uppercase mb-0.5 text-slate-200">{log.resourceName}</p>
+                                      {log.module && <p className="text-[10px] text-slate-500">Module: {log.module}</p>}
                                     </div>
                                   ) : log.source === "audit_trails" && (log.message || log.details) ? (
                                     <div className="min-w-0">
-                                      {log.message && (
-                                        <p className="text-xs truncate max-w-[250px]">
-                                          {log.message}
-                                        </p>
-                                      )}
-                                      {log.details && (
-                                        <p className="text-[10px] text-muted-foreground truncate max-w-[250px]">
-                                          {log.details}
-                                        </p>
-                                      )}
-                                      {log.entityName && (
-                                        <p className="text-[10px] text-pink-600 truncate">
-                                          {log.entityName}
-                                        </p>
-                                      )}
+                                      {log.message && <p className="text-xs truncate max-w-[250px] text-slate-300">{log.message}</p>}
+                                      {log.details && <p className="text-[10px] text-slate-500 truncate max-w-[250px]">{log.details}</p>}
+                                      {log.entityName && <p className="text-[10px] text-pink-400 truncate">{log.entityName}</p>}
                                     </div>
                                   ) : log.customerName ? (
-                                    <p className="text-xs font-medium uppercase truncate max-w-[200px]">
-                                      {log.customerName}
-                                    </p>
+                                    <p className="text-xs font-medium uppercase truncate max-w-[200px] text-slate-200">{log.customerName}</p>
                                   ) : (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      —
-                                    </span>
+                                    <span className="text-[10px] text-slate-600">—</span>
                                   )}
                                 </td>
-
                                 {/* Time */}
-                                <td className="px-4 py-3">
+                                <td className="px-3 py-2.5">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <div className="cursor-default">
-                                        <p className="text-xs font-medium">
-                                          {timeAgo(log.timestamp)}
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground">
-                                          {formatTimestamp(log.timestamp)}
-                                        </p>
+                                        <p className="text-xs font-medium text-slate-300">{timeAgo(log.timestamp)}</p>
+                                        <p className="text-[10px] text-slate-500">{formatTimestamp(log.timestamp)}</p>
                                       </div>
                                     </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p className="text-xs">
-                                        {formatTimestamp(log.timestamp)}
-                                      </p>
-                                    </TooltipContent>
+                                    <TooltipContent><p className="text-xs">{formatTimestamp(log.timestamp)}</p></TooltipContent>
                                   </Tooltip>
                                 </td>
-
                                 {/* View */}
-                                <td className="px-4 py-3 text-center">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => setSelectedLog(log)}
-                                  >
-                                    <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                <td className="px-3 py-2.5 text-center">
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-cyan-500/10" onClick={() => setSelectedLog(log)}>
+                                    <Eye className="h-3.5 w-3.5 text-slate-500" />
                                   </Button>
                                 </td>
                               </tr>
@@ -1643,67 +1281,37 @@ export default function CustomerAuditLogsPage() {
 
                   {/* Pagination */}
                   {!loading && filtered.length > 0 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
-                      <p className="text-xs text-muted-foreground">
-                        Showing{" "}
-                        <span className="font-medium text-foreground">
-                          {(currentPage - 1) * PAGE_SIZE + 1}–
-                          {Math.min(currentPage * PAGE_SIZE, filtered.length)}
-                        </span>{" "}
-                        of{" "}
-                        <span className="font-medium text-foreground">
-                          {filtered.length}
-                        </span>{" "}
-                        events
+                    <div className="shrink-0 flex items-center justify-between pt-2">
+                      <p className="text-xs text-slate-500">
+                        Showing <span className="font-medium text-slate-300">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)}</span>{" "}
+                        of <span className="font-medium text-slate-300">{filtered.length}</span> events
                       </p>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7"
-                          disabled={currentPage === 1}
-                          onClick={() => setCurrentPage((p) => p - 1)}
-                        >
+                        <Button variant="outline" size="icon" className="h-7 w-7 bg-slate-800 border-slate-700 text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-none"
+                          disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>
                           <ChevronLeft className="h-3.5 w-3.5" />
                         </Button>
-                        {Array.from(
-                          { length: Math.min(5, totalPages) },
-                          (_, i) => {
-                            let p: number;
-                            if (totalPages <= 5) p = i + 1;
-                            else if (currentPage <= 3) p = i + 1;
-                            else if (currentPage >= totalPages - 2)
-                              p = totalPages - 4 + i;
-                            else p = currentPage - 2 + i;
-                            return (
-                              <Button
-                                key={p}
-                                variant={
-                                  currentPage === p ? "default" : "outline"
-                                }
-                                size="icon"
-                                className="h-7 w-7 text-xs"
-                                onClick={() => setCurrentPage(p)}
-                              >
-                                {p}
-                              </Button>
-                            );
-                          },
-                        )}
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7"
-                          disabled={currentPage === totalPages}
-                          onClick={() => setCurrentPage((p) => p + 1)}
-                        >
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let p: number;
+                          if (totalPages <= 5) p = i + 1;
+                          else if (currentPage <= 3) p = i + 1;
+                          else if (currentPage >= totalPages - 2) p = totalPages - 4 + i;
+                          else p = currentPage - 2 + i;
+                          return (
+                            <Button key={p}
+                              variant={currentPage === p ? "default" : "outline"}
+                              size="icon" className={cn("h-7 w-7 text-xs rounded-none",
+                                currentPage === p ? "bg-cyan-600 border-cyan-600 text-white" : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400")}
+                              onClick={() => setCurrentPage(p)}>{p}</Button>
+                          );
+                        })}
+                        <Button variant="outline" size="icon" className="h-7 w-7 bg-slate-800 border-slate-700 text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-none"
+                          disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
                           <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
                   </>}
                 </>
               ) : (
@@ -1866,6 +1474,7 @@ export default function CustomerAuditLogsPage() {
                 </div>
               )}
             </main>
+            </div>
           </SidebarInset>
         </SidebarProvider>
 
