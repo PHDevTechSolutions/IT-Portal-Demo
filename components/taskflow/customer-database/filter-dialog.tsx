@@ -1,18 +1,16 @@
 "use client";
 
 import React from "react";
-import { Filter } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger, // <- import this
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-
 import {
   Select,
   SelectContent,
@@ -44,53 +42,84 @@ export function FilterDialog({
   filterTSA,
   setFilterTSA,
   tsaList,
-
   filterType,
   setFilterType,
   typeOptions,
-
   filterStatus,
   setFilterStatus,
   statusOptions,
-
   rowsPerPage,
   setRowsPerPage,
-
   setPage,
 }: FilterDialogProps) {
   const [open, setOpen] = React.useState(false);
 
+  const hasActiveFilters =
+    filterTSA !== "all" || filterType !== "all" || filterStatus !== "all";
+
+  const handleReset = () => {
+    setFilterTSA("all");
+    setFilterType("all");
+    setFilterStatus("all");
+    setPage(1);
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {/* Add DialogTrigger here */}
       <DialogTrigger asChild>
-        <Button variant="outline">
-          <Filter />
+        <Button
+          variant="outline"
+          size="sm"
+          className={`bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider ${
+            hasActiveFilters
+              ? "border-cyan-500/40 text-cyan-400 bg-cyan-500/5"
+              : ""
+          }`}
+        >
+          <SlidersHorizontal className="size-4 mr-1" />
+          Filters
+          {hasActiveFilters && (
+            <span className="ml-1 w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+          )}
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-md rounded-lg">
-        <DialogHeader>
-          <DialogTitle>Filter Customers</DialogTitle>
-          <DialogDescription>
-            Use the filters below to refine your customer list.
-          </DialogDescription>
+      <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0">
+        {/* Header */}
+        <DialogHeader className="px-5 py-4 border-b border-slate-700/60 bg-slate-800/60">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-sm bg-cyan-500/10 border border-cyan-500/30">
+              <SlidersHorizontal className="size-4 text-cyan-400" />
+            </div>
+            <div>
+              <DialogTitle className="text-sm font-bold uppercase tracking-widest text-cyan-400">
+                Filter Customers
+              </DialogTitle>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Refine your customer list
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        {/* Body */}
+        <div className="px-5 py-4 space-y-4">
           {/* Filter TSA */}
-          <div className="space-y-1">
-            <label className="text-sm">Filter by TSA</label>
-            <Select
-              value={filterTSA}
-              onValueChange={(value) => setFilterTSA(value)}
-            >
-              <SelectTrigger className="w-full">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              Filter by TSA
+            </label>
+            <Select value={filterTSA} onValueChange={setFilterTSA}>
+              <SelectTrigger className="w-full h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none focus:border-cyan-500/50 focus:ring-0">
                 <SelectValue placeholder="Select TSA" />
               </SelectTrigger>
-              <SelectContent className="capitalize">
+              <SelectContent className="bg-slate-800 border-slate-700 text-slate-200 rounded-none">
                 {tsaList.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
+                  <SelectItem
+                    key={t.value}
+                    value={t.value}
+                    className="text-xs capitalize focus:bg-cyan-500/10 focus:text-cyan-400"
+                  >
                     {t.label}
                   </SelectItem>
                 ))}
@@ -99,18 +128,21 @@ export function FilterDialog({
           </div>
 
           {/* Filter Type */}
-          <div className="space-y-1">
-            <label className="text-sm">Filter by Type</label>
-            <Select 
-              value={filterType}
-              onValueChange={(value) => setFilterType(value)}
-            >
-              <SelectTrigger className="w-full">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              Filter by Type
+            </label>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-full h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none focus:border-cyan-500/50 focus:ring-0">
                 <SelectValue placeholder="Select Type" />
               </SelectTrigger>
-              <SelectContent className="capitalize">
+              <SelectContent className="bg-slate-800 border-slate-700 text-slate-200 rounded-none">
                 {typeOptions.map((t) => (
-                  <SelectItem key={t} value={t}>
+                  <SelectItem
+                    key={t}
+                    value={t}
+                    className="text-xs capitalize focus:bg-cyan-500/10 focus:text-cyan-400"
+                  >
                     {t}
                   </SelectItem>
                 ))}
@@ -119,18 +151,21 @@ export function FilterDialog({
           </div>
 
           {/* Filter Status */}
-          <div className="space-y-1">
-            <label className="text-sm">Filter by Status</label>
-            <Select
-              value={filterStatus}
-              onValueChange={(value) => setFilterStatus(value)}
-            >
-              <SelectTrigger className="w-full">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              Filter by Status
+            </label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none focus:border-cyan-500/50 focus:ring-0">
                 <SelectValue placeholder="Select Status" />
               </SelectTrigger>
-              <SelectContent className="capitalize">
+              <SelectContent className="bg-slate-800 border-slate-700 text-slate-200 rounded-none">
                 {statusOptions.map((s) => (
-                  <SelectItem key={s} value={s}>
+                  <SelectItem
+                    key={s}
+                    value={s}
+                    className="text-xs capitalize focus:bg-cyan-500/10 focus:text-cyan-400"
+                  >
                     {s}
                   </SelectItem>
                 ))}
@@ -139,8 +174,10 @@ export function FilterDialog({
           </div>
 
           {/* Rows Per Page */}
-          <div className="space-y-1">
-            <label className="text-sm">Rows Per Page</label>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              Rows Per Page
+            </label>
             <Select
               value={rowsPerPage.toString()}
               onValueChange={(value) => {
@@ -148,33 +185,54 @@ export function FilterDialog({
                 setPage(1);
               }}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Rows Per Page" />
+              <SelectTrigger className="w-full h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none focus:border-cyan-500/50 focus:ring-0">
+                <SelectValue placeholder="Rows per page" />
               </SelectTrigger>
-              <SelectContent className="capitalize">
-                <SelectItem value="20">20</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-                <SelectItem value="100">100</SelectItem>
-                <SelectItem value="1000">1000</SelectItem>
-                <SelectItem value="12000">12000</SelectItem>
-                <SelectItem value="30000">30000</SelectItem>
+              <SelectContent className="bg-slate-800 border-slate-700 text-slate-200 rounded-none">
+                {["20", "50", "100", "1000", "12000", "30000"].map((v) => (
+                  <SelectItem
+                    key={v}
+                    value={v}
+                    className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400"
+                  >
+                    {v}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
+        {/* Footer */}
+        <DialogFooter className="px-5 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-between gap-2">
           <Button
-            onClick={() => {
-              setPage(1);
-              setOpen(false);
-            }}
+            variant="ghost"
+            size="sm"
+            onClick={handleReset}
+            className="h-8 text-xs rounded-none text-slate-500 hover:text-slate-300 hover:bg-slate-700 uppercase tracking-wider"
           >
-            Apply Filters
+            Reset
           </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setOpen(false)}
+              className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700 uppercase tracking-wider"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setPage(1);
+                setOpen(false);
+              }}
+              className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5 uppercase tracking-wider"
+            >
+              Apply
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

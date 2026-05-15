@@ -5,25 +5,67 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Pagination } from "@/components/app-pagination"
-import { Calendar } from "@/components/taskflow/customer-database/calendar";
+import { Calendar } from "@/components/taskflow/customer-database/calendar"
 import { DeleteDialog } from "@/components/taskflow/customer-database/delete"
 import { ApproveDialog } from "@/components/taskflow/customer-database/approval"
 import { FilterDialog } from "@/components/taskflow/customer-database/filter-dialog"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
-import { BadgeCheck, AlertTriangle, Clock, XCircle, PauseCircle, UserX, UserCheck, ArrowRight } from "lucide-react"
-
+import {
+    Loader2,
+    Search,
+    Trash,
+    FileDown,
+    BadgeCheck,
+    AlertTriangle,
+    Clock,
+    XCircle,
+    PauseCircle,
+    UserX,
+    UserCheck,
+    CheckCircle2,
+    XOctagon,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
+import {
+    Table,
+    TableHeader,
+    TableRow,
+    TableHead,
+    TableBody,
+    TableCell,
+} from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
-import { Search, Trash } from "lucide-react";
-import { DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
-import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable"
+import {
+    DndContext,
+    closestCenter,
+    MouseSensor,
+    TouchSensor,
+    KeyboardSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+    arrayMove,
+    useSortable,
+} from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import ProtectedPageWrapper from "@/components/protected-page-wrapper"
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface Customer {
     id: number
     company_name: string
@@ -41,18 +83,83 @@ interface Customer {
     date_created: string
     date_updated: string
     next_available_date?: string
-    transfer_to: string;
+    transfer_to: string
 }
+
+// ─── StatusBadge ──────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status?: string | null }) {
+    const s = (status ?? "").trim().toLowerCase()
+    if (!s)
+        return <Badge variant="outline" className="text-slate-500 border-slate-700">—</Badge>
+    if (s === "active")
+        return (
+            <Badge variant="secondary" className="bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-1">
+                <BadgeCheck className="size-3.5" /> Active
+            </Badge>
+        )
+    if (s === "new client")
+        return (
+            <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1">
+                <UserCheck className="size-3.5" /> New Client
+            </Badge>
+        )
+    if (s === "non-buying")
+        return (
+            <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 flex items-center gap-1">
+                <AlertTriangle className="size-3.5" /> Non-Buying
+            </Badge>
+        )
+    if (s === "inactive")
+        return (
+            <Badge variant="secondary" className="bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">
+                <XCircle className="size-3.5" /> Inactive
+            </Badge>
+        )
+    if (s === "on hold")
+        return (
+            <Badge variant="secondary" className="bg-stone-500/20 text-stone-400 border border-stone-500/30 flex items-center gap-1">
+                <PauseCircle className="size-3.5" /> On Hold
+            </Badge>
+        )
+    if (s === "used")
+        return (
+            <Badge variant="secondary" className="bg-blue-900/40 text-blue-300 border border-blue-700/40 flex items-center gap-1">
+                <Clock className="size-3.5" /> Used
+            </Badge>
+        )
+    if (s === "approval for transfer")
+        return (
+            <Badge variant="secondary" className="bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center gap-1">
+                <Clock className="size-3.5" /> Approval for Transfer
+            </Badge>
+        )
+    if (s === "for deletion" || s === "remove")
+        return (
+            <Badge variant="secondary" className="bg-red-600/20 text-red-400 border border-red-600/30 flex items-center gap-1">
+                <UserX className="size-3.5" /> {status}
+            </Badge>
+        )
+    return (
+        <Badge variant="outline" className="text-slate-400 border-slate-700">{status}</Badge>
+    )
+}
+
+// ─── DraggableRow ─────────────────────────────────────────────────────────────
 
 function DraggableRow({ item, children }: { item: Customer; children: React.ReactNode }) {
     const { setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.8 : 1,
+        opacity: isDragging ? 0.6 : 1,
     }
     return (
-        <TableRow ref={setNodeRef} style={style} className="data-[dragging=true]:opacity-75 hover:bg-muted/5">
+        <TableRow
+            ref={setNodeRef}
+            style={style}
+            className="border-slate-800 hover:bg-slate-800/50 data-[dragging=true]:opacity-60"
+        >
             {children}
         </TableRow>
     )
@@ -386,148 +493,268 @@ export default function AccountPage() {
         }
     };
 
+    const exportToExcel = async () => {
+        const ExcelJS = (await import("exceljs")).default;
+        const { saveAs } = await import("file-saver");
+
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("Customer Approval");
+
+        sheet.columns = [
+            { header: "Company", key: "company_name", width: 35 },
+            { header: "Contact Person", key: "contact_person", width: 25 },
+            { header: "Email", key: "email_address", width: 30 },
+            { header: "Type", key: "type_client", width: 18 },
+            { header: "Status", key: "status", width: 22 },
+            { header: "Area", key: "region", width: 20 },
+            { header: "Transfer From", key: "transfer_from", width: 25 },
+            { header: "Transfer To", key: "transfer_to_name", width: 25 },
+            { header: "TSM", key: "tsm", width: 20 },
+            { header: "Manager", key: "manager", width: 20 },
+            { header: "Date Created", key: "date_created", width: 18 },
+            { header: "Date Updated", key: "date_updated", width: 18 },
+            { header: "Next Available", key: "next_available_date", width: 18 },
+        ];
+
+        // Style header row
+        const headerRow = sheet.getRow(1);
+        headerRow.eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+        });
+        headerRow.height = 20;
+
+        // Use filtered (all pages, not just current page)
+        displayData.forEach((c, i) => {
+            const row = sheet.addRow({
+                company_name: c.company_name?.toUpperCase() || "",
+                contact_person: c.contact_person || "",
+                email_address: c.email_address || "",
+                type_client: c.type_client || "—",
+                status: c.status || "—",
+                region: c.region || "",
+                transfer_from: tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-",
+                transfer_to_name: tsaMap[c.transfer_to?.trim().toLowerCase()] || c.transfer_to || "-",
+                tsm: c.tsm || "",
+                manager: c.manager || "",
+                date_created: c.date_created ? new Date(c.date_created).toLocaleDateString() : "",
+                date_updated: c.date_updated ? new Date(c.date_updated).toLocaleDateString() : "",
+                next_available_date: c.next_available_date
+                    ? new Date(c.next_available_date).toLocaleDateString()
+                    : "-",
+            });
+
+            const rowBg = i % 2 === 0 ? "FFFFFFFF" : "FFF0F4FA";
+            row.eachCell((cell) => {
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
+                cell.alignment = { vertical: "middle", wrapText: true };
+                cell.border = {
+                    top: { style: "thin", color: { argb: "FFD0D0D0" } },
+                    left: { style: "thin", color: { argb: "FFD0D0D0" } },
+                    bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+                    right: { style: "thin", color: { argb: "FFD0D0D0" } },
+                };
+            });
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const timestamp = new Date().toISOString().slice(0, 10);
+        saveAs(blob, `customer-approval-${timestamp}.xlsx`);
+        toast.success("Excel file exported successfully!");
+    };
+
     return (
         <ProtectedPageWrapper>
-            <SidebarProvider>
+            <SidebarProvider className="dark">
                 <AppSidebar />
-                <SidebarInset>
+                <SidebarInset className="bg-slate-950 text-slate-100 flex flex-col h-svh overflow-hidden">
                     {/* Header */}
-                    <header className="flex h-auto min-h-[56px] items-center gap-2 px-2 md:px-4 py-2 flex-wrap">
-                        <SidebarTrigger className="-ml-1 touch-button" />
-                        <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
+                    <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4 border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-sm">
+                        <SidebarTrigger className="-ml-1 text-slate-400 hover:text-cyan-400" />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push("/dashboard")}
+                            className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 text-xs hidden sm:flex"
+                        >
                             Home
                         </Button>
-                        <Separator orientation="vertical" className="h-4 hidden sm:block" />
-                        <Breadcrumb className="hidden sm:flex">
+                        <Separator orientation="vertical" className="h-4 bg-slate-700 hidden sm:block" />
+                        <Breadcrumb>
                             <BreadcrumbList>
                                 <BreadcrumbItem>
-                                    <BreadcrumbLink href="#">Taskflow</BreadcrumbLink>
+                                    <BreadcrumbLink href="#" className="text-slate-500 hover:text-cyan-400 text-xs hidden sm:block">
+                                        Taskflow
+                                    </BreadcrumbLink>
                                 </BreadcrumbItem>
-                                <BreadcrumbSeparator />
+                                <BreadcrumbSeparator className="text-slate-600 hidden sm:block" />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage>Customer Approval</BreadcrumbPage>
+                                    <BreadcrumbPage className="text-cyan-400 text-xs font-semibold tracking-wide">
+                                        Customer Approval
+                                    </BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
                     </header>
 
-                    {/* 🔍 Search + Filters */}
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3">
-
-                        {/* 🔎 Search Input (left side, grow full width on mobile, fixed max-width on desktop) */}
-                        <div className="relative w-full sm:max-w-xs">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search customers..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="pl-8 pr-8 w-full"
-                            />
-                            {isFiltering && (
-                                <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
-                            )}
+                    {/* Toolbar */}
+                    <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800 space-y-3">
+                        {/* Title row */}
+                        <div className="flex items-center justify-between gap-2">
+                            <div>
+                                <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-cyan-400 leading-tight">
+                                    Customer Approval
+                                </h1>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                    {isFetching ? "Loading…" : (
+                                        <>
+                                            <span className="font-semibold text-slate-300">{displayData.length}</span>
+                                            {" "}pending for approval
+                                        </>
+                                    )}
+                                </p>
+                            </div>
+                            <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] shrink-0">
+                                Total: {displayData.length}
+                            </Badge>
                         </div>
 
-                        {/* 🧩 Right-Side Buttons (icon-only, grouped, inline-flex with gap) */}
-                        <div className="flex items-center gap-2">
-                            {/* Calendar Button (icon only) */}
-                            <Calendar startDate={startDate} endDate={endDate} setStartDateAction={setStartDate} setEndDateAction={setEndDate} />
+                        {/* Action bar */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* Search */}
+                            <div className="relative flex-1 min-w-[160px] max-w-xs">
+                                <Search className="absolute left-2 top-2.5 size-3.5 text-slate-500" />
+                                <Input
+                                    placeholder="Search customers…"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-7 h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/50 rounded-none"
+                                />
+                                {isFiltering && (
+                                    <Loader2 className="absolute right-2 top-2.5 size-3.5 animate-spin text-slate-500" />
+                                )}
+                            </div>
 
-                            {/* Delete Button (only show if there are selected items) */}
-                            {selectedIds.size > 0 && (
-                                <>
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        className="p-2 rounded-md"
-                                        aria-label={`Delete Selected (${selectedIds.size})`}
-                                        onClick={handleBulkDelete}
-                                    >
-                                        <Trash className="h-5 w-5" />
-                                        Delete
-                                    </Button>
+                            {/* Buttons */}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Calendar
+                                    startDate={startDate}
+                                    endDate={endDate}
+                                    setStartDateAction={setStartDate}
+                                    setEndDateAction={setEndDate}
+                                />
 
-                                    {/* Approve Button */}
-                                    <Button
-                                        variant="default"
-                                        size="sm"
-                                        className="p-2 rounded-md"
-                                        aria-label={`Approve Selected (${selectedIds.size})`}
-                                        onClick={() => setShowApproveDialog(true)}
-                                    >
-                                        Approve
-                                    </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={exportToExcel}
+                                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                                >
+                                    <FileDown className="size-4 mr-1" /> Export
+                                </Button>
 
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        className="p-2 rounded-md"
-                                        aria-label={`Cancel Transfer Selected (${selectedIds.size})`}
-                                        onClick={executeBulkCancelTransfer}
-                                    >
-                                        Cancel Transfer
-                                    </Button>
-                                </>
-                            )}
+                                <FilterDialog
+                                    filterTSA={filterTSA}
+                                    setFilterTSA={setFilterTSA}
+                                    tsaList={tsaList}
+                                    filterType={filterType}
+                                    setFilterType={setFilterType}
+                                    typeOptions={typeOptions}
+                                    filterStatus={filterStatus}
+                                    setFilterStatus={setFilterStatus}
+                                    statusOptions={statusOptions}
+                                    rowsPerPage={rowsPerPage}
+                                    setRowsPerPage={setRowsPerPage}
+                                    setPage={setPage}
+                                />
 
-                            {/* Filter Toggle Button (icon only) */}
-                            <FilterDialog
-                                filterTSA={filterTSA}
-                                setFilterTSA={setFilterTSA}
-                                tsaList={tsaList}
-                                filterType={filterType}
-                                setFilterType={setFilterType}
-                                typeOptions={typeOptions}
-                                filterStatus={filterStatus}
-                                setFilterStatus={setFilterStatus}
-                                statusOptions={statusOptions}
-                                rowsPerPage={rowsPerPage}
-                                setRowsPerPage={setRowsPerPage}
-                                setPage={setPage}
-                            // optionally pass the icon button as trigger if you want
-                            />
+                                {selectedIds.size > 0 && (
+                                    <>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => setShowApproveDialog(true)}
+                                            className="bg-cyan-600/20 border border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/30 hover:text-cyan-300 rounded-none h-9 text-xs uppercase tracking-wider"
+                                        >
+                                            <CheckCircle2 className="size-4 mr-1" />
+                                            Approve ({selectedIds.size})
+                                        </Button>
 
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={executeBulkCancelTransfer}
+                                            disabled={isApproving}
+                                            className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-slate-200 rounded-none h-9 text-xs uppercase tracking-wider"
+                                        >
+                                            <XOctagon className="size-4 mr-1" />
+                                            Cancel Transfer ({selectedIds.size})
+                                        </Button>
+
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={handleBulkDelete}
+                                            className="bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-none h-9 text-xs uppercase tracking-wider border"
+                                        >
+                                            <Trash className="size-4 mr-1" />
+                                            Delete ({selectedIds.size})
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
 
-                    {/* Table */}
-                    <div className="mx-4 border border-border shadow-sm rounded-lg">
-                        <div className="overflow-auto min-h-[200px] flex items-center justify-center">
+                    {/* Scrollable table area */}
+                    <div className="flex-1 overflow-auto px-3 sm:px-4 pb-3 min-h-0">
+                        <div className="border border-slate-800 overflow-auto">
                             {isFetching ? (
-                                <div className="py-10 text-center flex flex-col items-center gap-2 text-muted-foreground text-xs">
-                                    <Loader2 className="size-6 animate-spin" />
-                                    <span>Loading customers...</span>
+                                <div className="py-20 text-center flex flex-col items-center gap-3 text-slate-500 text-xs">
+                                    <Loader2 className="size-6 animate-spin text-cyan-500" />
+                                    <span>Loading customers…</span>
                                 </div>
                             ) : current.length > 0 ? (
                                 <DndContext collisionDetection={closestCenter} sensors={sensors} onDragEnd={handleDragEnd}>
                                     <SortableContext items={current.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                                        <Table className="whitespace-nowrap text-[13px] min-w-full">
-                                            <TableHeader className="bg-muted sticky top-0 z-10">
-                                                <TableRow>
-                                                    <TableHead className="w-8 text-center">
-                                                        <input type="checkbox" checked={selectAll} onChange={handleSelectAll} />
+                                        <Table className="whitespace-nowrap text-[12px] min-w-full">
+                                            <TableHeader className="bg-slate-900 sticky top-0 z-10">
+                                                <TableRow className="border-slate-800 hover:bg-transparent">
+                                                    <TableHead className="w-8 text-center text-slate-500">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectAll}
+                                                            onChange={handleSelectAll}
+                                                            className="accent-cyan-500"
+                                                        />
                                                     </TableHead>
-                                                    <TableHead>Company</TableHead>
-                                                    <TableHead>Contact</TableHead>
-                                                    <TableHead>Email</TableHead>
-                                                    <TableHead>Type</TableHead>
-                                                    <TableHead>Status</TableHead>
-                                                    <TableHead>Area</TableHead>
-                                                    <TableHead>Transfer From</TableHead>
-                                                    <TableHead>Transfer To</TableHead>
-                                                    <TableHead>TSM</TableHead>
-                                                    <TableHead>Manager</TableHead>
-                                                    <TableHead>Date Created</TableHead>
-                                                    <TableHead>Date Updated</TableHead>
-                                                    <TableHead>Next Available</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Company</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Contact</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Email</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Type</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Status</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Area</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Transfer From</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Transfer To</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">TSM</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Manager</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Date Created</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Date Updated</TableHead>
+                                                    <TableHead className="text-slate-400 text-[11px] uppercase tracking-wider">Next Available</TableHead>
                                                 </TableRow>
                                             </TableHeader>
 
-                                            <TableBody className="text-[12px]">
+                                            <TableBody>
                                                 {current.map((c) => {
-                                                    const isMissingType = !c.type_client?.trim()
-                                                    const isMissingStatus = !c.status?.trim()
-                                                    const isDuplicate = duplicateIds.has(c.id)
                                                     const isSelected = selectedIds.has(c.id)
 
                                                     return (
@@ -537,135 +764,43 @@ export default function AccountPage() {
                                                                     type="checkbox"
                                                                     checked={isSelected}
                                                                     onChange={() => toggleSelect(c.id)}
+                                                                    className="accent-cyan-500"
                                                                 />
                                                             </TableCell>
-                                                            <TableCell
-                                                                className={`uppercase whitespace-normal break-words max-w-[250px] ${isDuplicate ? "bg-red-100" : isMissingType || isMissingStatus ? "bg-yellow-100" : ""
-                                                                    }`}
-                                                            >
+                                                            <TableCell className="uppercase whitespace-normal break-words max-w-[250px] text-slate-200 font-medium">
                                                                 {c.company_name}
                                                             </TableCell>
-                                                            <TableCell className="capitalize whitespace-normal break-words max-w-[200px]">
+                                                            <TableCell className="capitalize whitespace-normal break-words max-w-[200px] text-slate-300">
                                                                 {c.contact_person}
                                                             </TableCell>
-                                                            <TableCell className="whitespace-normal break-words max-w-[250px]">
+                                                            <TableCell className="whitespace-normal break-words max-w-[250px] text-slate-400">
                                                                 {c.email_address}
                                                             </TableCell>
-                                                            <TableCell className={isMissingType ? "bg-yellow-100" : ""}>
-                                                                {c.type_client || "—"}
+                                                            <TableCell className="text-slate-300">
+                                                                {c.type_client || <span className="text-slate-600">—</span>}
                                                             </TableCell>
-                                                            <TableCell className="text-center">
-                                                                {c.status ? (
-                                                                    (() => {
-                                                                        const status = c.status.trim().toLowerCase()
-                                                                        switch (status) {
-                                                                            case "active":
-                                                                                return (
-                                                                                    <Badge
-                                                                                        variant="secondary"
-                                                                                        className="bg-green-500/90 hover:bg-green-600 text-white dark:bg-green-600 dark:hover:bg-green-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                    >
-                                                                                        <BadgeCheck className="size-3.5" />
-                                                                                        Active
-                                                                                    </Badge>
-                                                                                )
-                                                                            case "new client":
-                                                                                return (
-                                                                                    <Badge
-                                                                                        variant="secondary"
-                                                                                        className="bg-blue-500/90 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                    >
-                                                                                        <UserCheck className="size-3.5" />
-                                                                                        New Client
-                                                                                    </Badge>
-                                                                                )
-                                                                            case "non-buying":
-                                                                                return (
-                                                                                    <Badge
-                                                                                        variant="secondary"
-                                                                                        className="bg-yellow-500/90 hover:bg-yellow-600 text-white dark:bg-yellow-600 dark:hover:bg-yellow-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                    >
-                                                                                        <AlertTriangle className="size-3.5" />
-                                                                                        Non-Buying
-                                                                                    </Badge>
-                                                                                )
-                                                                            case "inactive":
-                                                                                return (
-                                                                                    <Badge
-                                                                                        variant="secondary"
-                                                                                        className="bg-red-500/90 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                    >
-                                                                                        <XCircle className="size-3.5" />
-                                                                                        Inactive
-                                                                                    </Badge>
-                                                                                )
-                                                                            case "on hold":
-                                                                                return (
-                                                                                    <Badge
-                                                                                        variant="secondary"
-                                                                                        className="bg-stone-500/90 hover:bg-stone-600 text-white dark:bg-stone-600 dark:hover:bg-stone-700 flex items-center gap-1 transition-colors duration-200"
-                                                                                    >
-                                                                                        <PauseCircle className="size-3.5" />
-                                                                                        On Hold
-                                                                                    </Badge>
-                                                                                )
-                                                                            case "used":
-                                                                                return (
-                                                                                    <Badge
-                                                                                        variant="secondary"
-                                                                                        className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1 transition-colors duration-200"
-                                                                                    >
-                                                                                        <Clock className="size-3.5" />
-                                                                                        Used
-                                                                                    </Badge>
-                                                                                )
-                                                                            case "for deletion":
-                                                                            case "remove":
-                                                                                return (
-                                                                                    <Badge
-                                                                                        variant="secondary"
-                                                                                        className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:hover:bg-red-800 flex items-center gap-1 transition-colors duration-200"
-                                                                                    >
-                                                                                        <UserX className="size-3.5" />
-                                                                                        {c.status}
-                                                                                    </Badge>
-                                                                                )
-                                                                            default:
-                                                                                return (
-                                                                                    <Badge
-                                                                                        variant="outline"
-                                                                                        className="text-muted-foreground hover:bg-muted transition-colors duration-200"
-                                                                                    >
-                                                                                        {c.status}
-                                                                                    </Badge>
-                                                                                )
-                                                                        }
-                                                                    })()
-                                                                ) : (
-                                                                    <Badge
-                                                                        variant="outline"
-                                                                        className="text-muted-foreground hover:bg-muted transition-colors duration-200"
-                                                                    >
-                                                                        —
-                                                                    </Badge>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell>{c.region}</TableCell>
-                                                            <TableCell className="capitalize">
-                                                                {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-"}
-                                                            </TableCell>
-                                                            <TableCell className="capitalize">
-                                                                {tsaMap[c.transfer_to?.trim().toLowerCase()] || c.transfer_to || "-"}
-                                                            </TableCell>
-
-                                                            <TableCell>{c.tsm}</TableCell>
-                                                            <TableCell>{c.manager}</TableCell>
-                                                            <TableCell>{new Date(c.date_created).toLocaleDateString()}</TableCell>
-                                                            <TableCell>{new Date(c.date_updated).toLocaleDateString()}</TableCell>
                                                             <TableCell>
+                                                                <StatusBadge status={c.status} />
+                                                            </TableCell>
+                                                            <TableCell className="text-slate-300">{c.region}</TableCell>
+                                                            <TableCell className="capitalize text-slate-300">
+                                                                {tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || <span className="text-slate-600">-</span>}
+                                                            </TableCell>
+                                                            <TableCell className="capitalize text-cyan-400 font-medium">
+                                                                {tsaMap[c.transfer_to?.trim().toLowerCase()] || c.transfer_to || <span className="text-slate-600">-</span>}
+                                                            </TableCell>
+                                                            <TableCell className="text-slate-300">{c.tsm}</TableCell>
+                                                            <TableCell className="text-slate-300">{c.manager}</TableCell>
+                                                            <TableCell className="text-slate-400">
+                                                                {new Date(c.date_created).toLocaleDateString()}
+                                                            </TableCell>
+                                                            <TableCell className="text-slate-400">
+                                                                {new Date(c.date_updated).toLocaleDateString()}
+                                                            </TableCell>
+                                                            <TableCell className="text-slate-400">
                                                                 {c.next_available_date
                                                                     ? new Date(c.next_available_date).toLocaleDateString()
-                                                                    : "-"}
+                                                                    : <span className="text-slate-600">-</span>}
                                                             </TableCell>
                                                         </DraggableRow>
                                                     )
@@ -675,8 +810,8 @@ export default function AccountPage() {
                                     </SortableContext>
                                 </DndContext>
                             ) : (
-                                <div className="py-10 text-center text-xs text-muted-foreground">
-                                    No customers found.
+                                <div className="py-20 text-center text-xs text-slate-500">
+                                    No customers pending for approval.
                                 </div>
                             )}
                         </div>
@@ -690,7 +825,6 @@ export default function AccountPage() {
                         selectedCount={selectedIds.size}
                     />
 
-
                     <DeleteDialog
                         open={showDeleteDialog}
                         onOpenChange={setShowDeleteDialog}
@@ -699,8 +833,7 @@ export default function AccountPage() {
                     />
 
                     {/* Pagination */}
-                    <div className="flex justify-center items-center gap-4 my-4">
-                        {/* Pagination */}
+                    <div className="shrink-0 flex justify-center items-center gap-4 py-3 border-t border-slate-800">
                         <Pagination
                             page={page}
                             totalPages={totalPages}

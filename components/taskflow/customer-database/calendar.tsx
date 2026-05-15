@@ -63,7 +63,7 @@ export function Calendar({
                             : "text-slate-300",
                     )}
                 >
-                    <CalendarIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <CalendarIcon className="size-3.5 shrink-0" />
                     {hasRange ? (
                         <span className="flex items-center gap-1.5">
                             <span>
@@ -74,30 +74,31 @@ export function Calendar({
                             <span
                                 role="button"
                                 onClick={handleClear}
-                                className="ml-1 rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                className="ml-1 rounded-full p-0.5 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
                             >
                                 <X className="size-3" />
                             </span>
                         </span>
                     ) : (
-                        <span>Date range</span>
+                        <span>Date Range</span>
                     )}
                 </Button>
             </PopoverTrigger>
+
             <PopoverContent
-                className="w-auto p-0 rounded-md border border-border shadow-md"
+                className="w-auto p-0 rounded-none border border-slate-700 shadow-xl bg-slate-900"
                 align="start"
                 sideOffset={6}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40">
-                    <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/60 bg-slate-800/60">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400">
                         Filter by Date Created
                     </span>
                     {hasRange && (
                         <button
                             onClick={handleClear}
-                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+                            className="text-[10px] text-slate-500 hover:text-red-400 transition-colors flex items-center gap-1 uppercase tracking-wider"
                         >
                             <X className="size-3" /> Clear
                         </button>
@@ -118,60 +119,60 @@ export function Calendar({
                         caption_label: "hidden",
                         caption_dropdowns: "flex gap-1",
                         dropdown:
-                            "text-xs border border-border rounded-sm px-1.5 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer",
+                            "text-xs border border-slate-700 rounded-none px-1.5 py-1 bg-slate-800 text-slate-200 focus:outline-none focus:border-cyan-500/50 cursor-pointer",
                         dropdown_month: "font-medium",
                         dropdown_year: "font-medium",
                         nav: "flex items-center gap-1",
                         nav_button:
-                            "h-7 w-7 bg-transparent p-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded-sm transition-colors",
+                            "h-7 w-7 bg-transparent p-0 text-slate-500 hover:text-cyan-400 hover:bg-slate-800 rounded-none transition-colors",
                         nav_button_previous: "absolute left-1",
                         nav_button_next: "absolute right-1",
                         table: "w-full border-collapse",
                         head_row: "flex",
                         head_cell:
-                            "text-muted-foreground w-9 font-medium text-[11px] text-center",
+                            "text-slate-600 w-9 font-medium text-[11px] text-center uppercase",
                         row: "flex w-full mt-1",
                         cell: cn(
                             "relative h-9 w-9 p-0 text-center text-sm",
-                            "[&:has([aria-selected])]:bg-primary/10",
-                            "first:[&:has([aria-selected])]:rounded-l-md",
-                            "last:[&:has([aria-selected])]:rounded-r-md",
-                            "[&:has([aria-selected].day-range-end)]:rounded-r-md",
-                            "[&:has([aria-selected].day-outside)]:bg-primary/5",
+                            "[&:has([aria-selected])]:bg-cyan-500/10",
+                            "first:[&:has([aria-selected])]:rounded-l-none",
+                            "last:[&:has([aria-selected])]:rounded-r-none",
+                            "[&:has([aria-selected].day-range-end)]:rounded-r-none",
+                            "[&:has([aria-selected].day-outside)]:bg-cyan-500/5",
                             "focus-within:relative focus-within:z-20",
                         ),
                         day: cn(
-                            "h-9 w-9 p-0 font-normal text-xs rounded-sm",
-                            "hover:bg-muted hover:text-foreground transition-colors",
+                            "h-9 w-9 p-0 font-normal text-xs rounded-none text-slate-300",
+                            "hover:bg-slate-800 hover:text-cyan-400 transition-colors",
                             "aria-selected:opacity-100",
                         ),
-                        day_range_start: "rounded-l-md",
-                        day_range_end: "day-range-end rounded-r-md",
+                        day_range_start: "rounded-l-none",
+                        day_range_end: "day-range-end rounded-r-none",
                         day_selected:
-                            "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground rounded-sm",
+                            "bg-cyan-600 text-white hover:bg-cyan-500 hover:text-white focus:bg-cyan-600 focus:text-white rounded-none",
                         day_today:
-                            "bg-accent text-accent-foreground font-semibold",
+                            "bg-slate-800 text-cyan-400 font-semibold border border-cyan-500/30",
                         day_outside:
-                            "text-muted-foreground/40 aria-selected:bg-primary/5 aria-selected:text-muted-foreground",
-                        day_disabled: "text-muted-foreground/30 cursor-not-allowed",
+                            "text-slate-700 aria-selected:bg-cyan-500/5 aria-selected:text-slate-600",
+                        day_disabled: "text-slate-700 cursor-not-allowed",
                         day_range_middle:
-                            "aria-selected:bg-primary/10 aria-selected:text-foreground rounded-none",
+                            "aria-selected:bg-cyan-500/10 aria-selected:text-slate-200 rounded-none",
                         day_hidden: "invisible",
                     }}
                 />
 
                 {/* Footer */}
-                <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/40">
-                    <span className="text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-700/60 bg-slate-800/60">
+                    <span className="text-[11px] text-slate-500">
                         {hasRange
                             ? `${format(range.from!, "MMM d")} – ${format(range.to!, "MMM d, yyyy")}`
                             : "Select a start and end date"}
                     </span>
                     <Button
                         size="sm"
-                        className="h-7 text-xs rounded-sm"
                         disabled={!hasRange}
                         onClick={() => setOpen(false)}
+                        className="h-7 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-4 uppercase tracking-wider"
                     >
                         Apply
                     </Button>
