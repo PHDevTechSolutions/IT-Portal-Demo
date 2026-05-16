@@ -28,6 +28,7 @@ const DEFAULT_SIDEBAR_MODULES = [
       { title: "Activity Logs", url: "/taskflow/activity-logs" },
       { title: "Progress Logs", url: "/taskflow/progress-logs" },
       { title: "Endorsed Tickets", url: "/taskflow/csr-inquiries" },
+      { title: "Customize", url: "/taskflow/customize" },
     ],
   },
   {
@@ -238,12 +239,18 @@ export async function GET(req: NextRequest) {
       .sort({ order: 1 })
       .toArray();
 
-    // Check if we need to update (missing new ERP modules)
+    // Check if we need to update (missing new ERP modules or items changed)
     const requiredKeys = DEFAULT_SIDEBAR_MODULES.map(m => m.key);
     const existingKeys = modules.map((m: any) => m.key);
     const hasAllModules = requiredKeys.every(key => existingKeys.includes(key));
-    
-    if (!hasAllModules || modules.length === 0) {
+
+    // Also check if any module's item count has changed
+    const itemsChanged = DEFAULT_SIDEBAR_MODULES.some((defaultMod) => {
+      const existing = modules.find((m: any) => m.key === defaultMod.key);
+      return existing && existing.items?.length !== defaultMod.items.length;
+    });
+
+    if (!hasAllModules || modules.length === 0 || itemsChanged) {
       // Clear existing and insert fresh with all ERP modules
       await db.collection("sidebar_modules").deleteMany({});
       
