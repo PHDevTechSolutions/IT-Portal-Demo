@@ -523,13 +523,14 @@ function LoginFormMiniPreview({ styles, compact = false }: { styles: LoginFormSt
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type TabId = "quota" | "table-layout" | "maintenance" | "login-form"
+type TabId = "quota" | "table-layout" | "maintenance" | "login-form" | "reminder"
 
 const TABS: { id: TabId; label: string; description: string }[] = [
     { id: "quota",        label: "Quota Settings",  description: "Define activity targets" },
     { id: "table-layout", label: "Table Layout",    description: "Choose a preset & preview" },
     { id: "maintenance",  label: "Maintenance",     description: "Banner & maintenance mode" },
     { id: "login-form",   label: "Login Form",      description: "Customize login appearance" },
+    { id: "reminder",     label: "Reminder",        description: "Logout & timeout schedule" },
 ]
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -551,6 +552,16 @@ export default function CustomizePage() {
 
     // Login form state
     const [loginFormPreset, setLoginFormPreset] = useState("classic-indigo")
+
+    // Reminder state
+    const [logoutReminderHour,    setLogoutReminderHour]    = useState("16")
+    const [logoutReminderMinute,  setLogoutReminderMinute]  = useState("30")
+    const [logoutWindowEnd,       setLogoutWindowEnd]       = useState("17")
+    const [snoozeDuration,        setSnoozeDuration]        = useState("15")
+    const [logoutReminderTitle,   setLogoutReminderTitle]   = useState("Logout Reminder")
+    const [logoutReminderMessage, setLogoutReminderMessage] = useState("Understood, will sign off before leaving.")
+    const [logoutSnoozeLabel,     setLogoutSnoozeLabel]     = useState("Snooze (15m)")
+    const [logoutDismissLabel,    setLogoutDismissLabel]    = useState("Got it")
 
     useEffect(() => {
         const link = document.createElement("link")
@@ -574,6 +585,14 @@ export default function CustomizePage() {
                     if (json.data.maintenance_message)      setMaintenanceMessage(json.data.maintenance_message)
                     if (json.data.maintenance_banner_preset) setMaintenanceBannerPreset(json.data.maintenance_banner_preset)
                     if (json.data.login_form_preset)        setLoginFormPreset(json.data.login_form_preset)
+                    if (json.data.logout_reminder_hour   != null) setLogoutReminderHour(String(json.data.logout_reminder_hour))
+                    if (json.data.logout_reminder_minute != null) setLogoutReminderMinute(String(json.data.logout_reminder_minute))
+                    if (json.data.logout_window_end      != null) setLogoutWindowEnd(String(json.data.logout_window_end))
+                    if (json.data.snooze_duration        != null) setSnoozeDuration(String(json.data.snooze_duration))
+                    if (json.data.logout_reminder_title)   setLogoutReminderTitle(json.data.logout_reminder_title)
+                    if (json.data.logout_reminder_message) setLogoutReminderMessage(json.data.logout_reminder_message)
+                    if (json.data.logout_snooze_label)     setLogoutSnoozeLabel(json.data.logout_snooze_label)
+                    if (json.data.logout_dismiss_label)    setLogoutDismissLabel(json.data.logout_dismiss_label)
                 }
             } catch (err) {
                 console.error("Failed to load settings:", err)
@@ -609,6 +628,14 @@ export default function CustomizePage() {
                     maintenance_styles:        bannerPresetObj?.styles ?? null,
                     login_form_preset:         loginFormPreset,
                     login_form_styles:         loginPresetObj?.styles ?? null,
+                    logout_reminder_hour:      Number(logoutReminderHour),
+                    logout_reminder_minute:    Number(logoutReminderMinute),
+                    logout_window_end:         Number(logoutWindowEnd),
+                    snooze_duration:           Number(snoozeDuration),
+                    logout_reminder_title:     logoutReminderTitle.trim(),
+                    logout_reminder_message:   logoutReminderMessage.trim(),
+                    logout_snooze_label:       logoutSnoozeLabel.trim(),
+                    logout_dismiss_label:      logoutDismissLabel.trim(),
                 }),
             })
             const json = await res.json()
@@ -984,6 +1011,212 @@ export default function CustomizePage() {
                                                     <div style={{ width: "100%", maxWidth: "220px" }}>
                                                         <LoginFormMiniPreview
                                                             styles={LOGIN_FORM_PRESETS.find(p => p.id === loginFormPreset)!.styles}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    )}
+
+                                    {/* ══ Tab: Reminder ══ */}
+                                    {activeTab === "reminder" && (
+                                        <div className="p-6 max-w-xl space-y-6">
+
+                                            {/* ── Logout Reminder ── */}
+                                            <div className="border border-slate-800">
+                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Logout Reminder</p>
+                                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                                        Configure when the logout reminder dialog appears and how long users can snooze it
+                                                    </p>
+                                                </div>
+                                                <div className="px-4 py-5 space-y-5">
+
+                                                    {/* Trigger time */}
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                                                            Reminder Start Time
+                                                        </label>
+                                                        <p className="text-[11px] text-slate-600">
+                                                            The dialog will appear at this time — currently set to{" "}
+                                                            <span className="text-slate-400 font-medium">
+                                                                {(() => {
+                                                                    const h = Number(logoutReminderHour)
+                                                                    const m = logoutReminderMinute.padStart(2, "0")
+                                                                    const ap = h >= 12 ? "PM" : "AM"
+                                                                    const h12 = h % 12 || 12
+                                                                    return `${h12}:${m} ${ap}`
+                                                                })()}
+                                                            </span>
+                                                        </p>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="space-y-1">
+                                                                <p className="text-[10px] text-slate-600 uppercase tracking-widest">Hour</p>
+                                                                <select
+                                                                    value={logoutReminderHour}
+                                                                    onChange={(e) => setLogoutReminderHour(e.target.value)}
+                                                                    className="h-9 text-xs bg-slate-800 border border-slate-700 text-slate-200 rounded-none px-2 focus:border-cyan-500/50 focus:outline-none"
+                                                                >
+                                                                    {Array.from({ length: 24 }, (_, i) => {
+                                                                        const ap = i >= 12 ? "PM" : "AM"
+                                                                        const h12 = i % 12 || 12
+                                                                        return (
+                                                                            <option key={i} value={String(i)}>
+                                                                                {h12} {ap} ({String(i).padStart(2, "0")}:00)
+                                                                            </option>
+                                                                        )
+                                                                    })}
+                                                                </select>
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <p className="text-[10px] text-slate-600 uppercase tracking-widest">Minute</p>
+                                                                <select
+                                                                    value={logoutReminderMinute}
+                                                                    onChange={(e) => setLogoutReminderMinute(e.target.value)}
+                                                                    className="h-9 text-xs bg-slate-800 border border-slate-700 text-slate-200 rounded-none px-2 focus:border-cyan-500/50 focus:outline-none"
+                                                                >
+                                                                    {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
+                                                                        <option key={m} value={m}>:{m}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Window end */}
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                                                            Reminder End Time (Hour)
+                                                        </label>
+                                                        <p className="text-[11px] text-slate-600">
+                                                            Stop showing the reminder after this hour — currently{" "}
+                                                            <span className="text-slate-400 font-medium">
+                                                                {(() => {
+                                                                    const h = Number(logoutWindowEnd)
+                                                                    const ap = h >= 12 ? "PM" : "AM"
+                                                                    const h12 = h % 12 || 12
+                                                                    return `${h12}:00 ${ap}`
+                                                                })()}
+                                                            </span>
+                                                        </p>
+                                                        <select
+                                                            value={logoutWindowEnd}
+                                                            onChange={(e) => setLogoutWindowEnd(e.target.value)}
+                                                            className="h-9 text-xs bg-slate-800 border border-slate-700 text-slate-200 rounded-none px-2 focus:border-cyan-500/50 focus:outline-none"
+                                                        >
+                                                            {Array.from({ length: 24 }, (_, i) => {
+                                                                const ap = i >= 12 ? "PM" : "AM"
+                                                                const h12 = i % 12 || 12
+                                                                return (
+                                                                    <option key={i} value={String(i)}>
+                                                                        {h12}:00 {ap}
+                                                                    </option>
+                                                                )
+                                                            })}
+                                                        </select>
+                                                    </div>
+
+                                                    {/* Snooze duration */}
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                                                            Snooze Duration (minutes)
+                                                        </label>
+                                                        <p className="text-[11px] text-slate-600">
+                                                            How long before the reminder reappears after snoozing
+                                                        </p>
+                                                        <div className="flex items-center gap-2">
+                                                            <Input
+                                                                type="number"
+                                                                min={1}
+                                                                max={60}
+                                                                value={snoozeDuration}
+                                                                onChange={(e) => setSnoozeDuration(e.target.value)}
+                                                                className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none w-24"
+                                                            />
+                                                            <span className="text-[11px] text-slate-500">minutes</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Summary */}
+                                                    <div className="bg-slate-900/60 border border-slate-700 px-4 py-3 space-y-1">
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Current Schedule</p>
+                                                        <p className="text-[11px] text-slate-400">
+                                                            Reminder shows at{" "}
+                                                            <span className="text-slate-200 font-medium">
+                                                                {(() => {
+                                                                    const h = Number(logoutReminderHour)
+                                                                    const m = logoutReminderMinute.padStart(2, "0")
+                                                                    const ap = h >= 12 ? "PM" : "AM"
+                                                                    return `${h % 12 || 12}:${m} ${ap}`
+                                                                })()}
+                                                            </span>
+                                                            {" "}until{" "}
+                                                            <span className="text-slate-200 font-medium">
+                                                                {(() => {
+                                                                    const h = Number(logoutWindowEnd)
+                                                                    const ap = h >= 12 ? "PM" : "AM"
+                                                                    return `${h % 12 || 12}:00 ${ap}`
+                                                                })()}
+                                                            </span>
+                                                            {" "}· Snooze: <span className="text-slate-200 font-medium">{snoozeDuration} min</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* ── Message Content ── */}
+                                            <div className="border border-slate-800">
+                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Message Content</p>
+                                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                                        Customize the text shown inside the logout reminder dialog
+                                                    </p>
+                                                </div>
+                                                <div className="px-4 py-5 space-y-4">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                                                            Dialog Title
+                                                        </label>
+                                                        <Input
+                                                            placeholder="e.g. Logout Reminder"
+                                                            value={logoutReminderTitle}
+                                                            onChange={(e) => setLogoutReminderTitle(e.target.value)}
+                                                            className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                                                            Dialog Message
+                                                        </label>
+                                                        <Textarea
+                                                            placeholder="e.g. Please remember to log out before leaving."
+                                                            value={logoutReminderMessage}
+                                                            onChange={(e) => setLogoutReminderMessage(e.target.value)}
+                                                            rows={3}
+                                                            className="text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none resize-none"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                                                            Snooze Button Label
+                                                        </label>
+                                                        <Input
+                                                            placeholder="e.g. Snooze (15m)"
+                                                            value={logoutSnoozeLabel}
+                                                            onChange={(e) => setLogoutSnoozeLabel(e.target.value)}
+                                                            className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                                                            Dismiss Button Label
+                                                        </label>
+                                                        <Input
+                                                            placeholder="e.g. Got it"
+                                                            value={logoutDismissLabel}
+                                                            onChange={(e) => setLogoutDismissLabel(e.target.value)}
+                                                            className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
                                                         />
                                                     </div>
                                                 </div>

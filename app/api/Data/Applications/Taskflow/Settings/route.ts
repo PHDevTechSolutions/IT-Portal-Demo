@@ -45,6 +45,15 @@ export async function PUT(req: NextRequest) {
       // Login form fields
       login_form_preset,
       login_form_styles,
+      // Reminder fields
+      logout_reminder_hour,
+      logout_reminder_minute,
+      logout_window_end,
+      snooze_duration,
+      logout_reminder_title,
+      logout_reminder_message,
+      logout_snooze_label,
+      logout_dismiss_label,
     } = body;
 
     if (outbound_quota === undefined || outbound_quota === null || outbound_quota === "") {
@@ -74,6 +83,16 @@ export async function PUT(req: NextRequest) {
     // Login form
     if (login_form_preset !== undefined) updatePayload.login_form_preset = login_form_preset;
     if (login_form_styles !== undefined) updatePayload.login_form_styles = login_form_styles;
+
+    // Reminder
+    if (logout_reminder_hour    !== undefined) updatePayload.logout_reminder_hour    = logout_reminder_hour;
+    if (logout_reminder_minute  !== undefined) updatePayload.logout_reminder_minute  = logout_reminder_minute;
+    if (logout_window_end       !== undefined) updatePayload.logout_window_end       = logout_window_end;
+    if (snooze_duration         !== undefined) updatePayload.snooze_duration         = snooze_duration;
+    if (logout_reminder_title   !== undefined) updatePayload.logout_reminder_title   = logout_reminder_title;
+    if (logout_reminder_message !== undefined) updatePayload.logout_reminder_message = logout_reminder_message;
+    if (logout_snooze_label     !== undefined) updatePayload.logout_snooze_label     = logout_snooze_label;
+    if (logout_dismiss_label    !== undefined) updatePayload.logout_dismiss_label    = logout_dismiss_label;
 
     const { data, error } = await supabase
       .from("customize")
