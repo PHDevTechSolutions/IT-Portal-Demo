@@ -23,6 +23,7 @@ export const Download: React.FC<DownloadProps> = ({ data, filename = "CustomerDa
     setIsDownloading(true);
 
     const headers = [
+      "account_reference_number",
       "company_name",
       "contact_person",
       "contact_number",
@@ -37,6 +38,7 @@ export const Download: React.FC<DownloadProps> = ({ data, filename = "CustomerDa
     ];
 
     const rows = data.map((c) => [
+      c.account_reference_number,
       c.company_name,
       c.contact_person,
       c.contact_number,

@@ -506,7 +506,7 @@ export default function AccountPage() {
   };
 
   const handleCompanyChange = (value: string) => {
-    const domain = value === "Ecoshift Corporation" ? "@ecoshiftcorp.com" : value === "Disruptive Solutions Inc" ? "@disruptivesolutionsinc.com" : "";
+    const domain = value === "Ecoshift Corporation" ? "@ecoshiftcorp.com" : value === "Disruptive Solutions Inc" ? "@disruptivesolutionsinc.com" : value === "Buildchem Solutions" ? "@buildchemsolutions.com" : "";
     setNewUser((prev) => {
       const firstInitial = prev.Firstname ? prev.Firstname.charAt(0).toLowerCase() : "";
       const lastName = prev.Lastname ? prev.Lastname.toLowerCase() : "";
@@ -610,6 +610,7 @@ export default function AccountPage() {
                                   <SelectContent className={`${THEME.cardBg} ${THEME.border}`}>
                                     <SelectItem value="Ecoshift Corporation" className="text-cyan-100">Ecoshift Corporation</SelectItem>
                                     <SelectItem value="Disruptive Solutions Inc" className="text-cyan-100">Disruptive Solutions Inc</SelectItem>
+                                    <SelectItem value="Buildchem Solutions" className="text-cyan-100">Buildchem Solutions</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
