@@ -75,69 +75,37 @@ function SettingsContent() {
       <ProtectedPageWrapper>
         <AppSidebar />
         <SidebarInset>
-          {/* Dark Tech Background */}
-          <div className="min-h-screen w-full bg-[#050a14] relative overflow-hidden">
-            {/* Animated background grid */}
-            <div className="absolute inset-0 h-full w-full">
-              <div 
-                className="h-full w-full opacity-10"
-                style={{
-                  backgroundImage: `
-                    linear-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(6, 182, 212, 0.15) 1px, transparent 1px)
-                  `,
-                  backgroundSize: '50px 50px',
-                  backgroundRepeat: 'repeat'
-                }}
-              />
-              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
-              <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
-            </div>
-
-            {/* Floating particles */}
-            <div className="absolute inset-0 h-full w-full overflow-hidden pointer-events-none">
-              {[...Array(15)].map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute w-1 h-1 bg-cyan-400/40 rounded-full"
-                  style={{
-                    left: `${Math.random() * 100}%`,
-                    top: `${Math.random() * 100}%`,
-                    animation: `float ${5 + Math.random() * 10}s linear infinite`,
-                    animationDelay: `${Math.random() * 5}s` 
-                  }}
-                />
-              ))}
-            </div>
+          <div
+            className="min-h-screen w-full relative overflow-hidden"
+            style={{ backgroundColor: "#0d0d0b", fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" }}
+          >
+            {/* Dot-grid texture */}
+            <div
+              className="fixed inset-0 pointer-events-none"
+              style={{ backgroundImage: `radial-gradient(circle, #2a2a1e 1px, transparent 1px)`, backgroundSize: "24px 24px", opacity: 0.18, zIndex: 0 }}
+            />
 
             {/* Main Content */}
             <div className="relative z-10 w-full">
+
               {/* Header */}
-              <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
-                <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
-                <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-                <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-                <div className="flex items-center gap-2 px-4 relative z-10">
-                  <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
-                  <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
-                  <Breadcrumb>
-                    <BreadcrumbList>
-                      <BreadcrumbItem>
-                        <BreadcrumbLink href="#" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Settings</BreadcrumbLink>
-                      </BreadcrumbItem>
-                      <BreadcrumbSeparator className="text-slate-700" />
-                      <BreadcrumbItem>
-                        <BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">General</BreadcrumbPage>
-                      </BreadcrumbItem>
-                    </BreadcrumbList>
-                  </Breadcrumb>
-                </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-cyan-300/80 font-mono">SYSTEM ONLINE</span>
-                  </div>
-                  <span className="text-cyan-500/50">|</span>
-                  <span className="text-cyan-300/80 font-mono">V.1.0.0</span>
+              <header className="flex h-11 shrink-0 items-center gap-2 px-4 border-b" style={{ backgroundColor: "#0d0d0b", borderColor: "#2a2a20" }}>
+                <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: "#5a5a40" }} />
+                <div className="w-px h-4" style={{ backgroundColor: "#2a2a20" }} />
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest" style={{ color: "#5a5a40" }}>Settings</BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator style={{ color: "#3a3a28" }} />
+                    <BreadcrumbItem>
+                      <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#e8630a" }}>General</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] uppercase tracking-wider" style={{ color: "#5a5a40" }}>Online</span>
                 </div>
               </header>
 

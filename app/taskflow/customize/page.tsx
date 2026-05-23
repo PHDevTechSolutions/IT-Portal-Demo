@@ -7,14 +7,12 @@ import { AppSidebar } from "@/components/app-sidebar"
 import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
     Settings2, Save, Loader2, CheckCircle2, Check,
-    AlertTriangle, Info, XCircle, Wrench, Lock, Grid3X3,
-    Globe, Calendar, Monitor,
+    AlertTriangle, Info, XCircle, Wrench,
 } from "lucide-react"
 import { toast } from "sonner"
 import ProtectedPageWrapper from "@/components/protected-page-wrapper"
@@ -118,27 +116,27 @@ const BANNER_PRESETS: {
     id: string; name: string; description: string; icon: "warning" | "info" | "critical" | "maintenance"
     styles: MaintenanceStyles
 }[] = [
-    {
-        id: "warning", name: "Warning", icon: "warning",
-        description: "Amber tone — ideal for scheduled maintenance windows",
-        styles: { bg: "#fffbeb", border: "#f59e0b", title_color: "#92400e", message_color: "#78350f", icon_color: "#f59e0b" },
-    },
-    {
-        id: "info", name: "Informational", icon: "info",
-        description: "Blue tone — perfect for planned updates and notices",
-        styles: { bg: "#eff6ff", border: "#3b82f6", title_color: "#1e40af", message_color: "#1d4ed8", icon_color: "#3b82f6" },
-    },
-    {
-        id: "critical", name: "Critical", icon: "critical",
-        description: "Red alert — for urgent outages or service disruptions",
-        styles: { bg: "#fef2f2", border: "#ef4444", title_color: "#991b1b", message_color: "#b91c1c", icon_color: "#ef4444" },
-    },
-    {
-        id: "dark", name: "Night Ops", icon: "maintenance",
-        description: "Dark slate — minimal disruption to the reading experience",
-        styles: { bg: "#0f172a", border: "#334155", title_color: "#e2e8f0", message_color: "#94a3b8", icon_color: "#64748b" },
-    },
-]
+        {
+            id: "warning", name: "Warning", icon: "warning",
+            description: "Amber tone — ideal for scheduled maintenance windows",
+            styles: { bg: "#fffbeb", border: "#f59e0b", title_color: "#92400e", message_color: "#78350f", icon_color: "#f59e0b" },
+        },
+        {
+            id: "info", name: "Informational", icon: "info",
+            description: "Blue tone — perfect for planned updates and notices",
+            styles: { bg: "#eff6ff", border: "#3b82f6", title_color: "#1e40af", message_color: "#1d4ed8", icon_color: "#3b82f6" },
+        },
+        {
+            id: "critical", name: "Critical", icon: "critical",
+            description: "Red alert — for urgent outages or service disruptions",
+            styles: { bg: "#fef2f2", border: "#ef4444", title_color: "#991b1b", message_color: "#b91c1c", icon_color: "#ef4444" },
+        },
+        {
+            id: "dark", name: "Night Ops", icon: "maintenance",
+            description: "Dark slate — minimal disruption to the reading experience",
+            styles: { bg: "#0f172a", border: "#334155", title_color: "#e2e8f0", message_color: "#94a3b8", icon_color: "#64748b" },
+        },
+    ]
 
 // ─── Login Form Presets ───────────────────────────────────────────────────────
 
@@ -146,49 +144,49 @@ const LOGIN_FORM_PRESETS: {
     id: string; name: string; description: string; fontLabel: string
     styles: LoginFormStyles
 }[] = [
-    {
-        id: "classic-indigo", name: "Classic Indigo",
-        description: "Clean white card, indigo CTA, slate inputs — the default professional look",
-        fontLabel: "Inter · Modern",
-        styles: {
-            card_bg: "#ffffff", card_border: "#e2e8f0",
-            card_shadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
-            left_bg: "#ffffff", divider: "#e2e8f0",
-            title_color: "#1e293b", subtitle_color: "#94a3b8", label_color: "#334155",
-            input_bg: "#f8fafc", input_border: "#e2e8f0", input_text: "#1e293b",
-            btn_bg: "#4f46e5", btn_text: "#ffffff",
-            tab_active: "#4f46e5", link_color: "#4f46e5",
+        {
+            id: "classic-indigo", name: "Classic Indigo",
+            description: "Clean white card, indigo CTA, slate inputs — the default professional look",
+            fontLabel: "Inter · Modern",
+            styles: {
+                card_bg: "#ffffff", card_border: "#e2e8f0",
+                card_shadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+                left_bg: "#ffffff", divider: "#e2e8f0",
+                title_color: "#1e293b", subtitle_color: "#94a3b8", label_color: "#334155",
+                input_bg: "#f8fafc", input_border: "#e2e8f0", input_text: "#1e293b",
+                btn_bg: "#4f46e5", btn_text: "#ffffff",
+                tab_active: "#4f46e5", link_color: "#4f46e5",
+            },
         },
-    },
-    {
-        id: "dark-obsidian", name: "Dark Obsidian",
-        description: "Deep dark background, cyan highlights — sleek and minimal for night users",
-        fontLabel: "Nunito · Sleek",
-        styles: {
-            card_bg: "#0f172a", card_border: "#1e293b",
-            card_shadow: "0 25px 50px -12px rgba(0,0,0,0.6)",
-            left_bg: "#0f172a", divider: "#1e293b",
-            title_color: "#f1f5f9", subtitle_color: "#64748b", label_color: "#94a3b8",
-            input_bg: "#1e293b", input_border: "#334155", input_text: "#e2e8f0",
-            btn_bg: "#06b6d4", btn_text: "#ffffff",
-            tab_active: "#06b6d4", link_color: "#06b6d4",
+        {
+            id: "dark-obsidian", name: "Dark Obsidian",
+            description: "Deep dark background, cyan highlights — sleek and minimal for night users",
+            fontLabel: "Nunito · Sleek",
+            styles: {
+                card_bg: "#0f172a", card_border: "#1e293b",
+                card_shadow: "0 25px 50px -12px rgba(0,0,0,0.6)",
+                left_bg: "#0f172a", divider: "#1e293b",
+                title_color: "#f1f5f9", subtitle_color: "#64748b", label_color: "#94a3b8",
+                input_bg: "#1e293b", input_border: "#334155", input_text: "#e2e8f0",
+                btn_bg: "#06b6d4", btn_text: "#ffffff",
+                tab_active: "#06b6d4", link_color: "#06b6d4",
+            },
         },
-    },
-    {
-        id: "emerald-fresh", name: "Emerald Fresh",
-        description: "Crisp white with vibrant emerald accents — fresh and energetic for daytime",
-        fontLabel: "DM Sans · Fresh",
-        styles: {
-            card_bg: "#ffffff", card_border: "#d1fae5",
-            card_shadow: "0 25px 50px -12px rgba(16,185,129,0.15)",
-            left_bg: "#f0fdf4", divider: "#d1fae5",
-            title_color: "#064e3b", subtitle_color: "#6b7280", label_color: "#065f46",
-            input_bg: "#f9fafb", input_border: "#d1fae5", input_text: "#064e3b",
-            btn_bg: "#10b981", btn_text: "#ffffff",
-            tab_active: "#10b981", link_color: "#10b981",
+        {
+            id: "emerald-fresh", name: "Emerald Fresh",
+            description: "Crisp white with vibrant emerald accents — fresh and energetic for daytime",
+            fontLabel: "DM Sans · Fresh",
+            styles: {
+                card_bg: "#ffffff", card_border: "#d1fae5",
+                card_shadow: "0 25px 50px -12px rgba(16,185,129,0.15)",
+                left_bg: "#f0fdf4", divider: "#d1fae5",
+                title_color: "#064e3b", subtitle_color: "#6b7280", label_color: "#065f46",
+                input_bg: "#f9fafb", input_border: "#d1fae5", input_text: "#064e3b",
+                btn_bg: "#10b981", btn_text: "#ffffff",
+                tab_active: "#10b981", link_color: "#10b981",
+            },
         },
-    },
-]
+    ]
 
 // ─── Preview data ─────────────────────────────────────────────────────────────
 
@@ -212,6 +210,35 @@ const ALL_PREVIEW_ROWS = [
 const PREVIEW_HEADERS = ["Company", "Contact", "Status", "Area", "Date"]
 const PAGE_SIZE = 3
 
+// ─── Shared UI helpers ────────────────────────────────────────────────────────
+
+function SectionCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+    return (
+        <div style={{ border: "1px solid #1a2535" }}>
+            {/* Card header — same dark as page bg, orange accent */}
+            <div style={{ borderBottom: "1px solid #1a2535", backgroundColor: "#080d12", padding: "8px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ color: "#e8630a", fontSize: "10px", fontWeight: 700, lineHeight: 1 }}>$</span>
+                    <p style={{ color: "#e8630a", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", margin: 0 }}>{title}</p>
+                </div>
+                {description && (
+                    <p style={{ color: "#253040", fontSize: "10px", marginTop: "2px", marginLeft: "14px" }}>{description}</p>
+                )}
+            </div>
+            {/* Card body — slightly lighter than page bg */}
+            <div style={{ backgroundColor: "#0d1117", padding: "16px 14px" }}>{children}</div>
+        </div>
+    )
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+    return (
+        <label style={{ color: "#4a6070", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+            // {children}
+        </label>
+    )
+}
+
 // ─── Toggle ───────────────────────────────────────────────────────────────────
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -219,11 +246,21 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         <button
             type="button"
             onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors border ${checked ? "bg-cyan-500 border-cyan-500" : "bg-slate-700 border-slate-600"
-                }`}
+            className="relative inline-flex h-5 w-9 items-center transition-colors border"
+            style={{
+                borderRadius: "2px",
+                backgroundColor: checked ? "#e8630a" : "#0f1923",
+                borderColor: checked ? "#e8630a" : "#1a2535",
+            }}
         >
-            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"
-                }`} />
+            <span
+                className="inline-block h-3.5 w-3.5 transform transition-transform"
+                style={{
+                    backgroundColor: "#080d12",
+                    borderRadius: "1px",
+                    transform: checked ? "translateX(18px)" : "translateX(2px)",
+                }}
+            />
         </button>
     )
 }
@@ -432,9 +469,9 @@ function BannerPreview({ enabled, title, message, presetId }: {
     const s = preset.styles
 
     const iconMap = {
-        warning:     <AlertTriangle style={{ color: s.icon_color, width: 18, height: 18, flexShrink: 0 }} />,
-        info:        <Info style={{ color: s.icon_color, width: 18, height: 18, flexShrink: 0 }} />,
-        critical:    <XCircle style={{ color: s.icon_color, width: 18, height: 18, flexShrink: 0 }} />,
+        warning: <AlertTriangle style={{ color: s.icon_color, width: 18, height: 18, flexShrink: 0 }} />,
+        info: <Info style={{ color: s.icon_color, width: 18, height: 18, flexShrink: 0 }} />,
+        critical: <XCircle style={{ color: s.icon_color, width: 18, height: 18, flexShrink: 0 }} />,
         maintenance: <Wrench style={{ color: s.icon_color, width: 18, height: 18, flexShrink: 0 }} />,
     }
 
@@ -525,12 +562,47 @@ function LoginFormMiniPreview({ styles, compact = false }: { styles: LoginFormSt
 
 type TabId = "quota" | "table-layout" | "maintenance" | "login-form" | "reminder"
 
-const TABS: { id: TabId; label: string; description: string }[] = [
-    { id: "quota",        label: "Quota Settings",  description: "Define activity targets" },
-    { id: "table-layout", label: "Table Layout",    description: "Choose a preset & preview" },
-    { id: "maintenance",  label: "Maintenance",     description: "Banner & maintenance mode" },
-    { id: "login-form",   label: "Login Form",      description: "Customize login appearance" },
-    { id: "reminder",     label: "Reminder",        description: "Logout & timeout schedule" },
+const TABS: { id: TabId; label: string; description: string; icon: React.ReactNode }[] = [
+    {
+        id: "quota", label: "Quota Settings", description: "Activity targets",
+        icon: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="20" x2="12" y2="10" /><line x1="18" y1="20" x2="18" y2="4" /><line x1="6" y1="20" x2="6" y2="16" />
+            </svg>
+        ),
+    },
+    {
+        id: "table-layout", label: "Table Layout", description: "Preset & preview",
+        icon: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="0" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="9" x2="9" y2="21" />
+            </svg>
+        ),
+    },
+    {
+        id: "maintenance", label: "Maintenance", description: "Banner & mode",
+        icon: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+        ),
+    },
+    {
+        id: "login-form", label: "Login Form", description: "Login appearance",
+        icon: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="0" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+        ),
+    },
+    {
+        id: "reminder", label: "Reminder", description: "Logout schedule",
+        icon: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+        ),
+    },
 ]
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -538,30 +610,30 @@ const TABS: { id: TabId; label: string; description: string }[] = [
 export default function CustomizePage() {
     const router = useRouter()
 
-    const [activeTab, setActiveTab]           = useState<TabId>("quota")
-    const [outboundQuota, setOutboundQuota]   = useState("")
+    const [activeTab, setActiveTab] = useState<TabId>("quota")
+    const [outboundQuota, setOutboundQuota] = useState("")
     const [selectedPreset, setSelectedPreset] = useState<string>("cloud-card")
-    const [isFetching, setIsFetching]         = useState(true)
-    const [isSaving, setIsSaving]             = useState(false)
+    const [isFetching, setIsFetching] = useState(true)
+    const [isSaving, setIsSaving] = useState(false)
 
     // Maintenance state
-    const [maintenanceEnabled, setMaintenanceEnabled]           = useState(false)
-    const [maintenanceTitle, setMaintenanceTitle]               = useState("System Maintenance")
-    const [maintenanceMessage, setMaintenanceMessage]           = useState("We are currently performing scheduled maintenance. Please check back shortly.")
+    const [maintenanceEnabled, setMaintenanceEnabled] = useState(false)
+    const [maintenanceTitle, setMaintenanceTitle] = useState("System Maintenance")
+    const [maintenanceMessage, setMaintenanceMessage] = useState("We are currently performing scheduled maintenance. Please check back shortly.")
     const [maintenanceBannerPreset, setMaintenanceBannerPreset] = useState("warning")
 
     // Login form state
     const [loginFormPreset, setLoginFormPreset] = useState("classic-indigo")
 
     // Reminder state
-    const [logoutReminderHour,    setLogoutReminderHour]    = useState("16")
-    const [logoutReminderMinute,  setLogoutReminderMinute]  = useState("30")
-    const [logoutWindowEnd,       setLogoutWindowEnd]       = useState("17")
-    const [snoozeDuration,        setSnoozeDuration]        = useState("15")
-    const [logoutReminderTitle,   setLogoutReminderTitle]   = useState("Logout Reminder")
+    const [logoutReminderHour, setLogoutReminderHour] = useState("16")
+    const [logoutReminderMinute, setLogoutReminderMinute] = useState("30")
+    const [logoutWindowEnd, setLogoutWindowEnd] = useState("17")
+    const [snoozeDuration, setSnoozeDuration] = useState("15")
+    const [logoutReminderTitle, setLogoutReminderTitle] = useState("Logout Reminder")
     const [logoutReminderMessage, setLogoutReminderMessage] = useState("Understood, will sign off before leaving.")
-    const [logoutSnoozeLabel,     setLogoutSnoozeLabel]     = useState("Snooze (15m)")
-    const [logoutDismissLabel,    setLogoutDismissLabel]    = useState("Got it")
+    const [logoutSnoozeLabel, setLogoutSnoozeLabel] = useState("Snooze (15m)")
+    const [logoutDismissLabel, setLogoutDismissLabel] = useState("Got it")
 
     useEffect(() => {
         const link = document.createElement("link")
@@ -575,24 +647,24 @@ export default function CustomizePage() {
         const fetchSettings = async () => {
             setIsFetching(true)
             try {
-                const res  = await fetch("/api/Data/Applications/Taskflow/Settings")
+                const res = await fetch("/api/Data/Applications/Taskflow/Settings")
                 const json = await res.json()
                 if (json.success && json.data) {
                     setOutboundQuota(json.data["outbound_quota"] ?? "")
-                    if (json.data.table_preset)             setSelectedPreset(json.data.table_preset)
+                    if (json.data.table_preset) setSelectedPreset(json.data.table_preset)
                     if (json.data.maintenance_enabled !== undefined) setMaintenanceEnabled(json.data.maintenance_enabled)
-                    if (json.data.maintenance_title)        setMaintenanceTitle(json.data.maintenance_title)
-                    if (json.data.maintenance_message)      setMaintenanceMessage(json.data.maintenance_message)
+                    if (json.data.maintenance_title) setMaintenanceTitle(json.data.maintenance_title)
+                    if (json.data.maintenance_message) setMaintenanceMessage(json.data.maintenance_message)
                     if (json.data.maintenance_banner_preset) setMaintenanceBannerPreset(json.data.maintenance_banner_preset)
-                    if (json.data.login_form_preset)        setLoginFormPreset(json.data.login_form_preset)
-                    if (json.data.logout_reminder_hour   != null) setLogoutReminderHour(String(json.data.logout_reminder_hour))
+                    if (json.data.login_form_preset) setLoginFormPreset(json.data.login_form_preset)
+                    if (json.data.logout_reminder_hour != null) setLogoutReminderHour(String(json.data.logout_reminder_hour))
                     if (json.data.logout_reminder_minute != null) setLogoutReminderMinute(String(json.data.logout_reminder_minute))
-                    if (json.data.logout_window_end      != null) setLogoutWindowEnd(String(json.data.logout_window_end))
-                    if (json.data.snooze_duration        != null) setSnoozeDuration(String(json.data.snooze_duration))
-                    if (json.data.logout_reminder_title)   setLogoutReminderTitle(json.data.logout_reminder_title)
+                    if (json.data.logout_window_end != null) setLogoutWindowEnd(String(json.data.logout_window_end))
+                    if (json.data.snooze_duration != null) setSnoozeDuration(String(json.data.snooze_duration))
+                    if (json.data.logout_reminder_title) setLogoutReminderTitle(json.data.logout_reminder_title)
                     if (json.data.logout_reminder_message) setLogoutReminderMessage(json.data.logout_reminder_message)
-                    if (json.data.logout_snooze_label)     setLogoutSnoozeLabel(json.data.logout_snooze_label)
-                    if (json.data.logout_dismiss_label)    setLogoutDismissLabel(json.data.logout_dismiss_label)
+                    if (json.data.logout_snooze_label) setLogoutSnoozeLabel(json.data.logout_snooze_label)
+                    if (json.data.logout_dismiss_label) setLogoutDismissLabel(json.data.logout_dismiss_label)
                 }
             } catch (err) {
                 console.error("Failed to load settings:", err)
@@ -610,32 +682,32 @@ export default function CustomizePage() {
         }
         setIsSaving(true)
         try {
-            const tablePresetObj  = TABLE_PRESETS.find((p) => p.id === selectedPreset)
+            const tablePresetObj = TABLE_PRESETS.find((p) => p.id === selectedPreset)
             const bannerPresetObj = BANNER_PRESETS.find((p) => p.id === maintenanceBannerPreset)
-            const loginPresetObj  = LOGIN_FORM_PRESETS.find((p) => p.id === loginFormPreset)
+            const loginPresetObj = LOGIN_FORM_PRESETS.find((p) => p.id === loginFormPreset)
 
-            const res  = await fetch("/api/Data/Applications/Taskflow/Settings", {
+            const res = await fetch("/api/Data/Applications/Taskflow/Settings", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    outbound_quota:            outboundQuota.trim(),
-                    table_preset:              selectedPreset,
-                    table_styles:              tablePresetObj?.styles ?? null,
-                    maintenance_enabled:       maintenanceEnabled,
-                    maintenance_title:         maintenanceTitle.trim(),
-                    maintenance_message:       maintenanceMessage.trim(),
+                    outbound_quota: outboundQuota.trim(),
+                    table_preset: selectedPreset,
+                    table_styles: tablePresetObj?.styles ?? null,
+                    maintenance_enabled: maintenanceEnabled,
+                    maintenance_title: maintenanceTitle.trim(),
+                    maintenance_message: maintenanceMessage.trim(),
                     maintenance_banner_preset: maintenanceBannerPreset,
-                    maintenance_styles:        bannerPresetObj?.styles ?? null,
-                    login_form_preset:         loginFormPreset,
-                    login_form_styles:         loginPresetObj?.styles ?? null,
-                    logout_reminder_hour:      Number(logoutReminderHour),
-                    logout_reminder_minute:    Number(logoutReminderMinute),
-                    logout_window_end:         Number(logoutWindowEnd),
-                    snooze_duration:           Number(snoozeDuration),
-                    logout_reminder_title:     logoutReminderTitle.trim(),
-                    logout_reminder_message:   logoutReminderMessage.trim(),
-                    logout_snooze_label:       logoutSnoozeLabel.trim(),
-                    logout_dismiss_label:      logoutDismissLabel.trim(),
+                    maintenance_styles: bannerPresetObj?.styles ?? null,
+                    login_form_preset: loginFormPreset,
+                    login_form_styles: loginPresetObj?.styles ?? null,
+                    logout_reminder_hour: Number(logoutReminderHour),
+                    logout_reminder_minute: Number(logoutReminderMinute),
+                    logout_window_end: Number(logoutWindowEnd),
+                    snooze_duration: Number(snoozeDuration),
+                    logout_reminder_title: logoutReminderTitle.trim(),
+                    logout_reminder_message: logoutReminderMessage.trim(),
+                    logout_snooze_label: logoutSnoozeLabel.trim(),
+                    logout_dismiss_label: logoutDismissLabel.trim(),
                 }),
             })
             const json = await res.json()
@@ -656,211 +728,239 @@ export default function CustomizePage() {
         <ProtectedPageWrapper>
             <SidebarProvider>
                 <AppSidebar />
-                <SidebarInset className="bg-[#0a0d14] text-slate-100 flex flex-col h-svh overflow-hidden">
+                <SidebarInset
+                    className="flex flex-col h-svh overflow-hidden text-slate-100"
+                    style={{ backgroundColor: "#080d12", fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" }}
+                >
+                    {/* Dot-grid texture */}
+                    <div
+                        className="fixed inset-0 pointer-events-none"
+                        style={{ backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`, backgroundSize: "24px 24px", opacity: 0.18, zIndex: 0 }}
+                    />
 
-                    {/* ── Header ── */}
-                    <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
-                        <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
-                        <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-                        <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-                        <div className="flex items-center gap-2 px-4 relative z-10">
-                        <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
-                        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")} className="text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 text-xs hidden sm:flex font-mono">
+                    {/* Header */}
+                    <header className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b" style={{ backgroundColor: "#080d12", borderColor: "#1a2535" }}>
+                        <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: "#4a6070" }} />
+                        <div className="w-px h-4" style={{ backgroundColor: "#1a2535" }} />
+                        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}
+                            className="hidden sm:flex h-7 px-2 text-[10px] uppercase tracking-widest rounded-none hover:bg-transparent"
+                            style={{ color: "#4a6070" }}>
                             Home
                         </Button>
-                        <Separator orientation="vertical" className="h-4 bg-orange-500/20 hidden sm:block" />
+                        <div className="w-px h-4 hidden sm:block" style={{ backgroundColor: "#1a2535" }} />
                         <Breadcrumb>
                             <BreadcrumbList>
                                 <BreadcrumbItem>
-                                    <BreadcrumbLink href="#" className="text-slate-500 hover:text-orange-400 text-xs hidden sm:block font-mono uppercase tracking-wider">Taskflow</BreadcrumbLink>
+                                    <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: "#4a6070" }}>Taskflow</BreadcrumbLink>
                                 </BreadcrumbItem>
-                                <BreadcrumbSeparator className="text-slate-700 hidden sm:block" />
+                                <BreadcrumbSeparator className="hidden sm:block" style={{ color: "#253040" }} />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage className="text-orange-400 text-xs font-mono tracking-widest uppercase">Customize</BreadcrumbPage>
+                                    <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#e8630a" }}>Customize</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
+                        <div className="ml-auto flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: "#4a6070" }}>Online</span>
                         </div>
                     </header>
 
-                    {/* ── Page title ── */}
-                    <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800/60">
-                        <div className="flex items-center gap-3">
-                            <div className="relative p-2 bg-orange-500/10 border border-orange-500/30">
-                                <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-orange-500/50" />
-                                <div className="absolute top-0 right-0 w-2 h-2 border-r border-t border-orange-500/50" />
-                                <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-                                <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-                                <Settings2 className="size-4 text-orange-400" />
-                            </div>
-                            <div>
-                                <h1 className="text-sm font-bold tracking-widest uppercase text-orange-400 font-mono leading-tight">Customize</h1>
-                                <p className="text-[10px] text-slate-600 font-mono mt-0.5 uppercase tracking-wider">Configure Taskflow settings and preferences</p>
-                            </div>
+                    {/* Page title bar */}
+                    <div className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: "#1a2535", backgroundColor: "#0d1117" }}>
+                        <div className="flex h-8 w-8 items-center justify-center border" style={{ borderColor: "#1a2535", backgroundColor: "#0f1923" }}>
+                            <Settings2 className="size-4" style={{ color: "#e8630a" }} />
+                        </div>
+                        <div>
+                            <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: "#e8630a" }}>Customize</h1>
+                            <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: "#253040" }}>Configure Taskflow settings and preferences</p>
+                        </div>
+                        <div className="ml-auto flex items-center gap-2">
+                            <span className="text-[10px]" style={{ color: "#253040" }}>$ taskflow --config</span>
                         </div>
                     </div>
 
-                    {/* ── Body ── */}
-                    <div className="flex-1 overflow-hidden">
+                    {/* Body */}
+                    <div className="relative z-10 flex-1 overflow-hidden">
                         {isFetching ? (
-                            <div className="flex items-center justify-center h-full gap-3 text-slate-600 text-xs font-mono">
-                                <Loader2 className="size-4 animate-spin text-orange-500" />
-                                <span className="uppercase tracking-widest">Loading settings…</span>
+                            <div className="flex items-center justify-center h-full gap-3 text-xs">
+                                <Loader2 className="size-4 animate-spin" style={{ color: "#e8630a" }} />
+                                <span className="uppercase tracking-widest" style={{ color: "#253040" }}>Loading settings…</span>
                             </div>
                         ) : (
                             <div className="flex h-full">
 
-                                {/* ── Left tab rail ── */}
-                                <nav className="w-52 shrink-0 border-r border-slate-800/60 bg-[#0d1117]/60 flex flex-col py-3 gap-0.5 overflow-y-auto">
-                                    {TABS.map((tab) => {
-                                        const isActive = activeTab === tab.id
-                                        return (
-                                            <button
-                                                key={tab.id}
-                                                onClick={() => setActiveTab(tab.id)}
-                                                className={`w-full text-left px-4 py-3 transition-all border-l-2 ${isActive ? "border-l-orange-400 bg-orange-500/8 text-orange-400" : "border-l-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/40"}`}
-                                            >
-                                                <p className={`text-[11px] font-bold uppercase tracking-widest leading-tight font-mono ${isActive ? "text-orange-400" : "text-slate-500"}`}>
-                                                    {tab.label}
-                                                </p>
-                                                <p className="text-[10px] text-slate-700 mt-0.5 leading-snug font-mono">{tab.description}</p>
-                                            </button>
-                                        )
-                                    })}
-
-                                    {/* ── Save button ── */}
-                                    <div className="mt-auto px-4 pt-4 pb-2 border-t border-slate-800">
-                                        <Button onClick={handleSave} disabled={isSaving} className="w-full h-8 text-[10px] rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 uppercase tracking-wider">
-                                            {isSaving ? (<><Loader2 className="size-3 mr-1.5 animate-spin" />Saving…</>) : (<><Save className="size-3 mr-1.5" />Save Settings</>)}
-                                        </Button>
+                                {/* Left tab rail */}
+                                <nav className="w-52 shrink-0 flex flex-col overflow-y-auto border-r" style={{ backgroundColor: "#080d12", borderColor: "#1a2535" }}>
+                                    {/* Rail header */}
+                                    <div className="px-4 py-3 border-b" style={{ borderColor: "#1a2535" }}>
+                                        <div className="flex items-center gap-2">
+                                            <span style={{ color: "#e8630a", fontSize: "10px", fontWeight: 700 }}>$</span>
+                                            <p className="text-[9px] font-bold uppercase tracking-[0.2em]" style={{ color: "#e8630a" }}>Config Modules</p>
+                                        </div>
+                                    </div>
+                                    {/* Tab items */}
+                                    <div className="flex-1">
+                                        {TABS.map((tab, idx) => {
+                                            const isActive = activeTab === tab.id
+                                            return (
+                                                <button
+                                                    key={tab.id}
+                                                    onClick={() => setActiveTab(tab.id)}
+                                                    className="w-full text-left transition-all"
+                                                    style={{
+                                                        borderLeft: `2px solid ${isActive ? "#e8630a" : "transparent"}`,
+                                                        borderBottom: "1px solid #1a2535",
+                                                        backgroundColor: isActive ? "rgba(232,99,10,0.07)" : "transparent",
+                                                        padding: "10px 14px",
+                                                    }}
+                                                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.025)" }}
+                                                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent" }}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <span style={{ color: isActive ? "#e8630a" : "#253040", flexShrink: 0 }}>
+                                                                {tab.icon}
+                                                            </span>
+                                                            <p
+                                                                className="text-[10px] font-bold uppercase tracking-widest leading-tight truncate"
+                                                                style={{ color: isActive ? "#e8630a" : "#4a6070" }}
+                                                            >
+                                                                {tab.label}
+                                                            </p>
+                                                        </div>
+                                                        {isActive && (
+                                                            <span className="text-[8px] font-bold shrink-0" style={{ color: "#e8630a" }}>●</span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[10px] mt-0.5 leading-snug" style={{ color: "#253040", paddingLeft: "20px" }}>
+                                                        {tab.description}
+                                                    </p>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                    {/* Save button */}
+                                    <div className="px-4 pt-4 pb-4 border-t" style={{ borderColor: "#1a2535" }}>
+                                        <button
+                                            onClick={handleSave}
+                                            disabled={isSaving}
+                                            className="w-full h-9 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                                            style={{ backgroundColor: "#e8630a", color: "#080d12", border: "1px solid #e8630a" }}
+                                            onMouseEnter={(e) => { if (!isSaving) e.currentTarget.style.backgroundColor = "#ff7a1a" }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#e8630a" }}
+                                        >
+                                            {isSaving
+                                                ? <><Loader2 className="size-3 animate-spin" />Saving…</>
+                                                : <><Save className="size-3" />Save Settings</>
+                                            }
+                                        </button>
                                         {!isSaving && outboundQuota && (
-                                            <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-2">
-                                                <CheckCircle2 className="size-3 text-green-500 shrink-0" />
-                                                Quota: <span className="text-slate-300 font-medium">{outboundQuota}</span>
+                                            <p className="text-[10px] flex items-center gap-1 mt-2" style={{ color: "#253040" }}>
+                                                <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
+                                                Quota: <span style={{ color: "#c8d8e8" }}>{outboundQuota}</span>
                                             </p>
                                         )}
                                     </div>
                                 </nav>
 
-                                {/* ── Right content panel ── */}
-                                <div className="flex-1 overflow-auto">
+                                {/* Right content panel */}
+                                <div className="flex-1 overflow-auto" style={{ backgroundColor: "#060b0f" }}>
 
-                                    {/* ══ Tab: Quota Settings ══ */}
+                                    {/* Quota Settings */}
                                     {activeTab === "quota" && (
                                         <div className="p-6 max-w-xl">
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Quota Settings</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">Define activity targets for the sales team</p>
+                                            <SectionCard title="Quota Settings" description="Define activity targets for the sales team">
+                                                <div className="space-y-1.5">
+                                                    <FieldLabel>Outbound — Touchbase Quota</FieldLabel>
+                                                    <p className="text-[11px]" style={{ color: "#253040" }}>Daily outbound touchbase target per TSA</p>
+                                                    <Input type="number" min={0} placeholder="e.g. 10"
+                                                        value={outboundQuota} onChange={(e) => setOutboundQuota(e.target.value)}
+                                                        className="h-9 text-xs rounded-none w-48 focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                        style={{ backgroundColor: "#080d12", borderColor: "#1a2535", color: "#c8d8e8" }}
+                                                        onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                        onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")}
+                                                    />
                                                 </div>
-                                                <div className="px-4 py-5 space-y-4">
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Outbound — Touchbase Quota</label>
-                                                        <p className="text-[11px] text-slate-600">Daily outbound touchbase target per TSA</p>
-                                                        <Input
-                                                            type="number" min={0} placeholder="e.g. 10"
-                                                            value={outboundQuota} onChange={(e) => setOutboundQuota(e.target.value)}
-                                                            className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none w-48"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            </SectionCard>
                                         </div>
                                     )}
 
-                                    {/* ══ Tab: Table Layout ══ */}
+                                    {/* Table Layout */}
                                     {activeTab === "table-layout" && (
                                         <div className="p-6 space-y-6">
-                                            {/* Preset picker */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Table Layout</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">Choose a table design preset — includes toolbar &amp; pagination styles</p>
-                                                </div>
-                                                <div className="px-4 py-4 space-y-2">
+                                            <SectionCard title="Table Layout" description="Choose a table design preset — includes toolbar & pagination styles">
+                                                <div className="space-y-2">
                                                     {TABLE_PRESETS.map((preset) => {
                                                         const isSelected = selectedPreset === preset.id
                                                         return (
-                                                            <button key={preset.id} onClick={() => setSelectedPreset(preset.id)} className={`w-full text-left px-3 py-2.5 border transition-all flex items-start gap-3 ${isSelected ? "border-cyan-500/50 bg-cyan-500/5" : "border-slate-700 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-800/50"}`}>
-                                                                <div className="flex flex-col gap-0.5 mt-0.5 shrink-0 overflow-hidden" style={{ borderRadius: `${Math.min(Number(preset.styles.table_border_radius), 6)}px` }}>
+                                                            <button key={preset.id} onClick={() => setSelectedPreset(preset.id)}
+                                                                className="w-full text-left px-3 py-2.5 border transition-all flex items-start gap-3"
+                                                                style={{ borderColor: isSelected ? "#e8630a" : "#1a2535", backgroundColor: isSelected ? "rgba(232,99,10,0.05)" : "#0d1117" }}
+                                                            >
+                                                                <div className="flex flex-col gap-0.5 mt-0.5 shrink-0 overflow-hidden" style={{ borderRadius: `${Math.min(Number(preset.styles.table_border_radius), 4)}px` }}>
                                                                     <div className="w-5 h-2" style={{ backgroundColor: preset.styles.toolbar_bg, border: `1px solid ${preset.styles.toolbar_border}` }} />
                                                                     <div className="w-5 h-2" style={{ backgroundColor: preset.styles.table_bg, border: `1px solid ${preset.styles.tr_border}` }} />
                                                                     <div className="w-5 h-2" style={{ backgroundColor: preset.styles.pagination_bg, border: `1px solid ${preset.styles.pagination_border}` }} />
                                                                 </div>
                                                                 <div className="flex-1 min-w-0">
                                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                                        <p className={`text-xs font-semibold uppercase tracking-wider ${isSelected ? "text-cyan-400" : "text-slate-300"}`}>{preset.name}</p>
-                                                                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-slate-800 text-slate-400 border border-slate-700">{preset.fontLabel}</span>
+                                                                        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: isSelected ? "#e8630a" : "#c8d8e8" }}>{preset.name}</p>
+                                                                        <span className="text-[9px] px-1.5 py-0.5 border" style={{ color: "#4a6070", borderColor: "#1a2535", backgroundColor: "#080d12" }}>{preset.fontLabel}</span>
                                                                     </div>
-                                                                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{preset.description}</p>
+                                                                    <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "#4a6070" }}>{preset.description}</p>
                                                                 </div>
-                                                                {isSelected && (<div className="shrink-0 mt-0.5"><div className="w-4 h-4 rounded-full bg-cyan-500 flex items-center justify-center"><Check className="size-2.5 text-white" /></div></div>)}
+                                                                {isSelected && <div className="shrink-0 mt-0.5 flex items-center gap-1" style={{ color: "#e8630a" }}><Check className="size-3" /><span className="text-[9px] font-bold uppercase">Active</span></div>}
                                                             </button>
                                                         )
                                                     })}
                                                 </div>
-                                            </div>
-
-                                            {/* Preview all layouts */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Preview All Layouts</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">Search, filter, export, and pagination are all styled per preset and saved with it</p>
-                                                </div>
-                                                <div className="p-6 bg-slate-800/30 grid grid-cols-1 xl:grid-cols-3 gap-8">
+                                            </SectionCard>
+                                            <SectionCard title="Preview All Layouts" description="Search, filter, export, and pagination are all styled per preset and saved with it">
+                                                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                                                     {TABLE_PRESETS.map((preset) => {
                                                         const isSelected = selectedPreset === preset.id
                                                         return (
-                                                            <div key={preset.id} className={`transition-all rounded-sm overflow-hidden border ${isSelected ? "border-cyan-500/60 ring-2 ring-cyan-500/30" : "border-slate-700 hover:border-slate-600"}`}>
-                                                                <div onClick={() => setSelectedPreset(preset.id)} className={`px-3 py-1.5 flex items-center justify-between gap-2 border-b cursor-pointer select-none ${isSelected ? "border-cyan-500/30 bg-cyan-500/5" : "border-slate-700 bg-slate-900/60"}`}>
+                                                            <div key={preset.id} className="overflow-hidden border transition-all" style={{ borderColor: isSelected ? "#e8630a" : "#1a2535" }}>
+                                                                <div onClick={() => setSelectedPreset(preset.id)}
+                                                                    className="px-3 py-1.5 flex items-center justify-between gap-2 border-b cursor-pointer select-none"
+                                                                    style={{ borderColor: isSelected ? "#e8630a" : "#1a2535", backgroundColor: isSelected ? "rgba(232,99,10,0.05)" : "#0d1117" }}
+                                                                >
                                                                     <div className="flex items-center gap-2 min-w-0">
-                                                                        <span className={`text-[10px] font-bold uppercase tracking-widest shrink-0 ${isSelected ? "text-cyan-400" : "text-slate-500"}`}>{preset.name}</span>
-                                                                        <span className="text-[9px] font-mono text-slate-600 truncate">{preset.fontLabel}</span>
+                                                                        <span className="text-[10px] font-bold uppercase tracking-widest shrink-0" style={{ color: isSelected ? "#e8630a" : "#4a6070" }}>{preset.name}</span>
+                                                                        <span className="text-[9px] truncate" style={{ color: "#253040" }}>{preset.fontLabel}</span>
                                                                     </div>
-                                                                    {isSelected && (<span className="text-[10px] text-cyan-400 flex items-center gap-1 shrink-0"><Check className="size-3" /> Selected</span>)}
+                                                                    {isSelected && <span className="text-[10px] flex items-center gap-1 shrink-0 font-bold" style={{ color: "#e8630a" }}><Check className="size-3" /> Selected</span>}
                                                                 </div>
-                                                                <div className="p-5 bg-slate-200/10 overflow-auto" onClick={(e) => e.stopPropagation()}>
+                                                                <div className="p-4 overflow-auto" style={{ backgroundColor: "#1a1a12" }} onClick={(e) => e.stopPropagation()}>
                                                                     <PreviewTable styles={preset.styles} />
                                                                 </div>
                                                             </div>
                                                         )
                                                     })}
                                                 </div>
-                                            </div>
+                                            </SectionCard>
                                         </div>
                                     )}
 
-                                    {/* ══ Tab: Maintenance ══ */}
+                                    {/* Maintenance */}
                                     {activeTab === "maintenance" && (
                                         <div className="p-6 space-y-6 max-w-4xl">
-
-                                            {/* Enable toggle card */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Maintenance Mode</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">Show a maintenance banner across the application</p>
-                                                </div>
-                                                <div className="px-4 py-4 flex items-center justify-between gap-4">
+                                            <SectionCard title="Maintenance Mode" description="Show a maintenance banner across the application">
+                                                <div className="flex items-center justify-between gap-4">
                                                     <div>
-                                                        <p className="text-xs font-semibold text-slate-300">Enable Maintenance Banner</p>
-                                                        <p className="text-[11px] text-slate-500 mt-0.5">When enabled, a banner will appear at the top of every page</p>
+                                                        <p className="text-xs font-bold" style={{ color: "#c8d8e8" }}>Enable Maintenance Banner</p>
+                                                        <p className="text-[11px] mt-0.5" style={{ color: "#253040" }}>When enabled, a banner will appear at the top of every page</p>
                                                     </div>
                                                     <div className="flex items-center gap-2 shrink-0">
                                                         <Toggle checked={maintenanceEnabled} onChange={setMaintenanceEnabled} />
-                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${maintenanceEnabled ? "text-cyan-400" : "text-slate-600"}`}>
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: maintenanceEnabled ? "#e8630a" : "#253040" }}>
                                                             {maintenanceEnabled ? "On" : "Off"}
                                                         </span>
                                                     </div>
                                                 </div>
-                                            </div>
-
-                                            {/* Banner style presets */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Banner Style</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">Choose a visual style for the maintenance banner</p>
-                                                </div>
-                                                <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            </SectionCard>
+                                            <SectionCard title="Banner Style" description="Choose a visual style for the maintenance banner">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                     {BANNER_PRESETS.map((preset) => {
                                                         const isSelected = maintenanceBannerPreset === preset.id
                                                         const s = preset.styles
@@ -871,366 +971,234 @@ export default function CustomizePage() {
                                                             maintenance: <Wrench className="size-4" style={{ color: s.icon_color }} />,
                                                         }
                                                         return (
-                                                            <button
-                                                                key={preset.id}
-                                                                onClick={() => setMaintenanceBannerPreset(preset.id)}
-                                                                className={`text-left px-3 py-2.5 border transition-all flex items-start gap-3 ${isSelected ? "border-cyan-500/50 bg-cyan-500/5" : "border-slate-700 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-800/50"}`}
+                                                            <button key={preset.id} onClick={() => setMaintenanceBannerPreset(preset.id)}
+                                                                className="text-left px-3 py-2.5 border transition-all flex items-start gap-3"
+                                                                style={{ borderColor: isSelected ? "#e8630a" : "#1a2535", backgroundColor: isSelected ? "rgba(232,99,10,0.05)" : "#0d1117" }}
                                                             >
-                                                                {/* Mini color swatch */}
-                                                                <div className="mt-0.5 shrink-0 w-8 h-8 rounded flex items-center justify-center" style={{ background: s.bg, border: `1.5px solid ${s.border}` }}>
+                                                                <div className="mt-0.5 shrink-0 w-8 h-8 flex items-center justify-center" style={{ background: s.bg, border: `1.5px solid ${s.border}` }}>
                                                                     {iconMap[preset.icon as keyof typeof iconMap]}
                                                                 </div>
                                                                 <div className="flex-1 min-w-0">
-                                                                    <p className={`text-xs font-semibold uppercase tracking-wider ${isSelected ? "text-cyan-400" : "text-slate-300"}`}>{preset.name}</p>
-                                                                    <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{preset.description}</p>
+                                                                    <p className="text-xs font-bold uppercase tracking-wider" style={{ color: isSelected ? "#e8630a" : "#c8d8e8" }}>{preset.name}</p>
+                                                                    <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: "#4a6070" }}>{preset.description}</p>
                                                                 </div>
-                                                                {isSelected && (<div className="shrink-0 mt-0.5"><div className="w-4 h-4 rounded-full bg-cyan-500 flex items-center justify-center"><Check className="size-2.5 text-white" /></div></div>)}
+                                                                {isSelected && <Check className="size-3 shrink-0 mt-0.5" style={{ color: "#e8630a" }} />}
                                                             </button>
                                                         )
                                                     })}
                                                 </div>
-                                            </div>
-
-                                            {/* Message editor */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Banner Content</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">Customize the title and message displayed in the banner</p>
-                                                </div>
-                                                <div className="px-4 py-5 space-y-4">
+                                            </SectionCard>
+                                            <SectionCard title="Banner Content" description="Customize the title and message displayed in the banner">
+                                                <div className="space-y-4">
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Banner Title</label>
-                                                        <Input
-                                                            placeholder="e.g. System Maintenance"
-                                                            value={maintenanceTitle}
-                                                            onChange={(e) => setMaintenanceTitle(e.target.value)}
-                                                            className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
-                                                        />
+                                                        <FieldLabel>Banner Title</FieldLabel>
+                                                        <Input placeholder="e.g. System Maintenance" value={maintenanceTitle} onChange={(e) => setMaintenanceTitle(e.target.value)}
+                                                            className="h-9 text-xs rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                            style={{ backgroundColor: "#080d12", borderColor: "#1a2535", color: "#c8d8e8" }}
+                                                            onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                            onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")} />
                                                     </div>
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Banner Message</label>
-                                                        <Textarea
-                                                            placeholder="e.g. We are currently performing scheduled maintenance. Please check back shortly."
-                                                            value={maintenanceMessage}
-                                                            onChange={(e) => setMaintenanceMessage(e.target.value)}
-                                                            rows={3}
-                                                            className="text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none resize-none"
-                                                        />
+                                                        <FieldLabel>Banner Message</FieldLabel>
+                                                        <Textarea placeholder="e.g. We are currently performing scheduled maintenance." value={maintenanceMessage} onChange={(e) => setMaintenanceMessage(e.target.value)} rows={3}
+                                                            className="text-xs rounded-none resize-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                            style={{ backgroundColor: "#080d12", borderColor: "#1a2535", color: "#c8d8e8" }}
+                                                            onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                            onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")} />
                                                     </div>
                                                 </div>
-                                            </div>
-
-                                            {/* Live preview */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Live Preview</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">How the banner appears to users — updates instantly as you type</p>
-                                                </div>
-                                                <div className="p-6 bg-slate-800/30">
-                                                    <BannerPreview
-                                                        enabled={maintenanceEnabled}
-                                                        title={maintenanceTitle}
-                                                        message={maintenanceMessage}
-                                                        presetId={maintenanceBannerPreset}
-                                                    />
-                                                </div>
-                                            </div>
+                                            </SectionCard>
+                                            <SectionCard title="Live Preview" description="How the banner appears to users — updates instantly as you type">
+                                                <BannerPreview enabled={maintenanceEnabled} title={maintenanceTitle} message={maintenanceMessage} presetId={maintenanceBannerPreset} />
+                                            </SectionCard>
                                         </div>
                                     )}
 
-                                    {/* ══ Tab: Login Form ══ */}
+                                    {/* Login Form */}
                                     {activeTab === "login-form" && (
                                         <div className="p-6 space-y-6">
-
-                                            {/* Preset picker */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Login Form Style</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">Select a visual theme for the login page — applied globally to all users</p>
-                                                </div>
-                                                <div className="px-4 py-4 space-y-2">
+                                            <SectionCard title="Login Form Style" description="Select a visual theme for the login page — applied globally to all users">
+                                                <div className="space-y-2">
                                                     {LOGIN_FORM_PRESETS.map((preset) => {
                                                         const isSelected = loginFormPreset === preset.id
                                                         const s = preset.styles
                                                         return (
-                                                            <button
-                                                                key={preset.id}
-                                                                onClick={() => setLoginFormPreset(preset.id)}
-                                                                className={`w-full text-left px-3 py-2.5 border transition-all flex items-start gap-3 ${isSelected ? "border-cyan-500/50 bg-cyan-500/5" : "border-slate-700 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-800/50"}`}
+                                                            <button key={preset.id} onClick={() => setLoginFormPreset(preset.id)}
+                                                                className="w-full text-left px-3 py-2.5 border transition-all flex items-start gap-3"
+                                                                style={{ borderColor: isSelected ? "#e8630a" : "#1a2535", backgroundColor: isSelected ? "rgba(232,99,10,0.05)" : "#0d1117" }}
                                                             >
-                                                                {/* Color swatches */}
-                                                                <div className="flex flex-col gap-0.5 mt-0.5 shrink-0 rounded overflow-hidden" style={{ border: `1px solid ${s.card_border}` }}>
+                                                                <div className="flex flex-col gap-0.5 mt-0.5 shrink-0 overflow-hidden" style={{ border: `1px solid ${s.card_border}` }}>
                                                                     <div className="w-5 h-2" style={{ backgroundColor: s.card_bg }} />
                                                                     <div className="w-5 h-2" style={{ backgroundColor: s.input_bg }} />
                                                                     <div className="w-5 h-2" style={{ backgroundColor: s.btn_bg }} />
                                                                 </div>
                                                                 <div className="flex-1 min-w-0">
                                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                                        <p className={`text-xs font-semibold uppercase tracking-wider ${isSelected ? "text-cyan-400" : "text-slate-300"}`}>{preset.name}</p>
-                                                                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-slate-800 text-slate-400 border border-slate-700">{preset.fontLabel}</span>
+                                                                        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: isSelected ? "#e8630a" : "#c8d8e8" }}>{preset.name}</p>
+                                                                        <span className="text-[9px] px-1.5 py-0.5 border" style={{ color: "#4a6070", borderColor: "#1a2535", backgroundColor: "#080d12" }}>{preset.fontLabel}</span>
                                                                     </div>
-                                                                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{preset.description}</p>
+                                                                    <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "#4a6070" }}>{preset.description}</p>
                                                                 </div>
-                                                                {isSelected && (<div className="shrink-0 mt-0.5"><div className="w-4 h-4 rounded-full bg-cyan-500 flex items-center justify-center"><Check className="size-2.5 text-white" /></div></div>)}
+                                                                {isSelected && <div className="shrink-0 mt-0.5 flex items-center gap-1" style={{ color: "#e8630a" }}><Check className="size-3" /><span className="text-[9px] font-bold uppercase">Active</span></div>}
                                                             </button>
                                                         )
                                                     })}
                                                 </div>
-                                            </div>
-
-                                            {/* Preview all login forms */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Preview All Login Styles</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">Click any preview to select it</p>
-                                                </div>
-                                                <div className="p-6 bg-slate-800/30 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            </SectionCard>
+                                            <SectionCard title="Preview All Login Styles" description="Click any preview to select it">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                     {LOGIN_FORM_PRESETS.map((preset) => {
                                                         const isSelected = loginFormPreset === preset.id
                                                         return (
-                                                            <div key={preset.id} className={`transition-all rounded-sm overflow-hidden border ${isSelected ? "border-cyan-500/60 ring-2 ring-cyan-500/30" : "border-slate-700 hover:border-slate-600"}`}>
-                                                                <div
-                                                                    onClick={() => setLoginFormPreset(preset.id)}
-                                                                    className={`px-3 py-1.5 flex items-center justify-between gap-2 border-b cursor-pointer select-none ${isSelected ? "border-cyan-500/30 bg-cyan-500/5" : "border-slate-700 bg-slate-900/60"}`}
+                                                            <div key={preset.id} className="overflow-hidden border transition-all cursor-pointer"
+                                                                style={{ borderColor: isSelected ? "#e8630a" : "#1a2535" }}
+                                                                onClick={() => setLoginFormPreset(preset.id)}
+                                                            >
+                                                                <div className="px-3 py-1.5 flex items-center justify-between gap-2 border-b"
+                                                                    style={{ borderColor: isSelected ? "#e8630a" : "#1a2535", backgroundColor: isSelected ? "rgba(232,99,10,0.05)" : "#0d1117" }}
                                                                 >
                                                                     <div className="flex items-center gap-2 min-w-0">
-                                                                        <span className={`text-[10px] font-bold uppercase tracking-widest shrink-0 ${isSelected ? "text-cyan-400" : "text-slate-500"}`}>{preset.name}</span>
-                                                                        <span className="text-[9px] font-mono text-slate-600 truncate">{preset.fontLabel}</span>
+                                                                        <span className="text-[10px] font-bold uppercase tracking-widest shrink-0" style={{ color: isSelected ? "#e8630a" : "#4a6070" }}>{preset.name}</span>
+                                                                        <span className="text-[9px] truncate" style={{ color: "#253040" }}>{preset.fontLabel}</span>
                                                                     </div>
-                                                                    {isSelected && (<span className="text-[10px] text-cyan-400 flex items-center gap-1 shrink-0"><Check className="size-3" /> Selected</span>)}
+                                                                    {isSelected && <span className="text-[10px] flex items-center gap-1 shrink-0 font-bold" style={{ color: "#e8630a" }}><Check className="size-3" /> Active</span>}
                                                                 </div>
-                                                                <div className="p-4 bg-slate-200/10" onClick={() => setLoginFormPreset(preset.id)}>
+                                                                <div className="p-3" style={{ backgroundColor: "#1a1a12" }}>
                                                                     <LoginFormMiniPreview styles={preset.styles} compact />
                                                                 </div>
                                                             </div>
                                                         )
                                                     })}
                                                 </div>
-                                            </div>
-
-                                            {/* Selected preview large */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Selected Style Preview</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">
-                                                        {LOGIN_FORM_PRESETS.find(p => p.id === loginFormPreset)?.name} — {LOGIN_FORM_PRESETS.find(p => p.id === loginFormPreset)?.description}
-                                                    </p>
-                                                </div>
-                                                <div className="p-6 bg-slate-800/30 flex justify-center">
+                                            </SectionCard>
+                                            <SectionCard
+                                                title="Selected Style Preview"
+                                                description={`${LOGIN_FORM_PRESETS.find(p => p.id === loginFormPreset)?.name} — ${LOGIN_FORM_PRESETS.find(p => p.id === loginFormPreset)?.description}`}
+                                            >
+                                                <div className="flex justify-center">
                                                     <div style={{ width: "100%", maxWidth: "220px" }}>
-                                                        <LoginFormMiniPreview
-                                                            styles={LOGIN_FORM_PRESETS.find(p => p.id === loginFormPreset)!.styles}
-                                                        />
+                                                        <LoginFormMiniPreview styles={LOGIN_FORM_PRESETS.find(p => p.id === loginFormPreset)!.styles} />
                                                     </div>
                                                 </div>
-                                            </div>
-
+                                            </SectionCard>
                                         </div>
                                     )}
 
-                                    {/* ══ Tab: Reminder ══ */}
+                                    {/* Reminder */}
                                     {activeTab === "reminder" && (
                                         <div className="p-6 max-w-xl space-y-6">
-
-                                            {/* ── Logout Reminder ── */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Logout Reminder</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">
-                                                        Configure when the logout reminder dialog appears and how long users can snooze it
-                                                    </p>
-                                                </div>
-                                                <div className="px-4 py-5 space-y-5">
-
-                                                    {/* Trigger time */}
+                                            <SectionCard title="Logout Reminder" description="Configure when the logout reminder dialog appears and how long users can snooze it">
+                                                <div className="space-y-5">
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                                                            Reminder Start Time
-                                                        </label>
-                                                        <p className="text-[11px] text-slate-600">
-                                                            The dialog will appear at this time — currently set to{" "}
-                                                            <span className="text-slate-400 font-medium">
-                                                                {(() => {
-                                                                    const h = Number(logoutReminderHour)
-                                                                    const m = logoutReminderMinute.padStart(2, "0")
-                                                                    const ap = h >= 12 ? "PM" : "AM"
-                                                                    const h12 = h % 12 || 12
-                                                                    return `${h12}:${m} ${ap}`
-                                                                })()}
+                                                        <FieldLabel>Reminder Start Time</FieldLabel>
+                                                        <p className="text-[11px]" style={{ color: "#253040" }}>
+                                                            Currently set to{" "}
+                                                            <span style={{ color: "#c8d8e8" }}>
+                                                                {(() => { const h = Number(logoutReminderHour); const m = logoutReminderMinute.padStart(2,"0"); const ap = h >= 12 ? "PM" : "AM"; return `${h%12||12}:${m} ${ap}` })()}
                                                             </span>
                                                         </p>
                                                         <div className="flex items-center gap-2">
                                                             <div className="space-y-1">
-                                                                <p className="text-[10px] text-slate-600 uppercase tracking-widest">Hour</p>
-                                                                <select
-                                                                    value={logoutReminderHour}
-                                                                    onChange={(e) => setLogoutReminderHour(e.target.value)}
-                                                                    className="h-9 text-xs bg-slate-800 border border-slate-700 text-slate-200 rounded-none px-2 focus:border-cyan-500/50 focus:outline-none"
+                                                                <p className="text-[10px] uppercase tracking-widest" style={{ color: "#253040" }}>Hour</p>
+                                                                <select value={logoutReminderHour} onChange={(e) => setLogoutReminderHour(e.target.value)}
+                                                                    className="h-9 text-xs rounded-none px-2 focus:outline-none"
+                                                                    style={{ backgroundColor: "#080d12", border: "1px solid #1a2535", color: "#c8d8e8" }}
+                                                                    onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                                    onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")}
                                                                 >
-                                                                    {Array.from({ length: 24 }, (_, i) => {
-                                                                        const ap = i >= 12 ? "PM" : "AM"
-                                                                        const h12 = i % 12 || 12
-                                                                        return (
-                                                                            <option key={i} value={String(i)}>
-                                                                                {h12} {ap} ({String(i).padStart(2, "0")}:00)
-                                                                            </option>
-                                                                        )
-                                                                    })}
+                                                                    {Array.from({ length: 24 }, (_, i) => { const ap = i >= 12 ? "PM" : "AM"; const h12 = i%12||12; return <option key={i} value={String(i)}>{h12} {ap} ({String(i).padStart(2,"0")}:00)</option> })}
                                                                 </select>
                                                             </div>
                                                             <div className="space-y-1">
-                                                                <p className="text-[10px] text-slate-600 uppercase tracking-widest">Minute</p>
-                                                                <select
-                                                                    value={logoutReminderMinute}
-                                                                    onChange={(e) => setLogoutReminderMinute(e.target.value)}
-                                                                    className="h-9 text-xs bg-slate-800 border border-slate-700 text-slate-200 rounded-none px-2 focus:border-cyan-500/50 focus:outline-none"
+                                                                <p className="text-[10px] uppercase tracking-widest" style={{ color: "#253040" }}>Minute</p>
+                                                                <select value={logoutReminderMinute} onChange={(e) => setLogoutReminderMinute(e.target.value)}
+                                                                    className="h-9 text-xs rounded-none px-2 focus:outline-none"
+                                                                    style={{ backgroundColor: "#080d12", border: "1px solid #1a2535", color: "#c8d8e8" }}
+                                                                    onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                                    onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")}
                                                                 >
-                                                                    {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
-                                                                        <option key={m} value={m}>:{m}</option>
-                                                                    ))}
+                                                                    {["00","05","10","15","20","25","30","35","40","45","50","55"].map((m) => <option key={m} value={m}>:{m}</option>)}
                                                                 </select>
                                                             </div>
                                                         </div>
                                                     </div>
-
-                                                    {/* Window end */}
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                                                            Reminder End Time (Hour)
-                                                        </label>
-                                                        <p className="text-[11px] text-slate-600">
-                                                            Stop showing the reminder after this hour — currently{" "}
-                                                            <span className="text-slate-400 font-medium">
-                                                                {(() => {
-                                                                    const h = Number(logoutWindowEnd)
-                                                                    const ap = h >= 12 ? "PM" : "AM"
-                                                                    const h12 = h % 12 || 12
-                                                                    return `${h12}:00 ${ap}`
-                                                                })()}
+                                                        <FieldLabel>Reminder End Time (Hour)</FieldLabel>
+                                                        <p className="text-[11px]" style={{ color: "#253040" }}>
+                                                            Stop after{" "}
+                                                            <span style={{ color: "#c8d8e8" }}>
+                                                                {(() => { const h = Number(logoutWindowEnd); const ap = h >= 12 ? "PM" : "AM"; return `${h%12||12}:00 ${ap}` })()}
                                                             </span>
                                                         </p>
-                                                        <select
-                                                            value={logoutWindowEnd}
-                                                            onChange={(e) => setLogoutWindowEnd(e.target.value)}
-                                                            className="h-9 text-xs bg-slate-800 border border-slate-700 text-slate-200 rounded-none px-2 focus:border-cyan-500/50 focus:outline-none"
+                                                        <select value={logoutWindowEnd} onChange={(e) => setLogoutWindowEnd(e.target.value)}
+                                                            className="h-9 text-xs rounded-none px-2 focus:outline-none"
+                                                            style={{ backgroundColor: "#080d12", border: "1px solid #1a2535", color: "#c8d8e8" }}
+                                                            onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                            onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")}
                                                         >
-                                                            {Array.from({ length: 24 }, (_, i) => {
-                                                                const ap = i >= 12 ? "PM" : "AM"
-                                                                const h12 = i % 12 || 12
-                                                                return (
-                                                                    <option key={i} value={String(i)}>
-                                                                        {h12}:00 {ap}
-                                                                    </option>
-                                                                )
-                                                            })}
+                                                            {Array.from({ length: 24 }, (_, i) => { const ap = i >= 12 ? "PM" : "AM"; const h12 = i%12||12; return <option key={i} value={String(i)}>{h12}:00 {ap}</option> })}
                                                         </select>
                                                     </div>
-
-                                                    {/* Snooze duration */}
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                                                            Snooze Duration (minutes)
-                                                        </label>
-                                                        <p className="text-[11px] text-slate-600">
-                                                            How long before the reminder reappears after snoozing
-                                                        </p>
+                                                        <FieldLabel>Snooze Duration (minutes)</FieldLabel>
                                                         <div className="flex items-center gap-2">
-                                                            <Input
-                                                                type="number"
-                                                                min={1}
-                                                                max={60}
-                                                                value={snoozeDuration}
-                                                                onChange={(e) => setSnoozeDuration(e.target.value)}
-                                                                className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none w-24"
-                                                            />
-                                                            <span className="text-[11px] text-slate-500">minutes</span>
+                                                            <Input type="number" min={1} max={60} value={snoozeDuration} onChange={(e) => setSnoozeDuration(e.target.value)}
+                                                                className="h-9 text-xs rounded-none w-24 focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                                style={{ backgroundColor: "#080d12", borderColor: "#1a2535", color: "#c8d8e8" }}
+                                                                onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                                onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")} />
+                                                            <span className="text-[11px]" style={{ color: "#253040" }}>minutes</span>
                                                         </div>
                                                     </div>
-
-                                                    {/* Summary */}
-                                                    <div className="bg-slate-900/60 border border-slate-700 px-4 py-3 space-y-1">
-                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Current Schedule</p>
-                                                        <p className="text-[11px] text-slate-400">
-                                                            Reminder shows at{" "}
-                                                            <span className="text-slate-200 font-medium">
-                                                                {(() => {
-                                                                    const h = Number(logoutReminderHour)
-                                                                    const m = logoutReminderMinute.padStart(2, "0")
-                                                                    const ap = h >= 12 ? "PM" : "AM"
-                                                                    return `${h % 12 || 12}:${m} ${ap}`
-                                                                })()}
-                                                            </span>
-                                                            {" "}until{" "}
-                                                            <span className="text-slate-200 font-medium">
-                                                                {(() => {
-                                                                    const h = Number(logoutWindowEnd)
-                                                                    const ap = h >= 12 ? "PM" : "AM"
-                                                                    return `${h % 12 || 12}:00 ${ap}`
-                                                                })()}
-                                                            </span>
-                                                            {" "}· Snooze: <span className="text-slate-200 font-medium">{snoozeDuration} min</span>
+                                                    <div className="border px-4 py-3 space-y-1" style={{ borderColor: "#1a2535", backgroundColor: "#0d1117" }}>
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="text-[10px] font-bold" style={{ color: "#e8630a" }}>$</span>
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#e8630a" }}>Current Schedule</p>
+                                                        </div>
+                                                        <p className="text-[11px]" style={{ color: "#4a6070" }}>
+                                                            Shows at <span style={{ color: "#c8d8e8" }}>{(() => { const h = Number(logoutReminderHour); const m = logoutReminderMinute.padStart(2,"0"); const ap = h >= 12 ? "PM" : "AM"; return `${h%12||12}:${m} ${ap}` })()}</span>
+                                                            {" "}until <span style={{ color: "#c8d8e8" }}>{(() => { const h = Number(logoutWindowEnd); const ap = h >= 12 ? "PM" : "AM"; return `${h%12||12}:00 ${ap}` })()}</span>
+                                                            {" "}· Snooze: <span style={{ color: "#c8d8e8" }}>{snoozeDuration} min</span>
                                                         </p>
                                                     </div>
                                                 </div>
-                                            </div>
-
-                                            {/* ── Message Content ── */}
-                                            <div className="border border-slate-800">
-                                                <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70">Message Content</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5">
-                                                        Customize the text shown inside the logout reminder dialog
-                                                    </p>
-                                                </div>
-                                                <div className="px-4 py-5 space-y-4">
+                                            </SectionCard>
+                                            <SectionCard title="Message Content" description="Customize the text shown inside the logout reminder dialog">
+                                                <div className="space-y-4">
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                                                            Dialog Title
-                                                        </label>
-                                                        <Input
-                                                            placeholder="e.g. Logout Reminder"
-                                                            value={logoutReminderTitle}
-                                                            onChange={(e) => setLogoutReminderTitle(e.target.value)}
-                                                            className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
-                                                        />
+                                                        <FieldLabel>Dialog Title</FieldLabel>
+                                                        <Input placeholder="e.g. Logout Reminder" value={logoutReminderTitle} onChange={(e) => setLogoutReminderTitle(e.target.value)}
+                                                            className="h-9 text-xs rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                            style={{ backgroundColor: "#080d12", borderColor: "#1a2535", color: "#c8d8e8" }}
+                                                            onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                            onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")} />
                                                     </div>
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                                                            Dialog Message
-                                                        </label>
-                                                        <Textarea
-                                                            placeholder="e.g. Please remember to log out before leaving."
-                                                            value={logoutReminderMessage}
-                                                            onChange={(e) => setLogoutReminderMessage(e.target.value)}
-                                                            rows={3}
-                                                            className="text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none resize-none"
-                                                        />
+                                                        <FieldLabel>Dialog Message</FieldLabel>
+                                                        <Textarea placeholder="e.g. Please remember to log out before leaving." value={logoutReminderMessage} onChange={(e) => setLogoutReminderMessage(e.target.value)} rows={3}
+                                                            className="text-xs rounded-none resize-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                            style={{ backgroundColor: "#080d12", borderColor: "#1a2535", color: "#c8d8e8" }}
+                                                            onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                            onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")} />
                                                     </div>
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                                                            Snooze Button Label
-                                                        </label>
-                                                        <Input
-                                                            placeholder="e.g. Snooze (15m)"
-                                                            value={logoutSnoozeLabel}
-                                                            onChange={(e) => setLogoutSnoozeLabel(e.target.value)}
-                                                            className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
-                                                        />
+                                                        <FieldLabel>Snooze Button Label</FieldLabel>
+                                                        <Input placeholder="e.g. Snooze (15m)" value={logoutSnoozeLabel} onChange={(e) => setLogoutSnoozeLabel(e.target.value)}
+                                                            className="h-9 text-xs rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                            style={{ backgroundColor: "#080d12", borderColor: "#1a2535", color: "#c8d8e8" }}
+                                                            onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                            onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")} />
                                                     </div>
                                                     <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                                                            Dismiss Button Label
-                                                        </label>
-                                                        <Input
-                                                            placeholder="e.g. Got it"
-                                                            value={logoutDismissLabel}
-                                                            onChange={(e) => setLogoutDismissLabel(e.target.value)}
-                                                            className="h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
-                                                        />
+                                                        <FieldLabel>Dismiss Button Label</FieldLabel>
+                                                        <Input placeholder="e.g. Got it" value={logoutDismissLabel} onChange={(e) => setLogoutDismissLabel(e.target.value)}
+                                                            className="h-9 text-xs rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                            style={{ backgroundColor: "#080d12", borderColor: "#1a2535", color: "#c8d8e8" }}
+                                                            onFocus={(e) => (e.currentTarget.style.borderColor = "#e8630a")}
+                                                            onBlur={(e) => (e.currentTarget.style.borderColor = "#1a2535")} />
                                                     </div>
                                                 </div>
-                                            </div>
-
+                                            </SectionCard>
                                         </div>
                                     )}
 
