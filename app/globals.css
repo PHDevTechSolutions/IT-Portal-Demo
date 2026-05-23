@@ -3,135 +3,208 @@
 @tailwind utilities;
 
 :root {
-  /* Sci-Fi Theme Colors */
-  --sci-bg-primary: #0a0f1a;
-  --sci-bg-secondary: #0d1424;
-  --sci-bg-card: #111827;
-  --sci-bg-panel: #0f172a;
-  
-  --sci-cyan: #06b6d4;
-  --sci-cyan-glow: rgba(6, 182, 212, 0.4);
-  --sci-purple: #8b5cf6;
-  --sci-purple-glow: rgba(139, 92, 246, 0.4);
-  --sci-amber: #f59e0b;
-  --sci-amber-glow: rgba(245, 158, 11, 0.4);
-  --sci-emerald: #10b981;
-  --sci-emerald-glow: rgba(16, 185, 129, 0.4);
-  --sci-rose: #f43f5e;
-  --sci-rose-glow: rgba(244, 63, 94, 0.4);
-  
-  --sci-border: rgba(6, 182, 212, 0.2);
-  --sci-text-primary: #e2e8f0;
-  --sci-text-secondary: #94a3b8;
-  --sci-text-muted: #64748b;
+  /* ── Ops Theme Colors ── */
+  --ops-bg-primary:   #0a0d14;
+  --ops-bg-secondary: #0d1117;
+  --ops-bg-card:      #0f1420;
+  --ops-bg-panel:     #0a0d14;
+
+  --ops-orange:       #f97316;
+  --ops-orange-glow:  rgba(249, 115, 22, 0.35);
+  --ops-amber:        #f59e0b;
+  --ops-amber-glow:   rgba(245, 158, 11, 0.35);
+  --ops-emerald:      #10b981;
+  --ops-emerald-glow: rgba(16, 185, 129, 0.35);
+  --ops-red:          #ef4444;
+  --ops-red-glow:     rgba(239, 68, 68, 0.35);
+  --ops-sky:          #38bdf8;
+  --ops-sky-glow:     rgba(56, 189, 248, 0.25);
+
+  --ops-border:       rgba(249, 115, 22, 0.18);
+  --ops-border-dim:   rgba(249, 115, 22, 0.08);
+  --ops-text-primary: #e2e8f0;
+  --ops-text-secondary: #94a3b8;
+  --ops-text-muted:   #475569;
 }
 
 @layer base {
   body {
-    background: linear-gradient(135deg, var(--sci-bg-primary) 0%, var(--sci-bg-secondary) 100%);
-    color: var(--sci-text-primary);
+    background: var(--ops-bg-primary);
+    color: var(--ops-text-primary);
   }
 }
 
 @layer components {
-  .sci-fi-panel {
-    @apply relative bg-slate-900/80 backdrop-blur-xl border border-cyan-500/20 rounded-xl overflow-hidden;
-    box-shadow: 0 0 40px rgba(6, 182, 212, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* ── Panel ── */
+  .ops-panel {
+    @apply relative bg-[#0d1117]/90 backdrop-blur-xl border border-orange-500/15 overflow-hidden;
   }
-  
-  .sci-fi-panel::before {
+  .ops-panel::before {
     content: '';
     @apply absolute top-0 left-0 right-0 h-px;
-    background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.5), transparent);
+    background: linear-gradient(90deg, transparent, rgba(249,115,22,0.35), transparent);
   }
-  
-  .sci-fi-button {
-    @apply relative px-4 py-2 font-medium text-sm uppercase tracking-wider rounded-lg border transition-all duration-200;
-    @apply bg-cyan-500/10 text-cyan-400 border-cyan-500/40;
-    @apply hover:bg-cyan-500/20 hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(6,182,212,0.3)];
+
+  /* ── Corner brackets ── */
+  .ops-corner-tl { @apply absolute top-0 left-0  w-3 h-3 border-l border-t border-orange-500/40; }
+  .ops-corner-tr { @apply absolute top-0 right-0 w-3 h-3 border-r border-t border-orange-500/40; }
+  .ops-corner-bl { @apply absolute bottom-0 left-0  w-3 h-3 border-l border-b border-orange-500/40; }
+  .ops-corner-br { @apply absolute bottom-0 right-0 w-3 h-3 border-r border-b border-orange-500/40; }
+
+  /* ── Buttons ── */
+  .ops-btn {
+    @apply relative px-4 py-2 text-[11px] font-mono font-bold uppercase tracking-widest border transition-all duration-150;
+    @apply bg-orange-500/10 text-orange-400 border-orange-500/30;
+    @apply hover:bg-orange-500/20 hover:border-orange-500/50;
   }
-  
-  .sci-fi-button-danger {
-    @apply sci-fi-button;
-    @apply bg-rose-500/10 text-rose-400 border-rose-500/40;
-    @apply hover:bg-rose-500/20 hover:border-rose-400 hover:shadow-[0_0_20px_rgba(244,63,94,0.3)];
+  .ops-btn-primary {
+    @apply ops-btn;
+    @apply shadow-[0_0_16px_rgba(249,115,22,0.15)] hover:shadow-[0_0_24px_rgba(249,115,22,0.25)];
   }
-  
-  .sci-fi-input {
-    @apply bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2 text-sm;
-    @apply text-slate-200 placeholder:text-slate-500;
-    @apply focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30;
-    @apply transition-all duration-200;
+  .ops-btn-danger {
+    @apply ops-btn;
+    @apply bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50;
   }
-  
-  .sci-fi-table {
+  .ops-btn-ghost {
+    @apply ops-btn;
+    @apply bg-transparent text-slate-500 border-slate-700/50 hover:text-slate-300 hover:border-slate-600;
+  }
+  .ops-btn-sky {
+    @apply ops-btn;
+    @apply bg-sky-500/10 text-sky-400 border-sky-500/30 hover:bg-sky-500/20 hover:border-sky-500/50;
+  }
+
+  /* ── Input ── */
+  .ops-input {
+    @apply w-full bg-[#0a0d14] border border-orange-500/20 text-slate-300;
+    @apply placeholder:text-slate-700 font-mono text-xs px-3 py-2;
+    @apply focus:outline-none focus:border-orange-500/50 rounded-none;
+    @apply transition-colors duration-150;
+  }
+  .ops-textarea {
+    @apply ops-input resize-none;
+  }
+  .ops-label {
+    @apply text-[10px] font-mono font-bold uppercase tracking-widest text-slate-600;
+  }
+  .ops-select-trigger {
+    @apply h-8 rounded-none bg-[#0a0d14] border border-orange-500/20 text-slate-400 text-[11px] font-mono;
+    @apply focus:ring-0 focus:border-orange-500/40 hover:border-orange-500/30;
+  }
+
+  /* ── Table ── */
+  .ops-table {
     @apply w-full border-collapse;
   }
-  
-  .sci-fi-table th {
-    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider;
-    @apply text-cyan-400 bg-slate-800/50 border-b border-cyan-500/20;
+  .ops-table th {
+    @apply px-4 py-3 text-left text-[10px] font-mono font-bold uppercase tracking-widest;
+    @apply text-orange-400/70 bg-[#0a0d14]/80 border-b border-orange-500/15;
   }
-  
-  .sci-fi-table td {
-    @apply px-4 py-3 text-sm border-b border-slate-700/50;
-    @apply text-slate-300;
+  .ops-table td {
+    @apply px-4 py-3 text-[11px] font-mono border-b border-orange-500/8 text-slate-400;
   }
-  
-  .sci-fi-table tr:hover td {
-    @apply bg-slate-800/30;
+  .ops-table tr:hover td {
+    @apply bg-orange-500/5;
   }
-  
-  .sci-fi-glow-cyan {
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+
+  /* ── Badge ── */
+  .ops-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border;
   }
-  
-  .sci-fi-glow-purple {
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  .ops-badge-orange  { @apply ops-badge text-orange-400 border-orange-500/30 bg-orange-500/10; }
+  .ops-badge-amber   { @apply ops-badge text-amber-400  border-amber-500/30  bg-amber-500/10;  }
+  .ops-badge-emerald { @apply ops-badge text-emerald-400 border-emerald-500/30 bg-emerald-500/10; }
+  .ops-badge-red     { @apply ops-badge text-red-400    border-red-500/30    bg-red-500/10;    }
+  .ops-badge-sky     { @apply ops-badge text-sky-400    border-sky-500/30    bg-sky-500/10;    }
+  .ops-badge-slate   { @apply ops-badge text-slate-400  border-slate-700/60  bg-slate-800/40;  }
+
+  /* ── Section header ── */
+  .ops-section-header {
+    @apply flex items-center gap-2 px-4 py-2.5 border-b border-orange-500/10 bg-[#0a0d14]/60;
+    @apply text-[10px] font-mono font-bold uppercase tracking-widest text-orange-400;
   }
-  
-  .sci-fi-text-glow {
-    text-shadow: 0 0 10px currentColor;
+
+  /* ── Glow helpers ── */
+  .ops-glow-orange { box-shadow: 0 0 20px rgba(249,115,22,0.25); }
+  .ops-glow-red    { box-shadow: 0 0 20px rgba(239,68,68,0.25);  }
+  .ops-glow-green  { box-shadow: 0 0 20px rgba(16,185,129,0.25); }
+  .ops-text-glow   { text-shadow: 0 0 8px currentColor; }
+
+  /* ── Scan line animation ── */
+  .ops-scanline {
+    @apply pointer-events-none absolute left-0 w-full h-px;
+    background: linear-gradient(90deg, transparent, rgba(249,115,22,0.28), transparent);
+    animation: ops-scanline 8s linear infinite;
+    top: 0;
+  }
+
+  /* ── Progress bar ── */
+  .ops-progress-track {
+    @apply h-1 bg-slate-800/80 overflow-hidden;
+  }
+  .ops-progress-fill {
+    @apply h-full bg-gradient-to-r from-orange-600 to-orange-400 transition-all duration-700;
   }
 }
+
+/* ── Keyframes ── */
+
+@keyframes ops-scanline {
+  0%   { top: 0%;   opacity: 0; }
+  5%   { opacity: 1; }
+  95%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@keyframes ops-pulse-border {
+  0%, 100% { border-color: rgba(249,115,22,0.2); }
+  50%       { border-color: rgba(249,115,22,0.5); }
+}
+.ops-pulse-border { animation: ops-pulse-border 2s ease-in-out infinite; }
 
 @keyframes continuous-shake {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  10% {
-    transform: translateX(-5px) rotate(-1deg);
-  }
-  20% {
-    transform: translateX(5px) rotate(1deg);
-  }
-  30% {
-    transform: translateX(-4px) rotate(-0.5deg);
-  }
-  40% {
-    transform: translateX(4px) rotate(0.5deg);
-  }
-  50% {
-    transform: translateX(-3px);
-  }
-  60% {
-    transform: translateX(3px);
-  }
-  70% {
-    transform: translateX(-2px);
-  }
-  80% {
-    transform: translateX(2px);
-  }
-  90% {
-    transform: translateX(-1px);
-  }
+  0%, 100% { transform: translateX(0); }
+  10%  { transform: translateX(-5px) rotate(-1deg); }
+  20%  { transform: translateX(5px)  rotate(1deg);  }
+  30%  { transform: translateX(-4px) rotate(-0.5deg); }
+  40%  { transform: translateX(4px)  rotate(0.5deg);  }
+  50%  { transform: translateX(-3px); }
+  60%  { transform: translateX(3px);  }
+  70%  { transform: translateX(-2px); }
+  80%  { transform: translateX(2px);  }
+  90%  { transform: translateX(-1px); }
 }
+.animate-continuous-shake { animation: continuous-shake 1s infinite ease-in-out; }
 
-.animate-continuous-shake {
-  animation: continuous-shake 1s infinite ease-in-out; /* 🔥 Infinite bounce shake */
+@keyframes shake {
+  0%   { transform: rotate(0deg);   }
+  25%  { transform: rotate(10deg);  }
+  50%  { transform: rotate(0deg);   }
+  75%  { transform: rotate(-10deg); }
+  100% { transform: rotate(0deg);   }
 }
+.animate-shake { animation: shake 1s ease-in-out infinite; }
 
+@keyframes fadeOut {
+  0%   { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-100%); }
+}
+.fade-out { animation: fadeOut 1s forwards; }
+
+@keyframes spin {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+.spin { animation: spin 2s linear infinite; }
+
+/* ── Prose ── */
+.prose ul  { list-style-type: disc;    padding-left: 1.25rem; }
+.prose ol  { list-style-type: decimal; padding-left: 1.25rem; }
+.prose strong { font-weight: 700; }
+.prose em     { font-style: italic; }
+
+/* ── Responsive table wrapper ── */
 @media (max-width: 768px) {
   table {
     display: block;
@@ -140,167 +213,59 @@
   }
 }
 
-/* Add this CSS for animation */
-@keyframes fadeOut {
-  0% {
-      opacity: 1;
-  }
-  100% {
-      opacity: 0;
-      transform: translateX(-100%);
-  }
-}
-
-.fade-out {
-  animation: fadeOut 1s forwards;
-}
-
-@keyframes shake {
-  0% { transform: rotate(0deg); }
-  25% { transform: rotate(10deg); }
-  50% { transform: rotate(0deg); }
-  75% { transform: rotate(-10deg); }
-  100% { transform: rotate(0deg); }
-}
-
-.animate-shake {
-  animation: shake 1s ease-in-out infinite;
-}
-
-/* global.css or component CSS */
-.prose ul {
-  list-style-type: disc;
-  padding-left: 1.25rem;
-}
-.prose ol {
-  list-style-type: decimal;
-  padding-left: 1.25rem;
-}
-.prose strong {
-  font-weight: 700;
-}
-.prose em {
-  font-style: italic;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.spin {
-  animation: spin 2s linear infinite;
-}
-
-/* Mobile Responsive Utilities */
+/* ── Mobile responsive utilities ── */
 @layer utilities {
   .responsive-table-wrapper {
     @apply w-full overflow-x-auto;
     -webkit-overflow-scrolling: touch;
   }
-  
-  .responsive-table {
-    @apply min-w-full;
-  }
-  
-  .mobile-card-grid {
-    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
-  }
-  
-  .mobile-flex-col {
-    @apply flex flex-col md:flex-row;
-  }
-  
-  .mobile-full-width {
-    @apply w-full;
-  }
-  
-  .mobile-p-2 {
-    @apply p-2 md:p-4;
-  }
-  
-  .mobile-text-sm {
-    @apply text-xs md:text-sm;
-  }
-  
-  .mobile-stack {
-    @apply flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2;
-  }
-  
-  .mobile-hide {
-    @apply hidden md:table-cell;
-  }
-  
-  .mobile-show {
-    @apply block md:hidden;
-  }
+  .responsive-table   { @apply min-w-full; }
+  .mobile-card-grid   { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4; }
+  .mobile-flex-col    { @apply flex flex-col md:flex-row; }
+  .mobile-full-width  { @apply w-full; }
+  .mobile-p-2         { @apply p-2 md:p-4; }
+  .mobile-text-sm     { @apply text-xs md:text-sm; }
+  .mobile-stack       { @apply flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2; }
+  .mobile-hide        { @apply hidden md:table-cell; }
+  .mobile-show        { @apply block md:hidden; }
 }
 
-/* Mobile-first table styling */
+/* ── Mobile table card layout ── */
 @media (max-width: 768px) {
-  .sci-fi-table {
-    @apply block w-full;
+  .ops-table           { @apply block w-full; }
+  .ops-table thead     { @apply hidden; }
+  .ops-table tbody     { @apply block w-full; }
+  .ops-table tr        { @apply block mb-3 p-3 bg-[#0d1117]/80 border border-orange-500/15; }
+  .ops-table td        { @apply block py-1.5 px-0 border-b-0 font-mono text-[11px]; }
+  .ops-table td::before {
+    content: attr(data-label);
+    @apply font-bold text-orange-400/70 mr-2 text-[9px] uppercase tracking-widest;
   }
-  
-  .sci-fi-table thead {
-    @apply hidden;
+  .ops-table td:first-child {
+    @apply font-bold text-orange-400 text-sm mb-2 border-b border-orange-500/15 pb-2;
   }
-  
-  .sci-fi-table tbody {
-    @apply block w-full;
-  }
-  
-  .sci-fi-table tr {
-    @apply block mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700;
-  }
-  
-  .sci-fi-table td {
-    @apply block py-2 px-0 border-b-0;
-    @apply before:content-[attr(data-label)] before:font-semibold before:text-cyan-400 before:mr-2;
-  }
-  
-  .sci-fi-table td:first-child {
-    @apply font-semibold text-cyan-400 text-base mb-2 border-b border-slate-700 pb-2;
-  }
-  
-  .mobile-action-buttons {
-    @apply flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-700;
-  }
+  .mobile-action-buttons { @apply flex flex-wrap gap-2 mt-3 pt-3 border-t border-orange-500/15; }
 }
 
-/* Touch-friendly button sizes on mobile */
+/* ── Touch targets ── */
 @media (max-width: 768px) {
-  .touch-button {
-    @apply min-h-[44px] min-w-[44px];
-  }
-  
-  .mobile-header {
-    @apply h-auto py-2 px-3;
-  }
-  
-  .mobile-sidebar-trigger {
-    @apply p-3;
-  }
+  .touch-button          { @apply min-h-[44px] min-w-[44px]; }
+  .mobile-header         { @apply h-auto py-2 px-3; }
+  .mobile-sidebar-trigger{ @apply p-3; }
 }
 
-/* Sidebar mobile adjustments */
+/* ── Sidebar mobile ── */
 @media (max-width: 768px) {
-  [data-sidebar="content"] {
-    @apply overflow-x-hidden;
-  }
+  [data-sidebar="content"] { @apply overflow-x-hidden; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   Tailwind base reset + CSS variables (shadcn/ui)
+══════════════════════════════════════════════════════════ */
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
 }
 
 @layer base {
@@ -339,49 +304,41 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 222 47% 4%;          /* #0a0d14 */
+    --foreground: 214 32% 91%;         /* slate-200 */
+    --card: 222 47% 6%;                /* #0d1117 */
+    --card-foreground: 214 32% 91%;
+    --popover: 222 47% 5%;
+    --popover-foreground: 214 32% 91%;
+    --primary: 24 95% 53%;             /* orange-500 */
+    --primary-foreground: 222 47% 4%;
+    --secondary: 222 47% 10%;
+    --secondary-foreground: 214 32% 91%;
+    --muted: 222 47% 10%;
+    --muted-foreground: 215 20% 45%;   /* slate-500 */
+    --accent: 222 47% 10%;
+    --accent-foreground: 214 32% 91%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 222 47% 5%; /* slate-950 */
-    --sidebar-foreground: 180 100% 97%; /* cyan-50 */
-    --sidebar-primary: 187 92% 43%; /* cyan-500 */
-    --sidebar-primary-foreground: 222 47% 5%; /* slate-950 */
-    --sidebar-accent: 222 47% 11%; /* slate-900 */
-    --sidebar-accent-foreground: 180 100% 97%; /* cyan-50 */
-    --sidebar-border: 187 92% 43% / 0.3; /* cyan-500/30 */
-    --sidebar-ring: 187 92% 43%; /* cyan-500 */
-  }
-}
+    --border: 24 95% 53% / 0.15;       /* orange-500/15 */
+    --input: 24 95% 53% / 0.15;
+    --ring: 24 95% 53%;                /* orange-500 */
+    --chart-1: 24 95% 53%;             /* orange */
+    --chart-2: 158 64% 52%;            /* emerald */
+    --chart-3: 38 92% 50%;             /* amber  */
+    --chart-4: 0 72% 51%;              /* red    */
+    --chart-5: 199 89% 48%;            /* sky    */
 
-
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
+    /* ── Sidebar — ops theme ── */
+    --sidebar-background: 222 47% 4%;  /* #0a0d14 */
+    --sidebar-foreground: 214 32% 75%; /* slate-300 */
+    --sidebar-primary: 24 95% 53%;     /* orange-500 */
+    --sidebar-primary-foreground: 222 47% 4%;
+    --sidebar-accent: 222 47% 8%;      /* slightly lighter than bg */
+    --sidebar-accent-foreground: 24 95% 63%; /* orange-400 */
+    --sidebar-border: 24 95% 53% / 0.18;     /* orange-500/18 */
+    --sidebar-ring: 24 95% 53%;
   }
 }

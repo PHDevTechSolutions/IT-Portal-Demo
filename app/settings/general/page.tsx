@@ -113,26 +113,25 @@ function SettingsContent() {
             {/* Main Content */}
             <div className="relative z-10 w-full">
               {/* Header */}
-              <header className="flex h-14 shrink-0 items-center gap-2 px-4 bg-slate-950/80 backdrop-blur-sm border-b border-cyan-500/20">
-                <div className="flex items-center gap-2">
-                  <SidebarTrigger className="-ml-1 text-cyan-400 hover:text-cyan-300" />
-                  <Separator orientation="vertical" className="h-4 bg-cyan-500/30" />
+              <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
+                <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
+                <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
+                <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
+                <div className="flex items-center gap-2 px-4 relative z-10">
+                  <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
+                  <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
                   <Breadcrumb>
                     <BreadcrumbList>
                       <BreadcrumbItem>
-                        <BreadcrumbLink href="#" className="text-slate-400 hover:text-cyan-400">Settings</BreadcrumbLink>
+                        <BreadcrumbLink href="#" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Settings</BreadcrumbLink>
                       </BreadcrumbItem>
-                      <BreadcrumbSeparator className="text-cyan-500/50" />
+                      <BreadcrumbSeparator className="text-slate-700" />
                       <BreadcrumbItem>
-                        <BreadcrumbPage className="text-cyan-400 font-medium uppercase tracking-wider text-sm">
-                          General
-                        </BreadcrumbPage>
+                        <BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">General</BreadcrumbPage>
                       </BreadcrumbItem>
                     </BreadcrumbList>
                   </Breadcrumb>
                 </div>
-                
-                <div className="flex items-center gap-4 ml-auto text-xs">
                   <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-cyan-300/80 font-mono">SYSTEM ONLINE</span>

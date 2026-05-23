@@ -80,7 +80,7 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     progress: null as string | null,
     activity: null as string | null,
   });
-  const [dateRange, setDateRange] = useState<string>("90"); // Default: last 90 days (3 months)
+  const [dateRange, setDateRange] = useState<string>("7"); // Default: last 7 days
 
   const fetchAllData = async () => {
     // Reset loading states
@@ -209,12 +209,9 @@ export function DashboardDataProvider({ children }: { children: React.ReactNode 
     fetchAllData();
   };
 
-  // Refetch when dateRange changes (for progress/activity chart data)
+  // Refetch when dateRange changes — always, not just when data exists
   useEffect(() => {
-    // Only refetch if not initial load (data already exists)
-    if (data.progressRecords.length > 0 || data.activityRecords.length > 0) {
-      fetchAllData();
-    }
+    fetchAllData();
   }, [dateRange]);
 
   return (

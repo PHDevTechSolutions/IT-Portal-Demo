@@ -31,7 +31,6 @@ import { AuditDialog } from "@/components/taskflow/customer-database/audit-dialo
 import { DeleteDialog } from "@/components/taskflow/customer-database/delete";
 import { TransferDialog } from "@/components/taskflow/customer-database/transfer";
 import { OthersDialog } from "@/components/taskflow/customer-database/others-dialog";
-import { SciFiThreeColumn, SciFiPanel } from "@/components/ui/sci-fi/layout";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -76,7 +75,6 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -103,7 +101,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ButtonGroup } from "@/components/ui/button-group";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import { cn } from "@/lib/utils";
 import {
@@ -379,7 +376,7 @@ function DropZone({
       ) : (
         <div className="flex flex-col items-center gap-1.5">
           <Upload className="h-8 w-8 text-muted-foreground" />
-          <p className="text-xs font-semibold text-foreground">
+          <p className="text-xs font-semibold">
             Drag & drop an Excel file
           </p>
           <p className="text-[10px] text-muted-foreground">
@@ -529,17 +526,17 @@ function EditCustomerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-full bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0">
+      <DialogContent className="max-w-5xl w-full bg-[#0d1117] border-none text-slate-100 rounded-none p-0 gap-0">
         {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-slate-800/60">
+        <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-[#0d1117]">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-sm bg-cyan-500/10 border border-cyan-500/30">
-              <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="p-2 rounded-sm bg-orange-500/10 border border-orange-500/30">
+              <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </div>
             <div>
-              <DialogTitle className="text-sm font-bold uppercase tracking-widest text-cyan-400">
+              <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">
                 Edit Customer
               </DialogTitle>
               <p className="text-[11px] text-slate-500 mt-0.5">{form.company_name || "—"}</p>
@@ -552,7 +549,7 @@ function EditCustomerDialog({
 
           {/* Section: Identity */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Company Info</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500/70 mb-2 border-b border-slate-700/50 pb-1">Company Info</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[
                 { label: "Account Ref. No.", key: "account_reference_number" },
@@ -567,7 +564,7 @@ function EditCustomerDialog({
                   <Input
                     value={(form as any)[key] ?? ""}
                     onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
-                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-orange-500/50 rounded-none"
                   />
                 </div>
               ))}
@@ -576,7 +573,7 @@ function EditCustomerDialog({
 
           {/* Section: Contact */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Contact Details</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500/70 mb-2 border-b border-slate-700/50 pb-1">Contact Details</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[
                 { label: "Contact Person", key: "contact_person" },
@@ -589,7 +586,7 @@ function EditCustomerDialog({
                   <Input
                     value={(form as any)[key] ?? ""}
                     onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
-                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-orange-500/50 rounded-none"
                   />
                 </div>
               ))}
@@ -598,7 +595,7 @@ function EditCustomerDialog({
 
           {/* Section: Location */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Location</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500/70 mb-2 border-b border-slate-700/50 pb-1">Location</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[
                 { label: "Address", key: "address" },
@@ -612,7 +609,7 @@ function EditCustomerDialog({
                   <Input
                     value={(form as any)[key] ?? ""}
                     onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
-                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-orange-500/50 rounded-none"
                   />
                 </div>
               ))}
@@ -621,7 +618,7 @@ function EditCustomerDialog({
 
           {/* Section: Status & Remarks */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Status & Notes</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500/70 mb-2 border-b border-slate-700/50 pb-1">Status & Notes</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[
                 { label: "Status", key: "status" },
@@ -633,7 +630,7 @@ function EditCustomerDialog({
                   <Input
                     value={(form as any)[key] ?? ""}
                     onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
-                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-orange-500/50 rounded-none"
                   />
                 </div>
               ))}
@@ -642,7 +639,7 @@ function EditCustomerDialog({
 
           {/* Section: Assignment */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Assignment</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500/70 mb-2 border-b border-slate-700/50 pb-1">Assignment</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[
                 { label: "Reference ID (TSA)", key: "referenceid" },
@@ -655,7 +652,7 @@ function EditCustomerDialog({
                   <Input
                     value={(form as any)[key] ?? ""}
                     onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
-                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-orange-500/50 rounded-none"
                   />
                 </div>
               ))}
@@ -664,7 +661,7 @@ function EditCustomerDialog({
 
           {/* Section: Dates */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">Dates</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500/70 mb-2 border-b border-slate-700/50 pb-1">Dates</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[
                 { label: "Date Created", key: "date_created" },
@@ -678,7 +675,7 @@ function EditCustomerDialog({
                   <Input
                     value={(form as any)[key] ?? ""}
                     onChange={(e) => handleChange(key as keyof Customer, e.target.value)}
-                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/50 rounded-none"
+                    className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-600 focus:border-orange-500/50 rounded-none"
                   />
                 </div>
               ))}
@@ -698,7 +695,7 @@ function EditCustomerDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5"
+            className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5"
           >
             Save Changes
           </Button>
@@ -714,7 +711,7 @@ function StatusBadge({ status }: { status?: string | null }) {
   const s = (status ?? "").trim().toLowerCase();
   if (!s)
     return (
-      <Badge variant="outline" className="text-muted-foreground">
+      <Badge variant="outline" className="rounded-none px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/20 text-orange-500/60 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/10 bg-orange-500/10 transition-colors">
         —
       </Badge>
     );
@@ -722,34 +719,34 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <Badge
         variant="secondary"
-        className="bg-green-500/90 hover:bg-green-600 text-white flex items-center gap-1"
+        className="gap-1 rounded-none px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-green-500/20 text-green-500/60 hover:border-green-500/50 hover:text-green-400 hover:bg-green-500/10 bg-green-500/10 transition-colors"
       >
         <BadgeCheck className="size-3.5" /> Active
       </Badge>
     );
-  if (s === "new client")
+  if (s === "removed")
     return (
       <Badge
         variant="secondary"
-        className="bg-blue-500/90 hover:bg-blue-600 text-white flex items-center gap-1"
+        className="rounded-none gap-1 px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-red-500/20 text-red-500/60 hover:border-red-500/50 hover:text-red-400 hover:bg-red-500/10 bg-red-500/10 transition-colors"
       >
-        <UserCheck className="size-3.5" /> New Client
+        <UserCheck className="size-3.5" /> Removed
       </Badge>
     );
-  if (s === "non-buying")
+  if (s === "subject for transfer")
     return (
       <Badge
         variant="secondary"
-        className="bg-yellow-500/90 hover:bg-yellow-600 text-white flex items-center gap-1"
+        className="rounded-none gap-1 px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-yellow-500/20 text-yellow-500/60 hover:border-yellow-500/50 hover:text-yellow-400 hover:bg-yellow-500/10 bg-yellow-500/10 transition-colors"
       >
-        <AlertTriangle className="size-3.5" /> Non-Buying
+        <AlertTriangle className="size-3.5" /> Subject for Transfer
       </Badge>
     );
-  if (s === "inactive")
+  if (s === "for approval")
     return (
       <Badge
         variant="secondary"
-        className="bg-red-500/90 hover:bg-red-600 text-white flex items-center gap-1"
+        className="rounded-none gap-1 px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-blue-500/20 text-blue-500/60 hover:border-blue-500/50 hover:text-blue-400 hover:bg-blue-500/10 bg-blue-500/10 transition-colors"
       >
         <XCircle className="size-3.5" /> Inactive
       </Badge>
@@ -758,7 +755,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <Badge
         variant="secondary"
-        className="bg-stone-500/90 hover:bg-stone-600 text-white flex items-center gap-1"
+        className="rounded-none px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/20 text-orange-500/60 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/10 bg-orange-500/10 transition-colors"
       >
         <PauseCircle className="size-3.5" /> On Hold
       </Badge>
@@ -767,7 +764,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <Badge
         variant="secondary"
-        className="bg-blue-900 hover:bg-blue-800 text-white flex items-center gap-1"
+        className="rounded-none px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/20 text-orange-500/60 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/10 bg-orange-500/10 transition-colors"
       >
         <Clock className="size-3.5" /> Used
       </Badge>
@@ -776,7 +773,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <Badge
         variant="secondary"
-        className="bg-slate-500/90 hover:bg-slate-600 text-white flex items-center gap-1"
+        className="rounded-none px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/20 text-orange-500/60 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/10 bg-orange-500/10 transition-colors"
       >
         <PauseCircle className="size-3.5" /> Parked
       </Badge>
@@ -785,13 +782,13 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <Badge
         variant="secondary"
-        className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1"
+        className="rounded-none px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/20 text-orange-500/60 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/10 bg-orange-500/10 transition-colors"
       >
         <UserX className="size-3.5" /> {status}
       </Badge>
     );
   return (
-    <Badge variant="outline" className="text-muted-foreground">
+    <Badge variant="outline" className="rounded-none px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/20 text-orange-500/60 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/10 bg-orange-500/10 transition-colors">
       {status}
     </Badge>
   );
@@ -1725,71 +1722,79 @@ export default function AccountPage() {
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <ProtectedPageWrapper>
-      <SidebarProvider className="dark">
+      <SidebarProvider>
         <AppSidebar />
-        <SidebarInset className="bg-slate-950 text-slate-100 flex flex-col h-svh overflow-hidden">
+        <SidebarInset className="bg-[#0a0d14] text-slate-100 flex flex-col h-svh overflow-hidden">
           {/* Header */}
-          <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4 border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-sm">
-            <SidebarTrigger className="-ml-1 text-slate-400 hover:text-cyan-400" />
+          <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
+            <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
+            <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
+            <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
+            <div className="flex items-center gap-2 px-4 relative z-10">
+            <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
             <Button
               variant="ghost"
               size="sm"
               onClick={() => router.push("/dashboard")}
-              className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 text-xs hidden sm:flex"
+              className="text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 text-xs hidden sm:flex font-mono"
             >
               Home
             </Button>
-            <Separator orientation="vertical" className="h-4 bg-slate-700 hidden sm:block" />
+            <Separator orientation="vertical" className="h-4 bg-orange-500/20 hidden sm:block" />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbLink href="#" className="text-slate-500 hover:text-cyan-400 text-xs hidden sm:block">Taskflow</BreadcrumbLink>
+                  <BreadcrumbLink href="#" className="text-slate-500 hover:text-orange-400 text-xs hidden sm:block font-mono uppercase tracking-wider">Taskflow</BreadcrumbLink>
                 </BreadcrumbItem>
-                <BreadcrumbSeparator className="text-slate-600 hidden sm:block" />
+                <BreadcrumbSeparator className="text-slate-700 hidden sm:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-cyan-400 text-xs font-semibold tracking-wide">Customer Database</BreadcrumbPage>
+                  <BreadcrumbPage className="text-orange-400 text-xs font-mono tracking-widest uppercase">Customer Database</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
+            </div>
           </header>
 
-          {/* Page title + toolbar — shrink-0 so they never scroll away */}
-          <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800 space-y-3">
+          {/* Page title + toolbar */}
+          <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800/60 space-y-3">
             {/* Title row */}
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-cyan-400 leading-tight">
+                <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-orange-400 font-mono leading-tight">
                   Customer Database
                 </h1>
-                <p className="text-[11px] text-slate-500 mt-0.5">
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
                   {isFetching ? "Loading…" : (
                     <><span className="font-semibold text-slate-300">{filtered.length}</span> customer{filtered.length !== 1 ? "s" : ""}</>
                   )}
                 </p>
               </div>
-              <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] shrink-0">
+              <Badge variant="outline" className="border-orange-500/30 text-orange-400/70 text-[10px] shrink-0 font-mono">
                 Total: {totalCount}
               </Badge>
             </div>
 
-            {/* Toolbar */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Search */}
-              <div className="relative flex-1 min-w-[160px] max-w-xs">
-                <Search className="absolute left-2 top-2.5 size-3.5 text-slate-500" />
-                <Input
-                  placeholder="Search customers…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-7 h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/50 rounded-none"
-                />
-                {isFiltering && (
-                  <Loader2 className="absolute right-2 top-2.5 size-3.5 animate-spin text-slate-500" />
-                )}
-              </div>
+            {/* Toolbar — left: search + actions | right: pagination */}
+            <div className="flex items-center gap-2 min-w-0">
 
-              {/* Action buttons */}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* ── Left side ── */}
+              <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+
+                {/* Search */}
+                <div className="relative min-w-[160px] max-w-xs">
+                  <Search className="absolute left-2 top-2.5 size-3.5 text-slate-600" />
+                  <Input
+                    placeholder="Search customers…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-7 h-9 text-xs bg-[#0d1117] border-slate-800 text-slate-300 placeholder:text-slate-700 focus:border-orange-500/40 rounded-none font-mono"
+                  />
+                  {isFiltering && (
+                    <Loader2 className="absolute right-2 top-2.5 size-3.5 animate-spin text-slate-500" />
+                  )}
+                </div>
+
+                {/* Action buttons */}
                 <Calendar
                   startDate={startDate}
                   endDate={endDate}
@@ -1801,21 +1806,21 @@ export default function AccountPage() {
                   size="sm"
                   onClick={() => setShowFilterDialog(true)}
                   className={cn(
-                    "bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider",
-                    hasActiveFilters && "border-cyan-500/40 text-cyan-400 bg-cyan-500/5",
+                    "bg-[#0d1117] border-slate-800 text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 text-[11px] uppercase tracking-wider font-mono",
+                    hasActiveFilters && "border-orange-500/40 text-orange-400 bg-orange-500/5",
                   )}
                 >
                   <SlidersHorizontal className="size-4 mr-1" />
                   Filters
                   {hasActiveFilters && (
-                    <span className="ml-1 w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+                    <span className="ml-1 w-1.5 h-1.5 rounded-full bg-orange-400 inline-block" />
                   )}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowImportDialog(true)}
-                  className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                  className="bg-[#0d1117] border-slate-800 text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 text-xs uppercase tracking-wider font-mono text-[11px]"
                 >
                   <Upload className="size-4 mr-1" /> Import
                 </Button>
@@ -1824,7 +1829,7 @@ export default function AccountPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowOthersDialog(true)}
-                  className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                  className="bg-[#0d1117] border-slate-800 text-[11px] text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 uppercase tracking-wider font-mono"
                 >
                   <Settings className="size-4 mr-1" /> Others
                 </Button>
@@ -1834,7 +1839,7 @@ export default function AccountPage() {
                       variant="outline"
                       size="sm"
                       onClick={handleOpenTransferDialog}
-                      className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                      className="bg-[#0d1117] border-slate-800 text-[11px] text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 uppercase tracking-wider font-mono"
                     >
                       <ArrowRight className="size-4 mr-1" /> Transfer
                     </Button>
@@ -1842,7 +1847,7 @@ export default function AccountPage() {
                       size="sm"
                       onClick={handleAutoGenerate}
                       disabled={isGenerating}
-                      className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider border"
+                      className="bg-[#0d1117] text-[11px] border-slate-800 text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 uppercase tracking-wider font-mono border"
                     >
                       <Hash className="size-4 mr-1" />
                       {isGenerating ? "Generating…" : `Auto-ID (${selectedIds.size})`}
@@ -1851,7 +1856,7 @@ export default function AccountPage() {
                       size="sm"
                       variant="destructive"
                       onClick={handleBulkDelete}
-                      className="bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-none h-9 text-xs uppercase tracking-wider border"
+                      className="bg-red-500/10 text-[11px] border-red-500/30 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-none h-9 uppercase tracking-wider border"
                     >
                       Delete ({selectedIds.size})
                     </Button>
@@ -1869,12 +1874,18 @@ export default function AccountPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleReturn}
-                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider"
+                    className="bg-[#0d1117] border-slate-800 text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 text-xs uppercase tracking-wider font-mono"
                   >
                     Return to List
                   </Button>
                 )}
               </div>
+              
+              <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChangeAction={setPage}
+                />
             </div>
           </div>
 
@@ -1882,98 +1893,60 @@ export default function AccountPage() {
           <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-4 pb-3 min-h-0">
             {/* Audit summary bar */}
             {isAuditView && (
-              <div className="shrink-0 flex flex-col gap-2 bg-slate-800/50 rounded-none px-3 py-2 border border-slate-700 text-[12px] mb-2">
-                  <div className="flex justify-between items-center flex-wrap gap-2">
-                    <div
-                      className="font-medium cursor-pointer select-none underline text-red-400"
-                      onClick={() => setShowAuditDialog(true)}
-                    >
-                      🧾 Audit Summary:{" "}
-                      <span className="font-semibold text-red-400">
-                        {audited.length}
-                      </span>{" "}
-                      total issues found
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-end ml-auto">
-                      <ButtonGroup>
-                        <Button
-                          size="sm"
-                          variant={
-                            auditFilter === "missingType"
-                              ? "secondary"
-                              : "outline"
-                          }
-                          className={cn(
-                            "rounded-l-md",
-                            auditFilter === "missingType" &&
-                              "bg-yellow-100 text-yellow-900",
-                          )}
-                          onClick={() =>
-                            setAuditFilter(
-                              auditFilter === "missingType"
-                                ? ""
-                                : "missingType",
-                            )
-                          }
-                        >
-                          ⚠ Missing Type:{" "}
-                          {
-                            audited.filter(
-                              (c) => !c.type_client?.trim() && c.status?.trim(),
-                            ).length
-                          }
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={
-                            auditFilter === "missingStatus"
-                              ? "secondary"
-                              : "outline"
-                          }
-                          className={cn(
-                            auditFilter === "missingStatus" &&
-                              "bg-yellow-100 text-yellow-900",
-                          )}
-                          onClick={() =>
-                            setAuditFilter(
-                              auditFilter === "missingStatus"
-                                ? ""
-                                : "missingStatus",
-                            )
-                          }
-                        >
-                          ⚠ Missing Status:{" "}
-                          {
-                            audited.filter(
-                              (c) => !c.status?.trim() && c.type_client?.trim(),
-                            ).length
-                          }
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={
-                            auditFilter === "duplicates"
-                              ? "secondary"
-                              : "outline"
-                          }
-                          className={cn(
-                            "rounded-r-md",
-                            auditFilter === "duplicates" &&
-                              "bg-red-100 text-red-900",
-                          )}
-                          onClick={() =>
-                            setAuditFilter(
-                              auditFilter === "duplicates" ? "" : "duplicates",
-                            )
-                          }
-                        >
-                          🔁 Duplicates: {Array.from(duplicateIds).length}
-                        </Button>
-                      </ButtonGroup>
-                    </div>
-                  </div>
+              <div className="shrink-0 flex items-center justify-between flex-wrap gap-2 px-3 py-2 mb-2 border border-orange-500/20 bg-orange-500/[0.03]">
+                {/* Label */}
+                <button
+                  className="text-[10px] font-mono uppercase tracking-widest text-orange-400/70 hover:text-orange-400 transition-colors flex items-center gap-1.5"
+                  onClick={() => setShowAuditDialog(true)}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
+                  Audit Active ·{" "}
+                  <span className="text-orange-400 font-bold">{audited.length}</span>{" "}
+                  issues flagged
+                </button>
+
+                {/* Filter pills */}
+                <div className="flex items-center gap-1.5">
+                  {[
+                    {
+                      key: "missingType" as const,
+                      label: "Missing Type",
+                      count: audited.filter((c) => !c.type_client?.trim() && c.status?.trim()).length,
+                      color: "text-amber-400 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10",
+                      activeColor: "bg-amber-500/20 border-amber-500/50 text-amber-300",
+                    },
+                    {
+                      key: "missingStatus" as const,
+                      label: "Missing Status",
+                      count: audited.filter((c) => !c.status?.trim() && c.type_client?.trim()).length,
+                      color: "text-amber-400 border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10",
+                      activeColor: "bg-amber-500/20 border-amber-500/50 text-amber-300",
+                    },
+                    {
+                      key: "duplicates" as const,
+                      label: "Duplicates",
+                      count: Array.from(duplicateIds).length,
+                      color: "text-red-400 border-red-500/30 bg-red-500/5 hover:bg-red-500/10",
+                      activeColor: "bg-red-500/20 border-red-500/50 text-red-300",
+                    },
+                  ].map(({ key, label, count, color, activeColor }) => {
+                    const isActive = auditFilter === key;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setAuditFilter(isActive ? "" : key)}
+                        className={cn(
+                          "px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border transition-colors",
+                          isActive ? activeColor : color,
+                        )}
+                      >
+                        {label}: <span className="font-bold">{count}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
 
               {/* Dialogs */}
               <DeleteDialog
@@ -1992,285 +1965,306 @@ export default function AccountPage() {
                   setIsAuditView(true);
                 }}
               />
+              
 
-              {/* Table — flex-1 so it fills remaining height, overflow-auto for horizontal+vertical scroll */}
-              <div className="flex-1 overflow-auto min-h-0 border border-slate-700/50 rounded-none bg-slate-900/40">
-                  {isFetching ? (
-                    <div className="py-10 text-center flex flex-col items-center gap-2 text-slate-500 text-xs">
-                      <Loader2 className="size-6 animate-spin text-cyan-500" />
-                      <span>Loading customers…</span>
-                    </div>
-                  ) : current.length > 0 ? (
-                    <Table className="whitespace-nowrap text-[12px] min-w-full">
-                      <TableHeader className="bg-slate-800/80 sticky top-0 z-10 border-b border-slate-700/50">
-                        <TableRow>
-                          <TableHead className="w-8 text-center px-2 text-slate-400">
-                            <input
-                              type="checkbox"
-                              checked={selectAll}
-                              onChange={handleSelectAll}
-                            />
+              {/* ── Table ── */}
+              <div className="flex-1 mt-2 overflow-auto min-h-0 border border-orange-500/10 bg-[#0a0d14]">
+                {isFetching ? (
+                  <div className="py-16 flex flex-col items-center gap-3 text-slate-600">
+                    <Loader2 className="size-5 animate-spin text-orange-500/60" />
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-orange-500/40">
+                      Loading records…
+                    </span>
+                  </div>
+                ) : current.length > 0 ? (
+                  <Table className="whitespace-nowrap text-[11px] min-w-full">
+
+                    {/* ── Header ── */}
+                    <TableHeader className="sticky top-0 z-10">
+                      <TableRow className="border-b border-orange-500/20 bg-[#0d1117] hover:bg-[#0d1117]">
+                        {/* Checkbox */}
+                        <TableHead className="w-8 text-center px-2 py-2">
+                          <input
+                            type="checkbox"
+                            checked={selectAll}
+                            onChange={handleSelectAll}
+                            className="accent-orange-500"
+                          />
+                        </TableHead>
+                        {[
+                          { label: "Actions",           w: "w-16"         },
+                          { label: "Status",            w: "min-w-[100px]"},
+                          { label: "Company",           w: "min-w-[180px]"},
+                          { label: "Company Group",     w: "min-w-[120px]"},
+                          { label: "Contact Person",    w: "min-w-[130px]"},
+                          { label: "Contact No.",       w: "min-w-[120px]"},
+                          { label: "Email",             w: "min-w-[180px]"},
+                          { label: "Type Client",       w: "min-w-[100px]"},
+                          { label: "Type",              w: "min-w-[80px]" },
+                          { label: "Industry",          w: "min-w-[80px]" },
+                          { label: "Gender",            w: "min-w-[60px]" },
+                          { label: "Address",           w: "min-w-[200px]"},
+                          { label: "Delivery Address",  w: "min-w-[200px]"},
+                          { label: "Region",            w: "min-w-[100px]"},
+                          { label: "Province",          w: "min-w-[100px]"},
+                          { label: "City",              w: "min-w-[100px]"},
+                          { label: "Remarks",           w: "min-w-[120px]"},
+                          { label: "TSA",               w: "min-w-[120px]"},
+                          { label: "TSM",               w: "min-w-[120px]"},
+                          { label: "Manager",           w: "min-w-[120px]"},
+                          { label: "Transfer To",       w: "min-w-[100px]"},
+                          { label: "Date Created",      w: "min-w-[100px]"},
+                          { label: "Date Updated",      w: "min-w-[100px]"},
+                          { label: "Next Available",    w: "min-w-[100px]"},
+                          { label: "Date Transferred",  w: "min-w-[100px]"},
+                          { label: "Date Approved",     w: "min-w-[100px]"},
+                          { label: "Date Removed",      w: "min-w-[100px]"},
+                        ].map(({ label, w }) => (
+                          <TableHead
+                            key={label}
+                            className={cn(
+                              w,
+                              "py-2 px-3 text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/60 border-r border-orange-500/5 last:border-r-0",
+                            )}
+                          >
+                            {label}
                           </TableHead>
-                          <TableHead className="text-center px-2 text-slate-400">Actions</TableHead>
-                          <TableHead className="min-w-[180px] text-slate-400">Company</TableHead>
-                          <TableHead className="min-w-[120px] text-slate-400">Company Group</TableHead>
-                          <TableHead className="min-w-[130px] text-slate-400">Contact Person</TableHead>
-                          <TableHead className="min-w-[120px] text-slate-400">Contact No.</TableHead>
-                          <TableHead className="min-w-[180px] text-slate-400">Email</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Type Client</TableHead>
-                          <TableHead className="min-w-[80px] text-slate-400">Type</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Status</TableHead>
-                          <TableHead className="min-w-[80px] text-slate-400">Industry</TableHead>
-                          <TableHead className="min-w-[60px] text-slate-400">Gender</TableHead>
-                          <TableHead className="min-w-[200px] text-slate-400">Address</TableHead>
-                          <TableHead className="min-w-[200px] text-slate-400">Delivery Address</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Region</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Province</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">City</TableHead>
-                          <TableHead className="min-w-[120px] text-slate-400">Remarks</TableHead>
-                          <TableHead className="min-w-[120px] text-slate-400">TSA</TableHead>
-                          <TableHead className="min-w-[120px] text-slate-400">TSM</TableHead>
-                          <TableHead className="min-w-[120px] text-slate-400">Manager</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Transfer To</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Date Created</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Date Updated</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Next Available</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Date Transferred</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Date Approved</TableHead>
-                          <TableHead className="min-w-[100px] text-slate-400">Date Removed</TableHead>
-                        </TableRow>
-                      </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
 
-                      <TableBody className="text-[11px]">
-                        {current.map((c) => {
-                          const isMissingType = !c.type_client?.trim();
-                          const isMissingStatus = !c.status?.trim();
-                          const isDuplicate = duplicateIds.has(c.id);
-                          const isSelected = selectedIds.has(c.id);
-                          const isParked =
-                            c.status?.trim().toLowerCase() === "park";
+                    {/* ── Body ── */}
+                    <TableBody>
+                      {current.map((c) => {
+                        const isMissingType   = !c.type_client?.trim();
+                        const isMissingStatus = !c.status?.trim();
+                        const isDuplicate     = duplicateIds.has(c.id);
+                        const isSelected      = selectedIds.has(c.id);
+                        const isParked        = c.status?.trim().toLowerCase() === "park";
 
-                          const renderUserCell = (refId: string | undefined, fallback: string | undefined) => {
-                            const key = (refId ?? "").trim().toLowerCase();
-                            const user = refIdUserMap.get(key);
-                            const label = user?.name || refId || "-";
-                            const isInactive = user && INACTIVE_STATUSES.includes(user.status ?? "");
-                            return (
-                              <span className="flex items-center gap-1 flex-wrap text-slate-300">
-                                {label}
-                                {isInactive && (
-                                  <span className={cn(
-                                    "text-[9px] font-semibold px-1 py-0.5 rounded-full leading-none",
-                                    user?.status === "Terminated" ? "bg-red-900/60 text-red-300"
-                                      : user?.status === "Resigned" ? "bg-orange-900/60 text-orange-300"
-                                      : "bg-slate-700 text-slate-400",
-                                  )}>
-                                    {user?.status}
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          };
-
-                          const fmtDate = (d?: string | null) =>
-                            d ? new Date(d).toLocaleDateString() : "—";
-
+                        const renderUserCell = (refId: string | undefined) => {
+                          const key  = (refId ?? "").trim().toLowerCase();
+                          const user = refIdUserMap.get(key);
+                          const label = user?.name || refId || "—";
+                          const isInactive = user && INACTIVE_STATUSES.includes(user.status ?? "");
                           return (
-                            <TableRow
-                              key={c.id}
-                              className={cn(
-                                "border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors text-slate-300",
-                                isParked && "opacity-50",
-                                isSelected && "bg-cyan-500/5 border-l-2 border-l-cyan-500/50",
-                              )}
-                            >
-                              <TableCell className="text-center px-2">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => toggleSelect(c.id)}
-                                />
-                              </TableCell>
-
-                              <TableCell className="text-center px-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-[11px] px-2 rounded-sm bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400"
-                                  onClick={() => {
-                                    setEditingCustomer(c);
-                                    setShowEditDialog(true);
-                                  }}
-                                >
-                                  Edit
-                                </Button>
-                              </TableCell>
-
-                              {/* Company */}
-                              <TableCell className="font-medium">
-                                <div className={cn(
-                                  "uppercase leading-tight text-slate-200",
-                                  (isDuplicate || isMissingType || isMissingStatus) &&
-                                    "line-through decoration-red-500 decoration-2",
+                            <span className="flex items-center gap-1 flex-wrap">
+                              <span className="text-slate-300">{label}</span>
+                              {isInactive && (
+                                <span className={cn(
+                                  "text-[8px] font-mono font-bold px-1 py-0.5 leading-none uppercase tracking-wider",
+                                  user?.status === "Terminated" ? "bg-red-900/50 text-red-400"
+                                    : user?.status === "Resigned"   ? "bg-orange-900/50 text-orange-400"
+                                    : "bg-slate-700 text-slate-400",
                                 )}>
-                                  {c.company_name || "—"}
-                                </div>
-                                {c.account_reference_number && (
-                                  <div className="text-[10px] text-slate-500 normal-case mt-0.5">
-                                    {c.account_reference_number}
-                                  </div>
-                                )}
-                              </TableCell>
-
-                              {/* Company Group */}
-                              <TableCell className="text-muted-foreground">
-                                {c.company_group || "—"}
-                              </TableCell>
-
-                              {/* Contact Person */}
-                              <TableCell className="capitalize">
-                                {c.contact_person || "—"}
-                              </TableCell>
-
-                              {/* Contact Number */}
-                              <TableCell>
-                                {c.contact_number || "—"}
-                              </TableCell>
-
-                              {/* Email */}
-                              <TableCell className="text-muted-foreground">
-                                {c.email_address || "—"}
-                              </TableCell>
-
-                              {/* Type Client */}
-                              <TableCell>
-                                <span className={isMissingType ? "line-through decoration-red-500 decoration-2" : ""}>
-                                  {c.type_client || "—"}
+                                  {user?.status}
                                 </span>
-                              </TableCell>
-
-                              {/* Type */}
-                              <TableCell className="text-muted-foreground">
-                                {c.type || "—"}
-                              </TableCell>
-
-                              {/* Status */}
-                              <TableCell>
-                                <StatusBadge status={c.status} />
-                              </TableCell>
-
-                              {/* Industry */}
-                              <TableCell className="text-muted-foreground">
-                                {c.industry || "—"}
-                              </TableCell>
-
-                              {/* Gender */}
-                              <TableCell className="text-muted-foreground capitalize">
-                                {c.gender || "—"}
-                              </TableCell>
-
-                              {/* Address */}
-                              <TableCell className="max-w-[200px] whitespace-normal break-words text-muted-foreground">
-                                {c.address || "—"}
-                              </TableCell>
-
-                              {/* Delivery Address */}
-                              <TableCell className="max-w-[200px] whitespace-normal break-words text-muted-foreground">
-                                {c.delivery_address || "—"}
-                              </TableCell>
-
-                              {/* Region */}
-                              <TableCell>{c.region || "—"}</TableCell>
-
-                              {/* Province */}
-                              <TableCell className="text-muted-foreground">
-                                {c.province || "—"}
-                              </TableCell>
-
-                              {/* City */}
-                              <TableCell className="text-muted-foreground">
-                                {c.city || "—"}
-                              </TableCell>
-
-                              {/* Remarks */}
-                              <TableCell className="max-w-[120px] whitespace-normal break-words text-muted-foreground">
-                                {c.remarks || "—"}
-                              </TableCell>
-
-                              {/* TSA */}
-                              <TableCell className="capitalize">
-                                {renderUserCell(c.referenceid, c.referenceid)}
-                              </TableCell>
-
-                              {/* TSM */}
-                              <TableCell className="capitalize">
-                                {renderUserCell(c.tsm, c.tsm)}
-                              </TableCell>
-
-                              {/* Manager */}
-                              <TableCell className="capitalize">
-                                {renderUserCell(c.manager, c.manager)}
-                              </TableCell>
-
-                              {/* Transfer To */}
-                              <TableCell className="text-muted-foreground">
-                                {c.transfer_to || "—"}
-                              </TableCell>
-
-                              {/* Date Created */}
-                              <TableCell className="text-muted-foreground">
-                                {fmtDate(c.date_created)}
-                              </TableCell>
-
-                              {/* Date Updated */}
-                              <TableCell className="text-muted-foreground">
-                                {fmtDate(c.date_updated)}
-                              </TableCell>
-
-                              {/* Next Available */}
-                              <TableCell className="text-muted-foreground">
-                                {fmtDate(c.next_available_date)}
-                              </TableCell>
-
-                              {/* Date Transferred */}
-                              <TableCell className="text-muted-foreground">
-                                {fmtDate(c.date_transferred)}
-                              </TableCell>
-
-                              {/* Date Approved */}
-                              <TableCell className="text-muted-foreground">
-                                {fmtDate(c.date_approved)}
-                              </TableCell>
-
-                              {/* Date Removed */}
-                              <TableCell className="text-muted-foreground">
-                                {fmtDate(c.date_removed)}
-                              </TableCell>
-                            </TableRow>
+                              )}
+                            </span>
                           );
-                        })}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <div className="py-10 text-center text-xs text-slate-500">
-                      No customers found.
-                    </div>
-                  )}
-              </div>
+                        };
 
-              {/* Pagination */}
-              <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-2 pt-2">
-                <p className="text-xs text-slate-500">
-                  Showing{" "}
-                  {displayData.length === 0 ? 0 : (page - 1) * rowsPerPage + 1}–
-                  {Math.min(page * rowsPerPage, displayData.length)} of{" "}
-                  {displayData.length} customers
-                </p>
-                <Pagination
-                  page={page}
-                  totalPages={totalPages}
-                  onPageChangeAction={setPage}
-                />
+                        const fmtDate = (d?: string | null) =>
+                          d ? new Date(d).toLocaleDateString() : "—";
+
+                        const cellBase = "py-2 px-3 border-r border-orange-500/5 last:border-r-0";
+
+                        return (
+                          <TableRow
+                            key={c.id}
+                            className={cn(
+                              "border-b border-orange-500/5 transition-colors",
+                              "hover:bg-orange-500/[0.04]",
+                              isParked  && "opacity-40",
+                              isSelected
+                                ? "bg-orange-500/[0.06] border-l-2 border-l-orange-500/50"
+                                : "border-l-2 border-l-transparent",
+                            )}
+                          >
+                            {/* Checkbox */}
+                            <TableCell className={cn(cellBase, "text-center w-8")}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelect(c.id)}
+                                className="accent-orange-500"
+                              />
+                            </TableCell>
+
+                            {/* Edit */}
+                            <TableCell className={cn(cellBase, "text-center w-16")}>
+                              <button
+                                className="px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/20 text-orange-500/60 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/10 transition-colors"
+                                onClick={() => { setEditingCustomer(c); setShowEditDialog(true); }}
+                              >
+                                Edit
+                              </button>
+                            </TableCell>
+
+                            {/* Status */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] ")} >
+                              <StatusBadge status={c.status}/>
+                            </TableCell>
+
+                            {/* Company */}
+                            <TableCell className={cn(cellBase, "min-w-[180px]")}>
+                              <div className={cn(
+                                "font-mono text-[11px] uppercase leading-tight text-slate-200",
+                                (isDuplicate || isMissingType || isMissingStatus) &&
+                                  "line-through decoration-red-500/70 decoration-2",
+                              )}>
+                                {c.company_name || "—"}
+                              </div>
+                              {c.account_reference_number && (
+                                <div className="text-[9px] font-mono text-orange-500/40 normal-case mt-0.5">
+                                  {c.account_reference_number}
+                                </div>
+                              )}
+                            </TableCell>
+
+                            {/* Company Group */}
+                            <TableCell className={cn(cellBase, "min-w-[120px] text-slate-500 text-[11px]")}>
+                              {c.company_group || "—"}
+                            </TableCell>
+
+                            {/* Contact Person */}
+                            <TableCell className={cn(cellBase, "min-w-[130px] text-slate-300 capitalize")}>
+                              {c.contact_person || "—"}
+                            </TableCell>
+
+                            {/* Contact Number */}
+                            <TableCell className={cn(cellBase, "min-w-[120px] text-slate-400 font-mono")}>
+                              {c.contact_number || "—"}
+                            </TableCell>
+
+                            {/* Email */}
+                            <TableCell className={cn(cellBase, "min-w-[180px] text-slate-500")}>
+                              {c.email_address || "—"}
+                            </TableCell>
+
+                            {/* Type Client */}
+                            <TableCell className={cn(cellBase, "min-w-[100px]")}>
+                              <span className={cn(
+                                "text-slate-300",
+                                isMissingType && "line-through decoration-red-500/70 decoration-2 text-slate-600",
+                              )}>
+                                {c.type_client || "—"}
+                              </span>
+                            </TableCell>
+
+                            {/* Type */}
+                            <TableCell className={cn(cellBase, "min-w-[80px] text-slate-500")}>
+                              {c.type || "—"}
+                            </TableCell>
+
+                            {/* Industry */}
+                            <TableCell className={cn(cellBase, "min-w-[80px] text-slate-500")}>
+                              {c.industry || "—"}
+                            </TableCell>
+
+                            {/* Gender */}
+                            <TableCell className={cn(cellBase, "min-w-[60px] text-slate-500 capitalize")}>
+                              {c.gender || "—"}
+                            </TableCell>
+
+                            {/* Address */}
+                            <TableCell className={cn(cellBase, "min-w-[200px] text-slate-500 whitespace-normal break-words max-w-[200px]")}>
+                              {c.address || "—"}
+                            </TableCell>
+
+                            {/* Delivery Address */}
+                            <TableCell className={cn(cellBase, "min-w-[200px] text-slate-500 whitespace-normal break-words max-w-[200px]")}>
+                              {c.delivery_address || "—"}
+                            </TableCell>
+
+                            {/* Region */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-300")}>
+                              {c.region || "—"}
+                            </TableCell>
+
+                            {/* Province */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500")}>
+                              {c.province || "—"}
+                            </TableCell>
+
+                            {/* City */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500")}>
+                              {c.city || "—"}
+                            </TableCell>
+
+                            {/* Remarks */}
+                            <TableCell className={cn(cellBase, "min-w-[120px] text-slate-500 whitespace-normal break-words max-w-[120px]")}>
+                              {c.remarks || "—"}
+                            </TableCell>
+
+                            {/* TSA */}
+                            <TableCell className={cn(cellBase, "min-w-[120px] capitalize")}>
+                              {renderUserCell(c.referenceid)}
+                            </TableCell>
+
+                            {/* TSM */}
+                            <TableCell className={cn(cellBase, "min-w-[120px] capitalize")}>
+                              {renderUserCell(c.tsm)}
+                            </TableCell>
+
+                            {/* Manager */}
+                            <TableCell className={cn(cellBase, "min-w-[120px] capitalize")}>
+                              {renderUserCell(c.manager)}
+                            </TableCell>
+
+                            {/* Transfer To */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500")}>
+                              {c.transfer_to || "—"}
+                            </TableCell>
+
+                            {/* Date Created */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>
+                              {fmtDate(c.date_created)}
+                            </TableCell>
+
+                            {/* Date Updated */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>
+                              {fmtDate(c.date_updated)}
+                            </TableCell>
+
+                            {/* Next Available */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>
+                              {fmtDate(c.next_available_date)}
+                            </TableCell>
+
+                            {/* Date Transferred */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>
+                              {fmtDate(c.date_transferred)}
+                            </TableCell>
+
+                            {/* Date Approved */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>
+                              {fmtDate(c.date_approved)}
+                            </TableCell>
+
+                            {/* Date Removed */}
+                            <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>
+                              {fmtDate(c.date_removed)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="py-16 flex flex-col items-center gap-3">
+                    <div className="relative p-3 border border-orange-500/20 bg-orange-500/5">
+                      <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-orange-500/40" />
+                      <div className="absolute top-0 right-0 w-2 h-2 border-r border-t border-orange-500/40" />
+                      <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/40" />
+                      <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/40" />
+                      <Search className="size-5 text-orange-500/30" />
+                    </div>
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-orange-500/30">
+                      No records found
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
         </SidebarInset>
@@ -2315,14 +2309,14 @@ export default function AccountPage() {
 
       {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="max-w-lg bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0">
-          <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-slate-800/60">
+        <DialogContent className="max-w-lg bg-[#0d1117] border-none text-slate-100 rounded-none p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-[#0d1117] ">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-sm bg-cyan-500/10 border border-cyan-500/30">
-                <Upload className="w-4 h-4 text-cyan-400" />
+              <div className="p-2 rounded-sm bg-orange-500/10 border border-orange-500/30">
+                <Upload className="w-4 h-4 text-orange-400" />
               </div>
               <div>
-                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-cyan-400">
+                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">
                   Import Customer Database
                 </DialogTitle>
                 <p className="text-[11px] text-slate-500 mt-0.5">Upload an Excel file to import customers</p>
@@ -2331,7 +2325,7 @@ export default function AccountPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="ml-auto h-7 rounded-sm text-[9px] uppercase font-bold text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
+                  className="ml-auto h-7 rounded-sm text-[9px] uppercase font-bold text-slate-400 hover:text-orange-400 hover:bg-orange-500/10"
                   disabled={isImportLoading}
                   onClick={() => {
                     setImportFile(null);
@@ -2506,7 +2500,7 @@ export default function AccountPage() {
               <Button
                 onClick={handleImportUpload}
                 disabled={isImportLoading || !importFile || !importSelectedTSA}
-                className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5 gap-2 uppercase tracking-wider"
+                className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5 gap-2 uppercase tracking-wider"
               >
                 {isImportLoading ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
@@ -2521,15 +2515,15 @@ export default function AccountPage() {
 
       {/* Filter Dialog */}
       <Dialog open={showFilterDialog} onOpenChange={setShowFilterDialog}>
-        <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0">
-          <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-slate-800/60">
+        <DialogContent className="max-w-md bg-[#0d1117] border-none text-slate-100 rounded-none p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-[#0d1117]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-sm bg-slate-700/60 border border-slate-600">
+                <div className="p-2 rounded-sm bg-orange-500/10 border border-orange-500/30">
                   <SlidersHorizontal className="w-4 h-4 text-slate-300" />
                 </div>
                 <div>
-                  <DialogTitle className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                  <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">
                     Filters
                   </DialogTitle>
                   <p className="text-[11px] text-slate-500 mt-0.5">Narrow down the customer list</p>
@@ -2540,7 +2534,7 @@ export default function AccountPage() {
                   variant="ghost"
                   size="sm"
                   onClick={handleResetFilters}
-                  className="h-7 rounded-sm text-[9px] uppercase font-bold text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
+                  className="h-7 rounded-sm text-[9px] uppercase font-bold text-slate-400 hover:text-orange-400 hover:bg-orange-500/10"
                 >
                   <RotateCcw className="mr-1 h-3 w-3" /> Reset
                 </Button>
@@ -2594,7 +2588,7 @@ export default function AccountPage() {
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
                   {typeOptions.map((t) => (
-                    <SelectItem key={t} value={t} className="text-xs capitalize focus:bg-cyan-500/10 focus:text-cyan-400">
+                    <SelectItem key={t} value={t} className="text-xs capitalize focus:bg-orange-500/10 focus:text-orange-400">
                       {t === "all" ? "All Types" : t}
                     </SelectItem>
                   ))}
@@ -2610,8 +2604,8 @@ export default function AccountPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
-                  <SelectItem value="desc" className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400">Latest First</SelectItem>
-                  <SelectItem value="asc" className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400">Oldest First</SelectItem>
+                  <SelectItem value="desc" className="text-xs focus:bg-orange-500/10 focus:text-orange-400">Latest First</SelectItem>
+                  <SelectItem value="asc" className="text-xs focus:bg-orange-500/10 focus:text-orange-400">Oldest First</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2625,7 +2619,7 @@ export default function AccountPage() {
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
                   {[20, 50, 100, 1000, 12000, 30000].map((n) => (
-                    <SelectItem key={n} value={n.toString()} className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400">
+                    <SelectItem key={n} value={n.toString()} className="text-xs focus:bg-orange-500/10 focus:text-orange-400">
                       {n}
                     </SelectItem>
                   ))}
@@ -2637,7 +2631,7 @@ export default function AccountPage() {
           <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex justify-end">
             <Button
               onClick={() => setShowFilterDialog(false)}
-              className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5 uppercase tracking-wider"
+              className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5 uppercase tracking-wider"
             >
               Apply
             </Button>

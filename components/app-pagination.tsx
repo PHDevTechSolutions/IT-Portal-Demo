@@ -2,7 +2,6 @@
 
 import React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { Button } from "@/components/ui/button"
 
 interface PaginationProps {
   page: number
@@ -18,32 +17,33 @@ export const Pagination: React.FC<PaginationProps> = ({
   if (totalPages <= 1) return null
 
   return (
-    <div className="flex items-center gap-2">
-      <Button
-        variant="outline"
-        size="sm"
+    <div className="flex items-center gap-1.5 shrink-0">
+      {/* Prev */}
+      <button
         onClick={() => onPageChangeAction(Math.max(1, page - 1))}
         disabled={page === 1}
-        className="h-8 w-8 p-0 border-cyan-500/30 bg-slate-900/50 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:opacity-30 disabled:hover:bg-transparent rounded-none"
+        className="h-8 w-8 flex items-center justify-center border border-orange-500/20 bg-transparent text-orange-500/50 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-400 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-orange-500/20 transition-colors"
+        aria-label="Previous page"
       >
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      
-      <div className="flex items-center gap-1 px-3 py-1 rounded border border-cyan-500/30 bg-slate-900/50">
-        <span className="text-xs text-cyan-400 font-mono">{page}</span>
-        <span className="text-xs text-cyan-500/50">/</span>
-        <span className="text-xs text-cyan-300/60 font-mono">{totalPages}</span>
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+
+      {/* Page indicator */}
+      <div className="flex items-center gap-1 px-3 h-8 border border-orange-500/20 bg-orange-500/5">
+        <span className="text-[11px] font-mono text-orange-400">{page}</span>
+        <span className="text-[11px] font-mono text-orange-500/30">/</span>
+        <span className="text-[11px] font-mono text-orange-500/40">{totalPages}</span>
       </div>
-      
-      <Button
-        variant="outline"
-        size="sm"
+
+      {/* Next */}
+      <button
         onClick={() => onPageChangeAction(Math.min(totalPages, page + 1))}
         disabled={page === totalPages}
-        className="h-8 w-8 p-0 border-cyan-500/30 bg-slate-900/50 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:opacity-30 disabled:hover:bg-transparent rounded-none"
+        className="h-8 w-8 flex items-center justify-center border border-orange-500/20 bg-transparent text-orange-500/50 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-400 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-orange-500/20 transition-colors"
+        aria-label="Next page"
       >
-        <ChevronRight className="h-4 w-4" />
-      </Button>
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
     </div>
   )
 }

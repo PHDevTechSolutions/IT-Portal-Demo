@@ -359,35 +359,40 @@ export default function ApiTesterPage() {
             {/* Main Content */}
             <div className="relative z-10 w-full">
               {/* Header */}
-              <header className="flex h-16 items-center gap-2 px-4 border-b border-cyan-500/20 bg-slate-900/50 backdrop-blur-sm">
-                <SidebarTrigger className="-ml-1 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20" />
-                <Separator orientation="vertical" className="h-4 bg-cyan-500/30" />
+              <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
+                <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
+                <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
+                <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
+                <div className="flex items-center gap-2 px-4 relative z-10">
+                <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
+                <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
                 <Breadcrumb>
                   <BreadcrumbList>
                     <BreadcrumbItem>
-                      <BreadcrumbLink href="/dashboard" className="text-cyan-400 hover:text-cyan-300">Dashboard</BreadcrumbLink>
+                      <BreadcrumbLink href="/dashboard" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Dashboard</BreadcrumbLink>
                     </BreadcrumbItem>
-                    <BreadcrumbSeparator className="text-cyan-500/50" />
+                    <BreadcrumbSeparator className="text-slate-700" />
                     <BreadcrumbItem>
-                      <BreadcrumbLink href="/settings/general" className="text-cyan-400 hover:text-cyan-300">Settings</BreadcrumbLink>
+                      <BreadcrumbLink href="/settings/general" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Settings</BreadcrumbLink>
                     </BreadcrumbItem>
-                    <BreadcrumbSeparator className="text-cyan-500/50" />
+                    <BreadcrumbSeparator className="text-slate-700" />
                     <BreadcrumbItem>
-                      <BreadcrumbPage className="text-cyan-100">API Tester</BreadcrumbPage>
+                      <BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">API Tester</BreadcrumbPage>
                     </BreadcrumbItem>
                   </BreadcrumbList>
                 </Breadcrumb>
+                </div>
               </header>
 
               {/* Page Title */}
               <div className="px-4 py-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
-                    <Terminal className="h-6 w-6 text-cyan-400" />
+                  <div className="p-2 bg-orange-500/10 border border-orange-500/30">
+                    <Terminal className="h-5 w-5 text-orange-400" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-white tracking-wider">API TESTER</h1>
-                    <p className="text-sm text-cyan-300/60">Test and debug API endpoints with your token</p>
+                    <h1 className="text-sm font-bold text-orange-400 tracking-widest uppercase font-mono">API TESTER</h1>
+                    <p className="text-[11px] text-slate-600 font-mono mt-0.5">Test and debug API endpoints with your token</p>
                   </div>
                 </div>
               </div>

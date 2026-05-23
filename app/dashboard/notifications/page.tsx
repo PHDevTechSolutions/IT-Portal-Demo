@@ -67,428 +67,515 @@ interface TaskNotification {
   isTaskReminder: boolean;
 }
 
+// ─── Icon maps ────────────────────────────────────────────────────────────────
+
 const categoryIcons: Record<string, React.ReactNode> = {
-  backup: <Database className="h-5 w-5" />,
-  customer: <UserPlus className="h-5 w-5" />,
-  activity: <Activity className="h-5 w-5" />,
-  progress: <TrendingUp className="h-5 w-5" />,
-  taskflow: <History className="h-5 w-5" />,
-  system: <Info className="h-5 w-5" />,
-  task: <ListTodo className="h-5 w-5" />,
-  transfer: <AlertTriangle className="h-5 w-5" />,
+  backup:   <Database  className="h-4 w-4" />,
+  customer: <UserPlus  className="h-4 w-4" />,
+  activity: <Activity  className="h-4 w-4" />,
+  progress: <TrendingUp className="h-4 w-4" />,
+  taskflow: <History   className="h-4 w-4" />,
+  system:   <Info      className="h-4 w-4" />,
+  task:     <ListTodo  className="h-4 w-4" />,
+  transfer: <AlertTriangle className="h-4 w-4" />,
 };
 
 const typeIcons: Record<string, React.ReactNode> = {
-  success: <CheckCircle className="h-5 w-5 text-emerald-400" />,
-  error: <AlertTriangle className="h-5 w-5 text-red-400" />,
-  warning: <AlertTriangle className="h-5 w-5 text-yellow-400" />,
-  info: <Info className="h-5 w-5 text-cyan-400" />,
+  success: <CheckCircle  className="h-3.5 w-3.5 text-emerald-400" />,
+  error:   <AlertTriangle className="h-3.5 w-3.5 text-red-400" />,
+  warning: <AlertTriangle className="h-3.5 w-3.5 text-orange-400" />,
+  info:    <Info          className="h-3.5 w-3.5 text-orange-300" />,
 };
 
+// Left-border + subtle bg per type — kept semantic, accent shifted to orange family
 const typeColors: Record<string, string> = {
-  success: "border-l-emerald-500 bg-emerald-500/10",
-  error: "border-l-red-500 bg-red-500/10",
-  warning: "border-l-yellow-500 bg-yellow-500/10",
-  info: "border-l-cyan-500 bg-cyan-500/10",
+  success: "border-l-emerald-500 bg-emerald-500/5",
+  error:   "border-l-red-500    bg-red-500/5",
+  warning: "border-l-orange-500 bg-orange-500/5",
+  info:    "border-l-orange-400 bg-orange-400/5",
 };
+
+// ─── Scan line ────────────────────────────────────────────────────────────────
+
+function ScanLine() {
+  return (
+    <>
+      <style>{`
+        @keyframes scanline {
+          0%   { top: 0%;   opacity: 0; }
+          5%   { opacity: 1; }
+          95%  { opacity: 1; }
+          100% { top: 100%; opacity: 0; }
+        }
+      `}</style>
+      <div
+        className="pointer-events-none absolute left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/30 to-transparent"
+        style={{ animation: "scanline 8s linear infinite", top: 0 }}
+      />
+    </>
+  );
+}
+
+// ─── Status dot ───────────────────────────────────────────────────────────────
+
+function StatusDot({ active = true }: { active?: boolean }) {
+  return (
+    <span
+      className={`inline-block w-1.5 h-1.5 rounded-full ${
+        active
+          ? "bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.8)]"
+          : "bg-slate-600"
+      }`}
+    />
+  );
+}
+
+// ─── Corner brackets ──────────────────────────────────────────────────────────
+
+function CornerBrackets({ color = "orange" }: { color?: "orange" | "slate" }) {
+  const cls =
+    color === "orange" ? "border-orange-500/40" : "border-slate-700/60";
+  return (
+    <>
+      <div className={`absolute top-0 left-0  w-3 h-3 border-l border-t ${cls}`} />
+      <div className={`absolute top-0 right-0 w-3 h-3 border-r border-t ${cls}`} />
+      <div className={`absolute bottom-0 left-0  w-3 h-3 border-l border-b ${cls}`} />
+      <div className={`absolute bottom-0 right-0 w-3 h-3 border-r border-b ${cls}`} />
+    </>
+  );
+}
+
+// ─── Notifications content ────────────────────────────────────────────────────
 
 function NotificationsContent() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, dismissNotification } =
-    useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    dismissNotification,
+  } = useNotifications();
+
   const [filter, setFilter] = useState<"all" | "unread">("all");
-  
-  // Additional notification sources (same as NotificationBell)
   const [taskNotifications, setTaskNotifications] = useState<TaskNotification[]>([]);
   const [customerNotifications, setCustomerNotifications] = useState<any[]>([]);
   const [transferNotifications, setTransferNotifications] = useState<any[]>([]);
   const [userId, setUserId] = useState<string>("");
-  
-  // Get userId from localStorage
+
+  // ── userId from localStorage ──────────────────────────────────────────────
   useEffect(() => {
     const storedUserId = localStorage.getItem("userId");
-    if (storedUserId) {
-      setUserId(storedUserId);
-    }
+    if (storedUserId) setUserId(storedUserId);
   }, []);
-  
-  // Fetch customer notifications
+
+  // ── Customer notifications ────────────────────────────────────────────────
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const response = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/Fetch");
+        const response = await fetch(
+          "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch"
+        );
         const result = await response.json();
-        
+
         if (result.success && result.data) {
           const now = new Date();
           const customers: Customer[] = result.data;
-          
-          const newCustomers = customers.filter((customer) => {
-            if (!customer.date_created) return false;
-            const createdDate = new Date(customer.date_created);
-            const hoursDiff = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
-            return hoursDiff <= 48;
-          });
-          
-          newCustomers.sort((a, b) => {
-            const dateA = new Date(a.date_created || 0).getTime();
-            const dateB = new Date(b.date_created || 0).getTime();
-            return dateB - dateA;
-          });
-          
-          const customerNotifs = newCustomers.map((customer) => ({
-            id: `customer-${customer.id || Math.random()}`,
-            title: "New Customer Added",
-            message: `${customer.company_name || customer.contact_person || "A new customer"} was added to the database`,
-            type: "success" as const,
-            category: "customer" as const,
-            createdAt: customer.date_created || new Date().toISOString(),
-            read: false,
-            isCustomerNotification: true,
-            customerId: customer.id,
-          }));
-          
-          setCustomerNotifications(customerNotifs);
+
+          const newCustomers = customers
+            .filter((c) => {
+              if (!c.date_created) return false;
+              const hrs =
+                (now.getTime() - new Date(c.date_created).getTime()) /
+                (1000 * 60 * 60);
+              return hrs <= 48;
+            })
+            .sort(
+              (a, b) =>
+                new Date(b.date_created || 0).getTime() -
+                new Date(a.date_created || 0).getTime()
+            );
+
+          setCustomerNotifications(
+            newCustomers.map((c) => ({
+              id: `customer-${c.id ?? Math.random()}`,
+              title: "New Customer Added",
+              message: `${
+                c.company_name ?? c.contact_person ?? "A new customer"
+              } was added to the database`,
+              type: "success" as const,
+              category: "customer" as const,
+              createdAt: c.date_created ?? new Date().toISOString(),
+              read: false,
+              isCustomerNotification: true,
+              customerId: c.id,
+            }))
+          );
         }
-      } catch (error) {
-        console.error("Error fetching customers:", error);
+      } catch (err) {
+        console.error("Error fetching customers:", err);
       }
     };
-    
+
     fetchCustomers();
     const interval = setInterval(fetchCustomers, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
-  
-  // Fetch task notifications
+
+  // ── Task notifications ────────────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
-    
-    const tasksRef = collection(db, "user_tasks");
+
     const q = query(
-      tasksRef,
+      collection(db, "user_tasks"),
       where("userId", "==", userId),
       where("status", "==", "pending")
     );
-    
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const now = new Date();
       const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      
-      const taskNotifs: TaskNotification[] = [];
-      
+      const notifs: TaskNotification[] = [];
+
       snapshot.forEach((doc) => {
         const task = doc.data();
         const dueDate = task.dueDate ? new Date(task.dueDate) : null;
-        
-        if (dueDate && dueDate <= sevenDaysFromNow) {
-          const isUrgent = dueDate <= new Date(now.getTime() + 24 * 60 * 60 * 1000);
-          
-          taskNotifs.push({
-            id: `task-${doc.id}`,
-            title: isUrgent ? "Urgent: Task Due Soon!" : "Task Reminder",
-            priority: task.priority || "normal",
-            dueDate: task.dueDate,
-            type: isUrgent ? "error" : "warning",
-            category: "task",
-            message: `"${task.title}" is due ${dueDate.toLocaleDateString()}`,
-            createdAt: task.createdAt || new Date().toISOString(),
-            read: false,
-            isTaskReminder: true,
-          });
-        }
-      });
-      
-      setTaskNotifications(taskNotifs);
-    });
-    
-    return () => unsubscribe();
-  }, [userId]);
-  
-  // Fetch transfer notifications
-  useEffect(() => {
-    if (!userId) return;
-    
-    const transfersRef = collection(db, "transfer_requests");
-    const q = query(
-      transfersRef,
-      where("toUserId", "==", userId),
-      where("status", "==", "pending")
-    );
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const transferNotifs = snapshot.docs.map((doc) => {
-        const transfer = doc.data();
-        return {
-          id: `transfer-${doc.id}`,
-          title: "Transfer Request",
-          message: `${transfer.fromUserName || "Someone"} wants to transfer ${transfer.customerName || "a customer"} to you`,
-          type: "info" as const,
-          category: "transfer" as const,
-          createdAt: transfer.createdAt || new Date().toISOString(),
+        if (!dueDate || dueDate > sevenDaysFromNow) return;
+
+        const isUrgent =
+          dueDate <= new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+        notifs.push({
+          id: `task-${doc.id}`,
+          title: isUrgent ? "Urgent: Task Due Soon!" : "Task Reminder",
+          priority: task.priority ?? "normal",
+          dueDate: task.dueDate,
+          type: isUrgent ? "error" : "warning",
+          category: "task",
+          message: `"${task.title}" is due ${dueDate.toLocaleDateString()}`,
+          createdAt: task.createdAt ?? new Date().toISOString(),
           read: false,
-          isTransferNotification: true,
-          transferId: doc.id,
-        };
+          isTaskReminder: true,
+        });
       });
-      
-      setTransferNotifications(transferNotifs);
+
+      setTaskNotifications(notifs);
     });
-    
+
     return () => unsubscribe();
   }, [userId]);
 
-  // Combine all notifications (same as NotificationBell)
+  // ── Transfer notifications ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!userId) return;
+
+    const q = query(
+      collection(db, "transfer_requests"),
+      where("toUserId", "==", userId),
+      where("status", "==", "pending")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setTransferNotifications(
+        snapshot.docs.map((doc) => {
+          const t = doc.data();
+          return {
+            id: `transfer-${doc.id}`,
+            title: "Transfer Request",
+            message: `${t.fromUserName ?? "Someone"} wants to transfer ${
+              t.customerName ?? "a customer"
+            } to you`,
+            type: "info" as const,
+            category: "transfer" as const,
+            createdAt: t.createdAt ?? new Date().toISOString(),
+            read: false,
+            isTransferNotification: true,
+            transferId: doc.id,
+          };
+        })
+      );
+    });
+
+    return () => unsubscribe();
+  }, [userId]);
+
+  // ── Combine & filter ──────────────────────────────────────────────────────
   const allNotifications = [
     ...transferNotifications,
     ...customerNotifications,
     ...taskNotifications,
     ...notifications,
   ];
-  
-  // Calculate total unread
-  const totalUnreadCount = allNotifications.filter((n) => !n.read).length;
 
-  const filteredNotifications = allNotifications.filter((n) => {
-    if (filter === "unread") return !n.read;
-    return true;
-  });
-
-  // Group notifications by date
-  const groupedNotifications = filteredNotifications.reduce<Record<string, typeof filteredNotifications>>(
-    (groups, notification) => {
-      const date = new Date(notification.createdAt).toDateString();
-      if (!groups[date]) {
-        groups[date] = [];
-      }
-      groups[date].push(notification);
-      return groups;
-    },
-    {}
+  const filteredNotifications = allNotifications.filter((n) =>
+    filter === "unread" ? !n.read : true
   );
 
-  const handleNotificationClick = async (notification: any) => {
-    if (!notification.read) {
-      await markAsRead(notification.id);
-    }
+  const groupedNotifications = filteredNotifications.reduce<
+    Record<string, typeof filteredNotifications>
+  >((groups, n) => {
+    const date = new Date(n.createdAt).toDateString();
+    if (!groups[date]) groups[date] = [];
+    groups[date].push(n);
+    return groups;
+  }, {});
 
-    // Navigate based on category
+  const handleNotificationClick = async (notification: any) => {
+    if (!notification.read) await markAsRead(notification.id);
+
     if (notification.category === "task" || notification.isTaskReminder) {
       window.location.href = "/dashboard/tasks";
-    } else if (notification.category === "customer" || notification.isCustomerNotification) {
+    } else if (
+      notification.category === "customer" ||
+      notification.isCustomerNotification
+    ) {
       window.location.href = "/taskflow/customer-database";
     } else if (notification.isTransferNotification) {
       window.location.href = "/user-management";
     }
   };
 
+  const totalUnread = allNotifications.filter((n) => !n.read).length;
+
   return (
     <ProtectedPageWrapper>
       <AppSidebar />
-      <SidebarInset>
-        <header className="relative flex h-16 shrink-0 items-center gap-2 justify-between bg-slate-950 border-b overflow-hidden">
-          {/* Corner brackets */}
-          <div className="absolute bottom-0 left-0 w-3 h-3 border-l border-b border-cyan-500/50" />
-          <div className="absolute bottom-0 right-0 w-3 h-3 border-r border-b border-cyan-500/50" />
-          {/* Cyan glow line on bottom edge */}
-          <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-          
+      <SidebarInset className="bg-[#0a0d14] text-slate-100 flex flex-col h-svh overflow-hidden">
+
+        {/* ── Header ── */}
+        <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
+          <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
+          <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
+          <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
+
           <div className="flex items-center gap-2 px-4 relative z-10">
-            <SidebarTrigger className="-ml-1 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10" />
-            <Separator orientation="vertical" className="mr-2 h-4 bg-cyan-500/30" />
+            <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
+            <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                  <BreadcrumbLink
+                    href="/dashboard"
+                    className="text-slate-500 hover:text-orange-400 text-xs font-mono uppercase tracking-wider"
+                  >
+                    Dashboard
+                  </BreadcrumbLink>
                 </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbSeparator className="hidden md:block text-slate-700" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Notifications</BreadcrumbPage>
+                  <BreadcrumbPage className="text-orange-400 text-xs font-mono tracking-widest uppercase">
+                    Notifications
+                  </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
-          <div className="flex items-center gap-2 px-4 relative z-10">
+
+          <div className="flex items-center gap-3 px-4 relative z-10">
+            {/* Live indicator */}
+            <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono text-orange-400/70 uppercase tracking-widest">
+              <StatusDot />
+              <span>Live</span>
+            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => markAllAsRead()}
               disabled={unreadCount === 0}
-              className="bg-slate-900/80 border-cyan-500/30 text-cyan-100 hover:bg-cyan-500/10 hover:text-cyan-300 hover:border-cyan-400/50 text-xs uppercase tracking-wider"
+              className="bg-transparent border-orange-500/30 text-orange-400/80 hover:bg-orange-500/10 hover:text-orange-300 hover:border-orange-400/50 text-[10px] font-mono uppercase tracking-widest"
             >
-              <Check className="h-4 w-4 mr-1" />
+              <Check className="h-3.5 w-3.5 mr-1.5" />
               Mark all read
             </Button>
           </div>
         </header>
 
-        {/* Main content */}
-        <div className="flex flex-1 flex-col bg-[#050a14] relative overflow-hidden">
-          {/* Animated background grid */}
-          <div className="absolute inset-0 h-full w-full">
-            <div
-              className="h-full w-full opacity-10"
-              style={{
-                backgroundImage: `
-                  linear-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px),
-                  linear-gradient(90deg, rgba(6, 182, 212, 0.15) 1px, transparent 1px)
-                `,
-                backgroundSize: '50px 50px',
-              }}
-            />
-          </div>
-
-          {/* Floating particles */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {[...Array(15)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-1 h-1 bg-cyan-400/30 rounded-full"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                  animation: `float ${5 + Math.random() * 10}s linear infinite`,
-                  animationDelay: `${Math.random() * 5}s`
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="relative z-10 flex-1 p-4 md:p-6">
-            {/* Filter buttons */}
-            <div className="flex gap-2 mb-4">
-              <Button
-                variant={filter === "all" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter("all")}
-                className={cn(
-                  "text-xs uppercase tracking-wider",
-                  filter === "all"
-                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-400/50 hover:bg-cyan-500/30"
-                    : "bg-slate-900/80 border-cyan-500/30 text-cyan-100 hover:bg-cyan-500/10"
-                )}
-              >
-                All ({notifications.length})
-              </Button>
-              <Button
-                variant={filter === "unread" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter("unread")}
-                className={cn(
-                  "text-xs uppercase tracking-wider",
-                  filter === "unread"
-                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-400/50 hover:bg-cyan-500/30"
-                    : "bg-slate-900/80 border-cyan-500/30 text-cyan-100 hover:bg-cyan-500/10"
-                )}
-              >
-                Unread ({unreadCount})
-              </Button>
+        {/* ── Page title bar ── */}
+        <div className="shrink-0 px-4 sm:px-6 pt-3 pb-2 border-b border-slate-800/60">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative p-2 bg-orange-500/10 border border-orange-500/30">
+                <CornerBrackets color="orange" />
+                <Bell className="w-4 h-4 text-orange-400" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold tracking-widest uppercase text-orange-400 font-mono leading-tight">
+                  Signal Feed
+                </h1>
+                <p className="text-[10px] text-slate-600 font-mono mt-0.5 tracking-wider">
+                  ALERTS · REMINDERS · EVENTS
+                </p>
+              </div>
             </div>
 
-            {/* Notifications list */}
-            <Card className="relative bg-slate-950/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-              {/* Corner brackets */}
-              <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
-              <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
-              <div className="absolute bottom-0 left-0 w-4 h-4 border-l border-b border-cyan-500/50" />
-              <div className="absolute bottom-0 right-0 w-4 h-4 border-r border-b border-cyan-500/50" />
+            <div className="hidden md:flex items-center gap-4 text-[10px] font-mono text-slate-600 uppercase tracking-widest">
+              <div className="flex items-center gap-1.5">
+                <StatusDot active />
+                <span className="text-orange-400/60">Firebase Sync</span>
+              </div>
+              <div className="w-px h-3 bg-slate-700" />
+              <div className="flex items-center gap-1.5">
+                <StatusDot active />
+                <span className="text-orange-400/60">Real-time</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-              <ScrollArea className="h-[calc(100vh-220px)]">
+        {/* ── Body ── */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
+
+          {/* Background grid */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage: `linear-gradient(rgba(251,146,60,0.03) 1px, transparent 1px),
+                                linear-gradient(90deg, rgba(251,146,60,0.03) 1px, transparent 1px)`,
+              backgroundSize: "40px 40px",
+            }}
+          />
+          <ScanLine />
+
+          {/* Content */}
+          <div className="relative z-10 p-4 sm:p-6 flex flex-col gap-4">
+
+            {/* ── Filter bar ── */}
+            <div className="flex items-center gap-2">
+              {(["all", "unread"] as const).map((f) => {
+                const label = f === "all"
+                  ? `All (${allNotifications.length})`
+                  : `Unread (${totalUnread})`;
+                const active = filter === f;
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={cn(
+                      "px-3 py-1 text-[10px] font-mono uppercase tracking-widest border transition-colors",
+                      active
+                        ? "bg-orange-500/15 border-orange-500/40 text-orange-400"
+                        : "bg-transparent border-slate-700/60 text-slate-500 hover:border-orange-500/30 hover:text-orange-400/70"
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Notifications card ── */}
+            <Card className="relative bg-[#0d1117]/90 backdrop-blur-xl border-orange-500/20 overflow-hidden">
+              <CornerBrackets color="orange" />
+
+              <ScrollArea className="h-[calc(100vh-260px)]">
                 {filteredNotifications.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-cyan-100/50">
-                    <Bell className="h-16 w-16 mb-4 opacity-50 text-cyan-400" />
-                    <p className="text-lg text-white/80">No notifications</p>
-                    <p className="text-sm text-white/50">
+                  <div className="flex flex-col items-center justify-center py-24 gap-3">
+                    <div className="relative p-4 bg-orange-500/10 border border-orange-500/20">
+                      <CornerBrackets color="orange" />
+                      <Bell className="h-8 w-8 text-orange-400/40" />
+                    </div>
+                    <p className="text-xs font-mono uppercase tracking-widest text-orange-400/40">
+                      No signals detected
+                    </p>
+                    <p className="text-[10px] text-slate-600 font-mono">
                       {filter === "unread"
-                        ? "No unread notifications"
+                        ? "All signals acknowledged"
                         : "Notifications appear here when events occur"}
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-cyan-500/10">
-                    {Object.entries(groupedNotifications).map(([date, items]) => {
-                      const notificationItems = items as typeof filteredNotifications;
-                      return (
-                        <div key={date}>
-                          <div className="px-4 py-3 bg-slate-900/70 border-b border-cyan-500/20 sticky top-0">
-                            <p className="text-xs font-medium text-cyan-400/80 uppercase tracking-wider">
+                  <div className="divide-y divide-orange-500/10">
+                    {Object.entries(groupedNotifications).map(([date, items]) => (
+                      <div key={date}>
+
+                        {/* Date group header */}
+                        <div className="px-4 py-2 bg-[#0a0d14]/80 border-b border-orange-500/10 sticky top-0 z-10">
+                          <div className="flex items-center gap-2">
+                            <div className="h-px flex-1 bg-gradient-to-r from-orange-500/20 to-transparent" />
+                            <p className="text-[10px] font-mono text-orange-500/50 uppercase tracking-widest shrink-0">
                               {new Date(date).toLocaleDateString(undefined, {
                                 weekday: "long",
                                 month: "long",
                                 day: "numeric",
                               })}
                             </p>
-                          </div>
-                          <div>
-                            {notificationItems.map((notification) => (
-                              <div
-                                key={notification.id}
-                                className={cn(
-                                  "p-4 cursor-pointer transition-colors hover:bg-cyan-500/10 border-l-4",
-                                  typeColors[notification.type],
-                                  !notification.read && "bg-slate-800/50"
-                                )}
-                                onClick={() => handleNotificationClick(notification)}
-                              >
-                                <div className="flex items-start gap-4">
-                                  <div className="mt-0.5 p-2 rounded-lg bg-slate-800/50 border border-cyan-500/20">
-                                    {categoryIcons[notification.category] || (
-                                      <Info className="h-5 w-5 text-cyan-400" />
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      {typeIcons[notification.type]}
-                                      <p className="font-medium text-base truncate text-white">
-                                        {notification.title}
-                                      </p>
-                                    </div>
-                                    <p className="text-sm text-white/70 mb-2">
-                                      {notification.message}
-                                    </p>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs text-cyan-400/60">
-                                        {formatDistanceToNow(
-                                          new Date(notification.createdAt),
-                                          { addSuffix: true }
-                                        )}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                        {!notification.read && (
-                                          <Badge className="text-xs bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                                            New
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 shrink-0 text-cyan-100/60 hover:text-cyan-300 hover:bg-cyan-500/10"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      dismissNotification(notification.id);
-                                    }}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
+                            <div className="h-px flex-1 bg-gradient-to-l from-orange-500/20 to-transparent" />
                           </div>
                         </div>
-                      );
-                    })}
+
+                        {/* Notification rows */}
+                        <div>
+                          {(items as typeof filteredNotifications).map((n) => (
+                            <div
+                              key={n.id}
+                              className={cn(
+                                "px-4 py-3 cursor-pointer transition-colors border-l-2 hover:bg-orange-500/5",
+                                typeColors[n.type],
+                                !n.read && "bg-orange-500/[0.03]"
+                              )}
+                              onClick={() => handleNotificationClick(n)}
+                            >
+                              <div className="flex items-start gap-3">
+
+                                {/* Category icon */}
+                                <div className="mt-0.5 shrink-0 p-1.5 bg-orange-500/10 border border-orange-500/20 text-orange-400/70">
+                                  {categoryIcons[n.category] ?? (
+                                    <Info className="h-4 w-4" />
+                                  )}
+                                </div>
+
+                                {/* Body */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    {typeIcons[n.type]}
+                                    <p className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-200 truncate">
+                                      {n.title}
+                                    </p>
+                                    {!n.read && (
+                                      <Badge className="ml-auto shrink-0 text-[9px] font-mono uppercase tracking-widest bg-orange-500/15 text-orange-400 border border-orange-500/30 px-1.5 py-0">
+                                        New
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-slate-400 leading-snug mb-1.5">
+                                    {n.message}
+                                  </p>
+                                  <span className="text-[10px] font-mono text-orange-500/40">
+                                    {formatDistanceToNow(new Date(n.createdAt), {
+                                      addSuffix: true,
+                                    })}
+                                  </span>
+                                </div>
+
+                                {/* Dismiss */}
+                                <button
+                                  className="shrink-0 mt-0.5 p-1 text-slate-600 hover:text-orange-400 hover:bg-orange-500/10 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    dismissNotification(n.id);
+                                  }}
+                                  aria-label="Dismiss notification"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </ScrollArea>
             </Card>
           </div>
         </div>
+
       </SidebarInset>
     </ProtectedPageWrapper>
   );
 }
+
+// ─── Page wrapper ─────────────────────────────────────────────────────────────
 
 function NotificationsPage() {
   const searchParams = useSearchParams();
@@ -501,18 +588,24 @@ function NotificationsPage() {
     }
   }, [queryUserId, userId, setUserId]);
 
-  return (
-    <NotificationsContent />
-  );
+  return <NotificationsContent />;
 }
+
+// ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function Page() {
   return (
     <UserProvider>
       <FormatProvider>
         <DashboardDataProvider>
-          <SidebarProvider>
-            <Suspense fallback={<div>Loading...</div>}>
+          <SidebarProvider style={{ "--sidebar-width": "16rem" } as React.CSSProperties}>
+            <Suspense
+              fallback={
+                <div className="flex h-screen items-center justify-center bg-[#0a0d14] text-orange-400 font-mono text-xs tracking-widest">
+                  INITIALIZING…
+                </div>
+              }
+            >
               <NotificationsPage />
             </Suspense>
           </SidebarProvider>

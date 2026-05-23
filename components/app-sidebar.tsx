@@ -16,41 +16,25 @@ import { NavMain } from "../components/nav-main";
 import { NavProjects } from "../components/nav-projects";
 import { NavSecondary } from "../components/nav-secondary";
 import { NavUser } from "../components/nav-user";
-import { 
-  BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send, 
+import {
+  BookOpen, Bot, SquareTerminal, Settings2, LifeBuoy, Send,
   Activity, Boxes, TicketCheck, CalendarCheck, FileText, Database,
-  LucideIcon, LayoutDashboard, Users, FolderKanban, Package, 
-  DollarSign, Wallet, UserCircle, UserPlus, BarChart3, PieChart, 
-  FileStack, ListTodo
+  LucideIcon, LayoutDashboard, Users, FolderKanban, Package,
+  DollarSign, Wallet, UserCircle, UserPlus, BarChart3, PieChart,
+  FileStack, ListTodo,
 } from "lucide-react";
 import { getUserPermissions, hasPermission } from "@/lib/utils/permissions";
 
-// Icon mapping
+// ─── Icon map ─────────────────────────────────────────────────────────────────
+
 const ICON_MAP: Record<string, LucideIcon> = {
-  LayoutDashboard,
-  SquareTerminal,
-  Activity,
-  Boxes,
-  TicketCheck,
-  FolderKanban,
-  Users,
-  Package,
-  DollarSign,
-  Wallet,
-  UserCircle,
-  UserPlus,
-  Bot,
-  BookOpen,
-  Settings2,
-  BarChart3,
-  PieChart,
-  FileStack,
-  CalendarCheck,
-  FileText,
-  Database,
-  LifeBuoy,
-  Send,
+  LayoutDashboard, SquareTerminal, Activity, Boxes, TicketCheck,
+  FolderKanban, Users, Package, DollarSign, Wallet, UserCircle,
+  UserPlus, Bot, BookOpen, Settings2, BarChart3, PieChart, FileStack,
+  CalendarCheck, FileText, Database, LifeBuoy, Send,
 };
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SidebarModule {
   key: string;
@@ -58,6 +42,8 @@ interface SidebarModule {
   icon: string;
   items: { title: string; url: string }[];
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
@@ -78,20 +64,15 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
   const [sidebarModules, setSidebarModules] = React.useState<SidebarModule[]>([]);
 
-  // Fetch sidebar modules and user data
   React.useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch sidebar modules
         const modulesRes = await fetch("/api/SidebarModules");
         if (modulesRes.ok) {
           const modulesData = await modulesRes.json();
-          if (modulesData.success) {
-            setSidebarModules(modulesData.modules);
-          }
+          if (modulesData.success) setSidebarModules(modulesData.modules);
         }
 
-        // Fetch user data
         const userRes = await fetch("/api/me", { cache: "no-store" });
         if (userRes.ok) {
           const data = await userRes.json();
@@ -104,26 +85,23 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
             Role: data.role ?? "",
           });
 
-          // Fetch user permissions (skip for Super Admin)
           if (data.email && data.role !== "SuperAdmin") {
             const permissions = await getUserPermissions(data.email);
             setUserPermissions(permissions);
           } else if (data.role === "SuperAdmin") {
-            // Super Admin gets all permissions
             setUserPermissions({
               modules: ["applications", "taskflow", "stash", "help-desk", "cloudflare", "user-accounts", "settings", "acculog"],
-              submodules: ["*"]
+              submodules: ["*"],
             });
           }
         }
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching sidebar data:", error);
       }
     };
     fetchData();
   }, []);
 
-  // Build dynamic sidebar data from fetched modules
   const sidebarData = React.useMemo(() => {
     const navMain: {
       title: string;
@@ -132,23 +110,17 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       isActive?: boolean;
       items: { title: string; url: string; hasAccess: boolean }[];
     }[] = [];
-    
+
     sidebarModules.forEach((module) => {
       const IconComponent = ICON_MAP[module.icon] || SquareTerminal;
-      
-      // Filter items to only those with access
       const accessibleItems = module.items
-        .map((item) => {
-          const permissionKey = `${module.key}:${item.title}`;
-          return {
-            title: item.title,
-            url: item.url,
-            hasAccess: hasPermission(userPermissions, permissionKey)
-          };
-        })
-        .filter((item) => item.hasAccess); // Only keep accessible items
-      
-      // Only add module if it has accessible items
+        .map((item) => ({
+          title: item.title,
+          url: item.url,
+          hasAccess: hasPermission(userPermissions, `${module.key}:${item.title}`),
+        }))
+        .filter((item) => item.hasAccess);
+
       if (accessibleItems.length > 0) {
         navMain.push({
           title: module.title,
@@ -163,70 +135,64 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     return {
       navMain,
       navSecondary: [
-        { 
-          title: "My Tasks", 
-          url: "/dashboard/tasks", 
-          icon: ListTodo,
-          hasAccess: true
-        },
-        { 
-          title: "Support", 
-          url: "/support", 
-          icon: LifeBuoy,
-          hasAccess: true
-        },
-        { 
-          title: "Feedback", 
-          url: "/feedback", 
-          icon: Send,
-          hasAccess: true
-        },
-        { 
-          title: "API Tester", 
-          url: "/settings/api-tester", 
-          icon: SquareTerminal,
-          hasAccess: true
-        },
+        { title: "My Tasks",   url: "/dashboard/tasks",      icon: ListTodo,      hasAccess: true },
+        { title: "Support",    url: "/support",               icon: LifeBuoy,      hasAccess: true },
+        { title: "Feedback",   url: "/feedback",              icon: Send,          hasAccess: true },
+        { title: "API Tester", url: "/settings/api-tester",   icon: SquareTerminal, hasAccess: true },
       ],
       projects: [
-        { 
-          name: "Acculog", 
-          url: "/acculog/activity-logs", 
-          icon: CalendarCheck,
-          hasAccess: hasPermission(userPermissions, "acculog:Activity Logs")
-        },
-        { 
-          name: "Data Management", 
-          url: "/acculog/data-management", 
-          icon: Database,
-          hasAccess: hasPermission(userPermissions, "acculog:Data Management")
-        },
+        { name: "Acculog",         url: "/acculog/activity-logs",    icon: CalendarCheck, hasAccess: hasPermission(userPermissions, "acculog:Activity Logs") },
+        { name: "Data Management", url: "/acculog/data-management",  icon: Database,      hasAccess: hasPermission(userPermissions, "acculog:Data Management") },
       ],
     };
   }, [sidebarModules, userPermissions, pathname]);
 
   return (
-    <Sidebar variant="inset" {...props}>
-      <SidebarHeader>
+    <Sidebar
+      variant="sidebar"
+      className="border-none bg-[#0d1117] text-slate-300"
+      {...props}
+    >
+      {/* ── Header ── */}
+      <SidebarHeader className="bg-[#0d1117] border-b border-orange-500/15 px-3 py-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard" className="flex items-center gap-2">
-                <img src="/xchire-logo.png" className="w-8 h-8" alt="Logo" />
-                <span className="font-medium">IT Portal</span>
+            <SidebarMenuButton size="lg" asChild className="hover:bg-orange-500/10 rounded-none">
+              <Link href="/dashboard" className="flex items-center gap-2.5">
+                {/* Logo with orange glow */}
+                <div className="relative shrink-0">
+                  <div className="absolute inset-0 bg-orange-500/20 blur-sm rounded" />
+                  <img
+                    src="/xchire-logo.png"
+                    className="relative w-7 h-7"
+                    alt="Logo"
+                  />
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-xs font-bold tracking-widest uppercase text-orange-400 font-mono">
+                    IT Portal
+                  </span>
+                  <span className="text-[9px] text-slate-600 tracking-widest uppercase font-mono">
+                    ERP System
+                  </span>
+                </div>
+                {/* Live dot */}
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.8)] shrink-0" />
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent>
+      {/* ── Content ── */}
+      <SidebarContent className="bg-[#0d1117] px-0">
         <NavMain items={sidebarData.navMain} />
         <NavProjects projects={sidebarData.projects} />
         <NavSecondary items={sidebarData.navSecondary} className="mt-auto" />
       </SidebarContent>
 
-      <SidebarFooter>
+      {/* ── Footer ── */}
+      <SidebarFooter className="bg-[#0d1117] border-t border-orange-500/15 px-2 py-2">
         <NavUser
           user={{
             id: userDetails.UserId,

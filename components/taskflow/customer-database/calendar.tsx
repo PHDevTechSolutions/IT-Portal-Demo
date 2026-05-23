@@ -1,17 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { CalendarIcon, X } from "lucide-react"
-import { type DateRange } from "react-day-picker"
+import { CalendarIcon, X, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+import { type DateRange, DayPicker, DayButton, getDefaultClassNames } from "react-day-picker"
 import { format } from "date-fns"
-
-import { Button } from "@/components/ui/button"
-import { Calendar as UiCalendar } from "@/components/ui/calendar"
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 
 interface CalendarProps {
@@ -20,6 +13,49 @@ interface CalendarProps {
     setStartDateAction: (date: string) => void
     setEndDateAction: (date: string) => void
 }
+
+// ─── Dark day button ──────────────────────────────────────────────────────────
+
+function DarkDayButton({
+    className,
+    day,
+    modifiers,
+    ...props
+}: React.ComponentProps<typeof DayButton>) {
+    const ref = React.useRef<HTMLButtonElement>(null)
+    React.useEffect(() => {
+        if (modifiers.focused) ref.current?.focus()
+    }, [modifiers.focused])
+
+    return (
+        <button
+            ref={ref}
+            data-day={day.date.toLocaleDateString()}
+            className={cn(
+                "relative flex aspect-square h-auto w-full min-w-[--cell-size] items-center justify-center",
+                "text-[11px] font-mono transition-colors select-none outline-none",
+                // default
+                "text-slate-300 hover:bg-orange-500/10 hover:text-orange-400",
+                // today
+                modifiers.today && !modifiers.selected && "border border-orange-500/40 text-orange-400 font-bold",
+                // range middle
+                modifiers.range_middle && "!bg-orange-500/10 !text-slate-200",
+                // range start / end / single selected
+                (modifiers.range_start || modifiers.range_end ||
+                    (modifiers.selected && !modifiers.range_middle)) &&
+                    "!bg-orange-600 !text-white hover:!bg-orange-500",
+                // outside month
+                modifiers.outside && "!text-slate-700 hover:!bg-transparent hover:!text-slate-600",
+                // disabled
+                modifiers.disabled && "!text-slate-700 cursor-not-allowed hover:!bg-transparent",
+                className,
+            )}
+            {...props}
+        />
+    )
+}
+
+// ─── Calendar component ───────────────────────────────────────────────────────
 
 export function Calendar({
     startDate,
@@ -51,16 +87,16 @@ export function Calendar({
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
+            {/* ── Trigger ── */}
             <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="sm"
+                <button
                     className={cn(
-                        "h-9 gap-2 text-xs font-normal rounded-none border-slate-600 bg-slate-800 text-slate-300",
-                        "hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors uppercase tracking-wider",
+                        "inline-flex items-center gap-2 h-9 px-3",
+                        "text-[10px] font-mono uppercase tracking-widest",
+                        "border transition-colors",
                         hasRange
-                            ? "text-cyan-400 border-cyan-500/40 bg-cyan-500/5 pr-2"
-                            : "text-slate-300",
+                            ? "border-orange-500/40 bg-orange-500/5 text-orange-400"
+                            : "border-slate-800 bg-[#0d1117] text-slate-400 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-300",
                     )}
                 >
                     <CalendarIcon className="size-3.5 shrink-0" />
@@ -74,7 +110,7 @@ export function Calendar({
                             <span
                                 role="button"
                                 onClick={handleClear}
-                                className="ml-1 rounded-full p-0.5 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+                                className="ml-1 p-0.5 text-slate-500 hover:text-red-400 transition-colors"
                             >
                                 <X className="size-3" />
                             </span>
@@ -82,100 +118,108 @@ export function Calendar({
                     ) : (
                         <span>Date Range</span>
                     )}
-                </Button>
+                </button>
             </PopoverTrigger>
 
+            {/* ── Popover ── */}
             <PopoverContent
-                className="w-auto p-0 rounded-none border border-slate-700 shadow-xl bg-slate-900"
+                className="w-auto p-0 border border-orange-500/20 shadow-2xl bg-[#0a0d14]"
                 align="start"
                 sideOffset={6}
+                style={{ borderRadius: 0 }}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700/60 bg-slate-800/60">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400">
-                        Filter by Date Created
-                    </span>
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-orange-500/10 bg-[#0d1117]">
+                    <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-orange-400">
+                            Filter by Date Created
+                        </span>
+                    </div>
                     {hasRange && (
                         <button
                             onClick={handleClear}
-                            className="text-[10px] text-slate-500 hover:text-red-400 transition-colors flex items-center gap-1 uppercase tracking-wider"
+                            className="text-[9px] font-mono text-slate-600 hover:text-red-400 transition-colors flex items-center gap-1 uppercase tracking-wider"
                         >
                             <X className="size-3" /> Clear
                         </button>
                     )}
                 </div>
 
-                <UiCalendar
+                {/* Calendar grid */}
+                <DayPicker
                     mode="range"
                     selected={range}
                     onSelect={handleSelect}
                     captionLayout="dropdown"
                     numberOfMonths={2}
-                    className="p-3"
+                    showOutsideDays
+                    className="p-3 [--cell-size:2rem]"
                     classNames={{
-                        months: "flex flex-col sm:flex-row gap-4",
-                        month: "space-y-3",
-                        caption: "flex justify-center pt-1 relative items-center gap-1",
+                        months: "flex flex-col sm:flex-row gap-6",
+                        month: "flex flex-col gap-3 w-full",
+                        month_caption: "flex items-center justify-center h-8 relative px-8",
+                        dropdowns: "flex items-center gap-1",
+                        dropdown_root: "relative",
+                        // hide the caption_label — dropdowns replace it
                         caption_label: "hidden",
-                        caption_dropdowns: "flex gap-1",
-                        dropdown:
-                            "text-xs border border-slate-700 rounded-none px-1.5 py-1 bg-slate-800 text-slate-200 focus:outline-none focus:border-cyan-500/50 cursor-pointer",
-                        dropdown_month: "font-medium",
-                        dropdown_year: "font-medium",
-                        nav: "flex items-center gap-1",
-                        nav_button:
-                            "h-7 w-7 bg-transparent p-0 text-slate-500 hover:text-cyan-400 hover:bg-slate-800 rounded-none transition-colors",
-                        nav_button_previous: "absolute left-1",
-                        nav_button_next: "absolute right-1",
+                        dropdown: cn(
+                            "text-[11px] font-mono border border-slate-700 px-2 py-1",
+                            "bg-[#0d1117] text-slate-200 cursor-pointer",
+                            "focus:outline-none focus:border-orange-500/50",
+                        ),
+                        nav: "absolute inset-x-0 top-0 flex items-center justify-between h-8 pointer-events-none",
+                        button_previous: cn(
+                            "pointer-events-auto h-8 w-8 flex items-center justify-center",
+                            "text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 transition-colors",
+                            "aria-disabled:opacity-20 aria-disabled:cursor-not-allowed",
+                        ),
+                        button_next: cn(
+                            "pointer-events-auto h-8 w-8 flex items-center justify-center",
+                            "text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 transition-colors",
+                            "aria-disabled:opacity-20 aria-disabled:cursor-not-allowed",
+                        ),
                         table: "w-full border-collapse",
-                        head_row: "flex",
-                        head_cell:
-                            "text-slate-600 w-9 font-medium text-[11px] text-center uppercase",
-                        row: "flex w-full mt-1",
-                        cell: cn(
-                            "relative h-9 w-9 p-0 text-center text-sm",
-                            "[&:has([aria-selected])]:bg-cyan-500/10",
-                            "first:[&:has([aria-selected])]:rounded-l-none",
-                            "last:[&:has([aria-selected])]:rounded-r-none",
-                            "[&:has([aria-selected].day-range-end)]:rounded-r-none",
-                            "[&:has([aria-selected].day-outside)]:bg-cyan-500/5",
-                            "focus-within:relative focus-within:z-20",
-                        ),
-                        day: cn(
-                            "h-9 w-9 p-0 font-normal text-xs rounded-none text-slate-300",
-                            "hover:bg-slate-800 hover:text-cyan-400 transition-colors",
-                            "aria-selected:opacity-100",
-                        ),
-                        day_range_start: "rounded-l-none",
-                        day_range_end: "day-range-end rounded-r-none",
-                        day_selected:
-                            "bg-cyan-600 text-white hover:bg-cyan-500 hover:text-white focus:bg-cyan-600 focus:text-white rounded-none",
-                        day_today:
-                            "bg-slate-800 text-cyan-400 font-semibold border border-cyan-500/30",
-                        day_outside:
-                            "text-slate-700 aria-selected:bg-cyan-500/5 aria-selected:text-slate-600",
-                        day_disabled: "text-slate-700 cursor-not-allowed",
-                        day_range_middle:
-                            "aria-selected:bg-cyan-500/10 aria-selected:text-slate-200 rounded-none",
-                        day_hidden: "invisible",
+                        weekdays: "flex",
+                        weekday: "flex-1 text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/40 text-center py-1.5",
+                        week: "flex w-full mt-0.5",
+                        day: "relative aspect-square h-full w-full p-0 text-center",
+                        range_start: "",
+                        range_middle: "",
+                        range_end: "",
+                        today: "",
+                        outside: "",
+                        disabled: "",
+                        hidden: "invisible",
+                    }}
+                    components={{
+                        Chevron: ({ orientation }) =>
+                            orientation === "left"
+                                ? <ChevronLeftIcon className="size-3.5" />
+                                : <ChevronRightIcon className="size-3.5" />,
+                        DayButton: DarkDayButton,
                     }}
                 />
 
                 {/* Footer */}
-                <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-700/60 bg-slate-800/60">
-                    <span className="text-[11px] text-slate-500">
+                <div className="flex items-center justify-between px-4 py-2.5 border-t border-orange-500/10 bg-[#0d1117]">
+                    <span className="text-[10px] font-mono text-slate-600">
                         {hasRange
                             ? `${format(range.from!, "MMM d")} – ${format(range.to!, "MMM d, yyyy")}`
                             : "Select a start and end date"}
                     </span>
-                    <Button
-                        size="sm"
+                    <button
                         disabled={!hasRange}
                         onClick={() => setOpen(false)}
-                        className="h-7 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-4 uppercase tracking-wider"
+                        className={cn(
+                            "px-4 py-1 text-[9px] font-mono uppercase tracking-widest border transition-colors",
+                            hasRange
+                                ? "border-orange-500/40 bg-orange-600 text-white hover:bg-orange-500"
+                                : "border-slate-700 text-slate-600 cursor-not-allowed",
+                        )}
                     >
                         Apply
-                    </Button>
+                    </button>
                 </div>
             </PopoverContent>
         </Popover>

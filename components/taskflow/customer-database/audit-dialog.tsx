@@ -271,7 +271,7 @@ function TerminalLine({ line }: { line: LogLine }) {
         : line.type === "error"
           ? "text-red-400"
           : line.type === "cmd"
-            ? "text-cyan-300 font-semibold"
+            ? "text-orange-300 font-semibold"
             : "text-zinc-300";
   const prefix =
     line.type === "cmd"
@@ -582,7 +582,7 @@ export function AuditDialog({
 
   const renderTerminal = () => (
     <div className="flex flex-col h-full gap-4">
-      <div className="rounded-xl overflow-hidden border border-zinc-700 bg-zinc-950 flex flex-col flex-1 min-h-0">
+      <div className="rounded-none overflow-hidden border border-zinc-700 bg-zinc-950 flex flex-col flex-1 min-h-0">
         <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900 border-b border-zinc-800">
           <div className="flex gap-1.5">
             <span className="size-3 rounded-full bg-red-500" />
@@ -620,14 +620,14 @@ export function AuditDialog({
         <Button
           variant="outline"
           onClick={() => onOpenChange(false)}
-          className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+          className="border-orange-500/30 text-orange-400 hover:bg-cyan-500/20 hover:text-orange-300 rounded-none"
         >
           Cancel
         </Button>
         <Button
           disabled={!isDone}
           onClick={() => setPhase("results")}
-          className="gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
+          className="gap-1.5 bg-orange-600 hover:bg-orange-500 text-white border-0 rounded-none"
         >
           View Results <ChevronRight className="size-4" />
         </Button>
@@ -745,7 +745,7 @@ export function AuditDialog({
             variant="ghost"
             size="sm"
             onClick={() => setPhase("terminal")}
-            className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
+            className="text-slate-400 hover:text-orange-400 hover:bg-orange-500/10"
           >
             ← Back to Log
           </Button>
@@ -755,7 +755,7 @@ export function AuditDialog({
               size="sm"
               onClick={() => auditResult && exportAuditDialogToPDF(auditResult, customers)}
               disabled={!auditResult || auditResult.allAffectedCustomers.length === 0}
-              className="gap-1.5 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 rounded-none"
+              className="gap-1.5 border-orange-500/30 text-orange-400 hover:bg-orange-500/10 rounded-none"
             >
               <FileDown className="size-4" />
               Export PDF
@@ -763,14 +763,14 @@ export function AuditDialog({
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+              className="border-orange-500/30 text-orange-400 hover:bg-cyan-500/20 hover:text-orange-300 rounded-none"
             >
               Close
             </Button>
             {hasAnyIssue && (
               <Button
                 onClick={() => setPhase("confirm")}
-                className="gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
+                className="gap-1.5 bg-orange-600 hover:bg-orange-500 text-white border-0 rounded-none"
               >
                 Review & Proceed <ArrowRight className="size-4" />
               </Button>
@@ -861,14 +861,14 @@ export function AuditDialog({
     return (
       <div className="flex flex-col h-full gap-6">
         <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center">
-          <div className="size-16 rounded-sm bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-            <CheckCircle2 className="size-8 text-cyan-400" />
+          <div className="size-16 rounded-sm bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+            <CheckCircle2 className="size-8 text-orange-400" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-base font-bold uppercase tracking-widest text-cyan-100">Send to Customer Audits?</h3>
+            <h3 className="text-base font-bold uppercase tracking-widest text-slate-100">Send to Customer Audits?</h3>
             <p className="text-xs text-slate-400 max-w-sm">
               Flagged records will be sent to the{" "}
-              <span className="font-medium text-cyan-400">
+              <span className="font-medium text-orange-400">
                 Customer Audits
               </span>{" "}
               page for review and resolution.
@@ -925,7 +925,7 @@ export function AuditDialog({
             variant="ghost"
             size="sm"
             onClick={() => setPhase("results")}
-            className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10"
+            className="text-slate-400 hover:text-orange-400 hover:bg-orange-500/10"
           >
             ← Back to Results
           </Button>
@@ -933,13 +933,13 @@ export function AuditDialog({
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 rounded-none"
+              className="border-orange-500/30 text-orange-400 hover:bg-cyan-500/20 hover:text-orange-300 rounded-none"
             >
               Cancel
             </Button>
             <Button
               onClick={handleConfirm}
-              className="gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0 rounded-none"
+              className="gap-1.5 bg-orange-600 hover:bg-orange-500 text-white border-0 rounded-none"
             >
               Confirm — Go to Audits <ArrowRight className="size-4" />
             </Button>
@@ -958,14 +958,14 @@ export function AuditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[82vh] flex flex-col gap-0 p-0 overflow-hidden bg-slate-900/95 border-cyan-500/30 rounded-none">
-        <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-cyan-500/30 bg-cyan-500/10">
+      <DialogContent className="max-w-2xl h-[82vh] flex flex-col gap-0 p-0 overflow-hidden bg-[#0d1117] border-orange-500/30 rounded-none">
+        <DialogHeader className="px-6 pt-5 pb-4 shrink-0 border-b border-orange-500/30 bg-orange-500/10">
           <div className="flex items-center gap-3">
-            <div className="size-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-              <Terminal className="size-4 text-cyan-400" />
+            <div className="size-8 rounded-none bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+              <Terminal className="size-4 text-orange-400" />
             </div>
             <div>
-              <DialogTitle className="text-base text-cyan-100 tracking-wider uppercase">{titles[phase]}</DialogTitle>
+              <DialogTitle className="text-base text-slate-100 tracking-wider uppercase">{titles[phase]}</DialogTitle>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {phase === "terminal" &&
                   "Scanning customer database for issues..."}
@@ -979,7 +979,7 @@ export function AuditDialog({
                 <span
                   key={p}
                   className={cn(
-                    "size-2 rounded-full transition-colors",
+                    "size-2 rounded-none transition-colors",
                     phase === p
                       ? "bg-cyan-400"
                       : i < phaseOrder.indexOf(phase)

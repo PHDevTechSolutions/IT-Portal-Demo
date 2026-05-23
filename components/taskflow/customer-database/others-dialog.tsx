@@ -578,16 +578,16 @@ export function OthersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl bg-slate-900 border-slate-700 text-slate-100 rounded-none p-0 gap-0 max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-5xl bg-[#0d1117] border-none text-slate-100 rounded-none p-0 gap-0 max-h-[90vh] flex flex-col">
 
         {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-slate-800/60 shrink-0">
+        <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-[#0d1117] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-sm bg-cyan-500/10 border border-cyan-500/30">
-              <Upload className="w-4 h-4 text-cyan-400" />
+            <div className="p-2 rounded-sm bg-orange-500/10 border border-orange-500/30">
+              <Upload className="w-4 h-4 text-orange-400" />
             </div>
             <div>
-              <DialogTitle className="text-sm font-bold uppercase tracking-widest text-cyan-400">
+              <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">
                 Upload & Transfer Matched Users
               </DialogTitle>
               <p className="text-[11px] text-slate-500 mt-0.5">
@@ -602,7 +602,7 @@ export function OthersDialog({
 
           {/* Assignment selects */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500/70 mb-2 border-b border-slate-700/50 pb-1">
               Transfer Assignment
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -614,12 +614,12 @@ export function OthersDialog({
                 <div key={label} className="space-y-1">
                   <label className="text-[10px] font-semibold uppercase text-slate-500">{label}</label>
                   <Select value={value} onValueChange={onChange}>
-                    <SelectTrigger className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none focus:border-cyan-500/50">
+                    <SelectTrigger className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none focus:border-orange-500/50">
                       <SelectValue placeholder={placeholder} />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
                       {options.map((u) => (
-                        <SelectItem key={u.value} value={u.value} className="text-xs focus:bg-cyan-500/10 focus:text-cyan-400">
+                        <SelectItem key={u.value} value={u.value} className="text-xs focus:bg-cyan-500/10 focus:text-orange-400">
                           {u.label}
                         </SelectItem>
                       ))}
@@ -632,7 +632,7 @@ export function OthersDialog({
 
           {/* File upload */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-500/70 mb-2 border-b border-slate-700/50 pb-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500/70 mb-2 border-b border-slate-700/50 pb-1">
               Excel File
             </p>
             <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
@@ -645,7 +645,7 @@ export function OthersDialog({
                   if (file) handleFilePick(file);
                 }}
                 disabled={isMatching || isTransferring}
-                className="max-w-sm h-8 text-xs bg-slate-800 border-slate-700 text-slate-300 rounded-none file:text-cyan-400 file:bg-transparent file:border-0 file:text-xs file:font-semibold"
+                className="max-w-sm h-8 text-xs bg-slate-800 border-slate-700 text-slate-300 rounded-none file:text-orange-400 file:bg-transparent file:border-0 file:text-xs file:font-semibold"
               />
               <Button
                 type="button"
@@ -659,7 +659,7 @@ export function OthersDialog({
               </Button>
               {(isMatching || isTransferring) && (
                 <span className="text-xs text-slate-500 flex items-center gap-1.5">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-400" />
                   Processing…
                 </span>
               )}
@@ -679,7 +679,7 @@ export function OthersDialog({
                 { label: "Total Rows", value: uploadRows.length },
                 { label: "Matched", value: matchedRowsCount, color: "text-emerald-400" },
                 { label: "Unmatched", value: unmatchedRowsCount, color: "text-amber-400" },
-                { label: "DB Records", value: matchedRecords.length, color: "text-cyan-400" },
+                { label: "DB Records", value: matchedRecords.length, color: "text-orange-400" },
               ].map(({ label, value, color }) => (
                 <div key={label} className="rounded-none border border-slate-700 bg-slate-800/60 px-3 py-2 text-center min-w-[80px]">
                   <div className={`text-lg font-bold tabular-nums ${color ?? "text-slate-200"}`}>{value}</div>
@@ -731,7 +731,7 @@ export function OthersDialog({
                     return (
                       <TableRow
                         key={row.rowIndex}
-                        className={`border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors text-slate-300 ${isSelected ? "bg-cyan-500/5" : ""}`}
+                        className={`border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors text-slate-300 ${isSelected ? "bg-orange-500/5" : ""}`}
                       >
                         <TableCell className="text-center px-2">
                           <input
@@ -780,7 +780,7 @@ export function OthersDialog({
           <Button
             onClick={handleTransfer}
             disabled={isMatching || isTransferring || selectedRows.length === 0}
-            className="h-8 text-xs rounded-none bg-cyan-600 hover:bg-cyan-500 text-white border-0 px-5 gap-2"
+            className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5 gap-2"
           >
             {isTransferring ? (
               <>

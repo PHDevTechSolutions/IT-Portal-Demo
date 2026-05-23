@@ -28,6 +28,7 @@ const DEFAULT_SIDEBAR_MODULES = [
       { title: "Activity Logs", url: "/taskflow/activity-logs" },
       { title: "Progress Logs", url: "/taskflow/progress-logs" },
       { title: "Endorsed Tickets", url: "/taskflow/csr-inquiries" },
+      { title: "Data Checking", url: "/taskflow/data-checking" },
       { title: "Customize", url: "/taskflow/customize" },
     ],
   },

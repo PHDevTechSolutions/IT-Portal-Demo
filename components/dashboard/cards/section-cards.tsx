@@ -1,242 +1,201 @@
 "use client";
 
-import { IconTrendingUp, IconUsers, IconDatabase, IconActivity, IconChartBar, IconFileAnalytics } from "@tabler/icons-react";
+import {
+  IconTrendingUp, IconUsers, IconDatabase,
+  IconActivity, IconChartBar, IconFileAnalytics,
+} from "@tabler/icons-react";
 import { useDashboardData } from "@/contexts/DashboardDataContext";
 import { Spinner } from "@/components/ui/spinner";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+// ─── Corner brackets ──────────────────────────────────────────────────────────
 
-interface CustomerRecord {
-    _id: string;
-    date_created: string; // ISO string
+function CornerBrackets({ color }: { color: string }) {
+  return (
+    <>
+      <div className={`absolute top-0 left-0 w-2.5 h-2.5 border-l border-t ${color}`} />
+      <div className={`absolute top-0 right-0 w-2.5 h-2.5 border-r border-t ${color}`} />
+      <div className={`absolute bottom-0 left-0 w-2.5 h-2.5 border-l border-b ${color}`} />
+      <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-r border-b ${color}`} />
+    </>
+  );
 }
 
-interface UserRecord {
-    _id: string;
-    createdAt: string; // ISO string
+// ─── Stat card ────────────────────────────────────────────────────────────────
+
+interface StatCardProps {
+  label: string;
+  sublabel?: string;
+  value: React.ReactNode;
+  icon: React.ReactNode;
+  trend?: string;
+  accentClass: string;       // e.g. "border-orange-500/20"
+  bracketClass: string;      // e.g. "border-orange-500/40"
+  iconBgClass: string;       // e.g. "bg-orange-500/10 border-orange-500/30"
+  iconColorClass: string;    // e.g. "text-orange-400"
+  glowClass: string;         // e.g. "from-orange-500/20 to-orange-400/5"
+  trendColorClass: string;   // e.g. "text-orange-400"
 }
 
-interface ProgressRecord {
-    _id: string;
-    referenceid: string;
-    date: string; // ISO string or date string representing the day
-    ramConsumed: number; // amount of RAM consumed in MB or appropriate unit
+function StatCard({
+  label, sublabel, value, icon, trend,
+  accentClass, bracketClass, iconBgClass, iconColorClass, glowClass, trendColorClass,
+}: StatCardProps) {
+  return (
+    <div className="relative group">
+      {/* Glow */}
+      <div className={`absolute -inset-0.5 bg-gradient-to-br ${glowClass} blur opacity-20 group-hover:opacity-40 transition duration-500`} />
+
+      <div className={`relative bg-[#0d1117]/95 border ${accentClass} overflow-hidden h-full p-4`}>
+        <CornerBrackets color={bracketClass} />
+
+        {/* Icon + value row */}
+        <div className="flex items-start gap-3">
+          <div className={`p-2 border ${iconBgClass} shrink-0`}>
+            <div className={iconColorClass}>{icon}</div>
+          </div>
+          <div className="min-w-0">
+            <p className={`text-xl font-bold font-mono tabular-nums ${trendColorClass}`}>
+              {value}
+            </p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-mono mt-0.5 leading-tight">
+              {label}
+            </p>
+            {sublabel && (
+              <p className="text-[9px] text-slate-700 uppercase tracking-widest font-mono mt-0.5">
+                {sublabel}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Trend */}
+        {trend && (
+          <div className={`mt-3 flex items-center gap-1 text-[10px] font-mono ${trendColorClass} opacity-70`}>
+            <IconTrendingUp className="h-3 w-3" />
+            <span>{trend}</span>
+          </div>
+        )}
+
+        {/* Bottom accent line */}
+        <div className={`absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-10 ${trendColorClass}`} />
+      </div>
+    </div>
+  );
 }
 
-interface ActivityRecord {
-    _id: string;
-}
+// ─── Section cards ────────────────────────────────────────────────────────────
 
 export function SectionCards() {
-    const { data, loading, errors } = useDashboardData();
-    const { allRecords, userRecords, progressRecords, activityRecords } = data;
-    const NEW_RECORDS_DAYS = 7;
+  const { data, loading, errors } = useDashboardData();
+  const { allRecords, userRecords, progressRecords, activityRecords } = data;
+  const NEW_RECORDS_DAYS = 7;
 
-    // Calculate new customer records within last 7 days
-    const newRecordsCount = allRecords.filter((record) => {
-        const createdDate = new Date(record.date_created);
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - NEW_RECORDS_DAYS);
-        return createdDate >= cutoffDate;
-    }).length;
+  const newRecordsCount = allRecords.filter((r) => {
+    const d = new Date(r.date_created);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - NEW_RECORDS_DAYS);
+    return d >= cutoff;
+  }).length;
 
-    // Calculate new users within last 7 days
-    const newUsersCount = userRecords.filter((user) => {
-        const createdDate = new Date(user.createdAt);
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - NEW_RECORDS_DAYS);
-        return createdDate >= cutoffDate;
-    }).length;
+  const newUsersCount = userRecords.filter((u) => {
+    const d = new Date(u.createdAt);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - NEW_RECORDS_DAYS);
+    return d >= cutoff;
+  }).length;
 
-    // Dummy trend data (replace with real trend logic)
-    const totalRecordsTrend = "+8.3%";
-    const newRecordsTrend = "+15.2%";
-    const totalUsersTrend = "+5.1%";
-    const newUsersTrend = "+10.7%";
-    const totalProgressTrend = "+6.0%";
-    const totalActivityTrend = "+7.5%";
+  function renderValue(isLoading: boolean, error: string | null, count: number) {
+    if (isLoading) return <Spinner className="h-5 w-5" />;
+    if (error) return <span className="text-red-400 text-sm">ERR</span>;
+    return count.toLocaleString();
+  }
 
-    // Helper to render card title with spinner or error
-    function renderTitle(
-        loading: boolean,
-        error: string | null,
-        count: number
-    ) {
-        if (loading) return <Spinner className="mx-auto" />;
-        if (error) return <span className="text-destructive">{error}</span>;
-        return count.toLocaleString();
-    }
+  const cards: StatCardProps[] = [
+    {
+      label: "Total Records",
+      sublabel: "Customer Database",
+      value: renderValue(loading.records, errors.records, allRecords.length),
+      icon: <IconDatabase className="h-5 w-5" />,
+      trend: "+8.3%",
+      accentClass: "border-orange-500/20",
+      bracketClass: "border-orange-500/40",
+      iconBgClass: "bg-orange-500/10 border-orange-500/30",
+      iconColorClass: "text-orange-400",
+      glowClass: "from-orange-500/20 to-orange-400/5",
+      trendColorClass: "text-orange-400",
+    },
+    {
+      label: "New Records",
+      sublabel: "Last 7 Days",
+      value: renderValue(loading.records, errors.records, newRecordsCount),
+      icon: <IconFileAnalytics className="h-5 w-5" />,
+      trend: "+15.2%",
+      accentClass: "border-orange-400/20",
+      bracketClass: "border-orange-400/40",
+      iconBgClass: "bg-orange-400/10 border-orange-400/30",
+      iconColorClass: "text-orange-300",
+      glowClass: "from-orange-400/20 to-orange-300/5",
+      trendColorClass: "text-orange-300",
+    },
+    {
+      label: "Total Users",
+      sublabel: "Registered Accounts",
+      value: renderValue(loading.users, errors.users, userRecords.length),
+      icon: <IconUsers className="h-5 w-5" />,
+      trend: "+5.1%",
+      accentClass: "border-amber-500/20",
+      bracketClass: "border-amber-500/40",
+      iconBgClass: "bg-amber-500/10 border-amber-500/30",
+      iconColorClass: "text-amber-400",
+      glowClass: "from-amber-500/20 to-amber-400/5",
+      trendColorClass: "text-amber-400",
+    },
+    {
+      label: "New Users",
+      sublabel: "Last 7 Days",
+      value: renderValue(loading.users, errors.users, newUsersCount),
+      icon: <IconUsers className="h-5 w-5" />,
+      trend: "+10.7%",
+      accentClass: "border-yellow-500/20",
+      bracketClass: "border-yellow-500/40",
+      iconBgClass: "bg-yellow-500/10 border-yellow-500/30",
+      iconColorClass: "text-yellow-400",
+      glowClass: "from-yellow-500/20 to-yellow-400/5",
+      trendColorClass: "text-yellow-400",
+    },
+    {
+      label: "Progress Records",
+      sublabel: "Selected Range",
+      value: renderValue(loading.progress, errors.progress, progressRecords.length),
+      icon: <IconChartBar className="h-5 w-5" />,
+      trend: "+6.0%",
+      accentClass: "border-orange-600/20",
+      bracketClass: "border-orange-600/40",
+      iconBgClass: "bg-orange-600/10 border-orange-600/30",
+      iconColorClass: "text-orange-500",
+      glowClass: "from-orange-600/20 to-orange-500/5",
+      trendColorClass: "text-orange-500",
+    },
+    {
+      label: "Activity Records",
+      sublabel: "Selected Range",
+      value: renderValue(loading.activity, errors.activity, activityRecords.length),
+      icon: <IconActivity className="h-5 w-5" />,
+      trend: "+7.5%",
+      accentClass: "border-red-500/20",
+      bracketClass: "border-red-500/40",
+      iconBgClass: "bg-red-500/10 border-red-500/30",
+      iconColorClass: "text-red-400",
+      glowClass: "from-red-500/20 to-red-400/5",
+      trendColorClass: "text-red-400",
+    },
+  ];
 
-    // Compute RAM consumed per referenceid per day
-    const ramConsumptionByRefAndDate: Record<string, Record<string, number>> = {};
-
-    progressRecords.forEach(({ referenceid, date, ramConsumed }) => {
-        if (!ramConsumptionByRefAndDate[referenceid]) {
-            ramConsumptionByRefAndDate[referenceid] = {};
-        }
-        const parsedDate = new Date(date);
-        if (isNaN(parsedDate.getTime())) return; // skip invalid dates
-        const day = parsedDate.toISOString().slice(0, 10);
-        ramConsumptionByRefAndDate[referenceid][day] =
-            (ramConsumptionByRefAndDate[referenceid][day] || 0) + ramConsumed;
-    });
-
-    return (
-        <>
-            <div className="grid grid-cols-1 gap-3 px-4 sm:grid-cols-2 lg:grid-cols-4 lg:px-6">
-                {/* Total Customer Records */}
-                <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl p-4 overflow-hidden h-full">
-                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
-                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
-                        
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
-                                <IconDatabase className="h-6 w-6 text-cyan-400" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.records, errors.records, allRecords.length)}</p>
-                                <p className="text-xs text-white/80 uppercase tracking-wider">Total Records</p>
-                            </div>
-                        </div>
-                        {!loading.records && !errors.records && (
-                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-cyan-400 border-cyan-400/50 bg-cyan-500/10 text-xs">
-                                <IconTrendingUp className="h-3 w-3" />
-                                {totalRecordsTrend}
-                            </Badge>
-                        )}
-                    </Card>
-                </div>
-
-                {/* New Customer Records */}
-                <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-emerald-500/30 rounded-xl p-4 overflow-hidden h-full">
-                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-emerald-500/50" />
-                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-emerald-500/50" />
-                        
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30">
-                                <IconFileAnalytics className="h-6 w-6 text-emerald-400" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.records, errors.records, newRecordsCount)}</p>
-                                <p className="text-xs text-white/80 uppercase tracking-wider">New (7 Days)</p>
-                            </div>
-                        </div>
-                        {!loading.records && !errors.records && (
-                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-emerald-400 border-emerald-400/50 bg-emerald-500/10 text-xs">
-                                <IconTrendingUp className="h-3 w-3" />
-                                {newRecordsTrend}
-                            </Badge>
-                        )}
-                    </Card>
-                </div>
-
-                {/* Total Users */}
-                <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-blue-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-blue-500/30 rounded-xl p-4 overflow-hidden h-full">
-                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-blue-500/50" />
-                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-blue-500/50" />
-                        
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-blue-500/20 border border-blue-500/30">
-                                <IconUsers className="h-6 w-6 text-blue-400" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.users, errors.users, userRecords.length)}</p>
-                                <p className="text-xs text-white/80 uppercase tracking-wider">Total Users</p>
-                            </div>
-                        </div>
-                        {!loading.users && !errors.users && (
-                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-blue-400 border-blue-400/50 bg-blue-500/10 text-xs">
-                                <IconTrendingUp className="h-3 w-3" />
-                                {totalUsersTrend}
-                            </Badge>
-                        )}
-                    </Card>
-                </div>
-
-                {/* New Users */}
-                <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-purple-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-purple-500/30 rounded-xl p-4 overflow-hidden h-full">
-                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-purple-500/50" />
-                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-purple-500/50" />
-                        
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-purple-500/20 border border-purple-500/30">
-                                <IconUsers className="h-6 w-6 text-purple-400" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.users, errors.users, newUsersCount)}</p>
-                                <p className="text-xs text-white/80 uppercase tracking-wider">New Users (7 Days)</p>
-                            </div>
-                        </div>
-                        {!loading.users && !errors.users && (
-                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-purple-400 border-purple-400/50 bg-purple-500/10 text-xs">
-                                <IconTrendingUp className="h-3 w-3" />
-                                {newUsersTrend}
-                            </Badge>
-                        )}
-                    </Card>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 px-4 sm:grid-cols-2 lg:grid-cols-2 lg:px-6">
-                {/* Total Progress Records */}
-                <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-orange-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-orange-500/30 rounded-xl p-4 overflow-hidden h-full">
-                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-orange-500/50" />
-                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-orange-500/50" />
-                        
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-orange-500/20 border border-orange-500/30">
-                                <IconChartBar className="h-6 w-6 text-orange-400" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.progress, errors.progress, progressRecords.length)}</p>
-                                <p className="text-xs text-white/80 uppercase tracking-wider">Progress Records</p>
-                            </div>
-                        </div>
-                        {!loading.progress && !errors.progress && (
-                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-orange-400 border-orange-400/50 bg-orange-500/10 text-xs">
-                                <IconTrendingUp className="h-3 w-3" />
-                                {totalProgressTrend}
-                            </Badge>
-                        )}
-                    </Card>
-                </div>
-
-                {/* Total Activity Records */}
-                <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-                    <Card className="relative bg-slate-900/90 backdrop-blur-xl border-yellow-500/30 rounded-xl p-4 overflow-hidden h-full">
-                        <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-yellow-500/50" />
-                        <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-yellow-500/50" />
-                        
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-yellow-500/20 border border-yellow-500/30">
-                                <IconActivity className="h-6 w-6 text-yellow-400" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold text-white tabular-nums">{renderTitle(loading.activity, errors.activity, activityRecords.length)}</p>
-                                <p className="text-xs text-white/80 uppercase tracking-wider">Activity Records</p>
-                            </div>
-                        </div>
-                        {!loading.activity && !errors.activity && (
-                            <Badge variant="outline" className="mt-3 flex items-center gap-1 w-max text-yellow-400 border-yellow-400/50 bg-yellow-500/10 text-xs">
-                                <IconTrendingUp className="h-3 w-3" />
-                                {totalActivityTrend}
-                            </Badge>
-                        )}
-                    </Card>
-                </div>
-            </div>
-        </>
-    );
+  return (
+    <div className="px-4 sm:px-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {cards.map((card) => (
+        <StatCard key={card.label} {...card} />
+      ))}
+    </div>
+  );
 }

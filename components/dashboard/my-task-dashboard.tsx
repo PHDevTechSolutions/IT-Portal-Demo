@@ -18,7 +18,6 @@ import {
   DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,144 +48,334 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, isPast, isToday, isTomorrow } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
-  Plus,
-  CheckCircle2,
-  Clock,
-  PlayCircle,
-  PauseCircle,
-  XCircle,
-  MoreVertical,
-  Edit,
-  Trash2,
-  ListTodo,
-  Search,
-  Filter,
-  Calendar as CalendarIcon,
-  Tag,
-  AlertTriangle,
-  CheckSquare,
-  Square,
-  ArrowUpCircle,
-  ArrowDownCircle,
-  AlertCircle,
-  LayoutGrid,
-  List,
-  Circle,
-  Pin,
-  Download,
-  Users,
-  UserPlus,
-  UserMinus,
-  X,
+  Plus, CheckCircle2, Clock, PlayCircle, PauseCircle, XCircle,
+  MoreVertical, Edit, Trash2, ListTodo, Search, Filter,
+  Calendar as CalendarIcon, Tag, AlertTriangle, CheckSquare,
+  Square, ArrowUpCircle, ArrowDownCircle, AlertCircle,
+  LayoutGrid, List, Circle, Pin, Download, Users,
+  UserPlus, UserMinus, X, Activity, Zap, Shield, Target,
+  ChevronRight, Terminal, Radio,
 } from "lucide-react";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 
+/* ─── Types ──────────────────────────────────────────────────────── */
+
 interface Subtask {
-  id: string;
-  title: string;
-  completed: boolean;
-  createdAt: any;
-  completedAt?: any;
+  id: string; title: string; completed: boolean;
+  createdAt: any; completedAt?: any;
 }
 
 interface HistoryEntry {
-  id: string;
-  action: string;
-  field?: string;
-  oldValue?: string;
-  newValue?: string;
-  performedBy: string;
-  timestamp: any;
+  id: string; action: string; field?: string;
+  oldValue?: string; newValue?: string;
+  performedBy: string; timestamp: any;
 }
 
 interface Collaborator {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  addedAt: any;
-  addedBy: string;
-  status?: "pending" | "accepted" | "rejected";
-  profilePicture?: string;
-  department?: string;
-  position?: string;
+  id: string; name: string; email: string; role: string;
+  addedAt: any; addedBy: string; status?: "pending" | "accepted" | "rejected";
+  profilePicture?: string; department?: string; position?: string;
 }
 
 interface CollaborationRequest {
-  id: string;
-  taskId: string;
-  taskTitle: string;
-  requesterId: string;
-  requesterName: string;
-  collaboratorId: string; // Changed from email to userId
-  collaboratorName: string;
-  collaboratorEmail: string;
-  role: string;
+  id: string; taskId: string; taskTitle: string;
+  requesterId: string; requesterName: string;
+  collaboratorId: string; collaboratorName: string;
+  collaboratorEmail: string; role: string;
   status: "pending" | "accepted" | "rejected";
-  createdAt: any;
-  message?: string;
+  createdAt: any; message?: string;
 }
 
 interface Task {
-  id: string;
-  userId: string;
-  userName: string;
-  title: string;
+  id: string; userId: string; userName: string; title: string;
   description?: string;
   status: "pending" | "in-progress" | "completed" | "on-hold" | "cancelled";
   priority: "low" | "medium" | "high";
-  dueDate?: Date;
-  category?: string;
-  tags?: string[];
-  notes?: string;
-  subtasks?: Subtask[];
-  history?: HistoryEntry[];
-  pinned?: boolean;
-  createdAt: any;
-  updatedAt: any;
-  completedAt?: any;
-  collaborators?: Collaborator[];
-  isCollaborative?: boolean;
+  dueDate?: Date; category?: string; tags?: string[];
+  notes?: string; subtasks?: Subtask[]; history?: HistoryEntry[];
+  pinned?: boolean; createdAt: any; updatedAt: any; completedAt?: any;
+  collaborators?: Collaborator[]; isCollaborative?: boolean;
 }
 
+interface MyTaskDashboardProps {
+  userId: string; userName: string; userRole?: string;
+}
+
+/* ─── Config ─────────────────────────────────────────────────────── */
+
 const statusConfig = {
-  pending: { icon: Clock, label: "Pending", color: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20", progress: 0 },
-  "in-progress": { icon: PlayCircle, label: "In Progress", color: "bg-blue-500/10 text-blue-600 border-blue-500/20", progress: 50 },
-  completed: { icon: CheckCircle2, label: "Completed", color: "bg-green-500/10 text-green-600 border-green-500/20", progress: 100 },
-  "on-hold": { icon: PauseCircle, label: "On Hold", color: "bg-orange-500/10 text-orange-600 border-orange-500/20", progress: 25 },
-  cancelled: { icon: XCircle, label: "Cancelled", color: "bg-red-500/10 text-red-600 border-red-500/20", progress: 0 },
+  pending:     { icon: Clock,        label: "Pending",     color: "text-amber-400",   bg: "bg-amber-500/10 border-amber-500/20",   bar: "#f59e0b" },
+  "in-progress":{ icon: PlayCircle,  label: "In Progress", color: "text-orange-400",  bg: "bg-orange-500/10 border-orange-500/20", bar: "#f97316" },
+  completed:   { icon: CheckCircle2, label: "Completed",   color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20",bar: "#10b981" },
+  "on-hold":   { icon: PauseCircle,  label: "On Hold",     color: "text-slate-400",   bg: "bg-slate-500/10 border-slate-500/20",   bar: "#64748b" },
+  cancelled:   { icon: XCircle,      label: "Cancelled",   color: "text-red-400",     bg: "bg-red-500/10 border-red-500/20",       bar: "#ef4444" },
 };
 
 const priorityConfig = {
-  low: { icon: ArrowDownCircle, color: "text-blue-500", bgColor: "bg-blue-500/10", label: "Low" },
-  medium: { icon: AlertCircle, color: "text-yellow-500", bgColor: "bg-yellow-500/10", label: "Medium" },
-  high: { icon: ArrowUpCircle, color: "text-red-500", bgColor: "bg-red-500/10", label: "High" },
+  low:    { icon: ArrowDownCircle, color: "text-sky-400",    bg: "bg-sky-500/10",    label: "LOW",    accent: "#38bdf8" },
+  medium: { icon: AlertCircle,     color: "text-amber-400",  bg: "bg-amber-500/10",  label: "MEDIUM", accent: "#f59e0b" },
+  high:   { icon: ArrowUpCircle,   color: "text-red-400",    bg: "bg-red-500/10",    label: "HIGH",   accent: "#ef4444" },
 };
 
 const categories = [
-  "Development",
-  "Design",
-  "Meeting",
-  "Research",
-  "Documentation",
-  "Testing",
-  "Bug Fix",
-  "Feature",
-  "Other",
+  "Development","Design","Meeting","Research",
+  "Documentation","Testing","Bug Fix","Feature","Other",
 ];
 
-interface MyTaskDashboardProps {
-  userId: string;
-  userName: string;
-  userRole?: string;
+/* ─── Small UI helpers ───────────────────────────────────────────── */
+
+function Corner({ pos }: { pos: "tl"|"tr"|"bl"|"br" }) {
+  const cls = {
+    tl: "top-0 left-0 border-l border-t",
+    tr: "top-0 right-0 border-r border-t",
+    bl: "bottom-0 left-0 border-l border-b",
+    br: "bottom-0 right-0 border-r border-b",
+  }[pos];
+  return <div className={`absolute w-3 h-3 ${cls} border-orange-500/40`} />;
 }
+
+function Panel({ children, className = "", glow = false }: {
+  children: React.ReactNode; className?: string; glow?: boolean;
+}) {
+  return (
+    <div className={`relative bg-[#0d1117]/90 border border-orange-500/15 overflow-hidden ${className}`}>
+      <Corner pos="tl" /><Corner pos="tr" /><Corner pos="bl" /><Corner pos="br" />
+      {glow && (
+        <div className="pointer-events-none absolute -inset-px rounded-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+          style={{ boxShadow: "inset 0 0 40px rgba(251,146,60,0.04)" }} />
+      )}
+      {children}
+    </div>
+  );
+}
+
+function StatTile({ label, value, icon: Icon, accent, sub }: {
+  label: string; value: number; icon: any; accent: string; sub?: string;
+}) {
+  return (
+    <Panel className="group px-4 py-3 flex items-center gap-3">
+      <div className="shrink-0 w-8 h-8 flex items-center justify-center border border-orange-500/20 bg-orange-500/5">
+        <Icon size={14} style={{ color: accent }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-mono uppercase tracking-widest text-slate-600">{label}</p>
+        <p className="text-xl font-bold tabular-nums text-slate-100 leading-none mt-0.5">{value}</p>
+        {sub && <p className="text-[9px] text-slate-700 font-mono mt-0.5">{sub}</p>}
+      </div>
+      <div className="ml-auto w-px self-stretch" style={{ background: accent, opacity: 0.15 }} />
+    </Panel>
+  );
+}
+
+function StatusBadge({ status }: { status: Task["status"] }) {
+  const c = statusConfig[status];
+  const Icon = c.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border ${c.bg} ${c.color}`}>
+      <Icon size={9} /> {c.label}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: Task["priority"] }) {
+  const c = priorityConfig[priority];
+  const Icon = c.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border border-current/20 ${c.bg} ${c.color}`}>
+      <Icon size={9} /> {c.label}
+    </span>
+  );
+}
+
+function SectionHeader({ label, count, icon: Icon, color = "text-orange-400" }: {
+  label: string; count: number; icon: any; color?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-orange-500/10 bg-[#0a0d14]/60">
+      <div className="w-px h-4 bg-orange-500/40" />
+      <Icon size={12} className={color} />
+      <span className={`text-[10px] font-mono font-bold uppercase tracking-widest ${color}`}>{label}</span>
+      <span className="ml-auto text-[10px] font-mono text-slate-600">[{count}]</span>
+    </div>
+  );
+}
+
+/* ─── Task Card ──────────────────────────────────────────────────── */
+
+function TaskCard({ task, isSelected, onSelect, onView, onEdit, onDelete, onPin, onCollaborate, canEdit, isOwner }: {
+  task: Task; isSelected: boolean;
+  onSelect: () => void; onView: () => void; onEdit: () => void;
+  onDelete: () => void; onPin: () => void; onCollaborate: () => void;
+  canEdit: boolean; isOwner: boolean;
+}) {
+  const dueStatus = getDueDateStatus(task.dueDate, task.status);
+  const subtasksDone = task.subtasks?.filter(s => s.completed).length ?? 0;
+  const subtasksTotal = task.subtasks?.length ?? 0;
+
+  return (
+    <div
+      onClick={onView}
+      className={cn(
+        "group relative border cursor-pointer transition-all duration-150 overflow-hidden",
+        "bg-[#0d1117]/60 hover:bg-[#0d1117]/90 border-orange-500/10 hover:border-orange-500/25",
+        isSelected && "border-orange-500/50 bg-orange-500/5",
+        task.pinned && "border-amber-500/30 bg-amber-500/5",
+        task.priority === "high" && task.status !== "completed" && "border-l-2 border-l-red-500/60",
+      )}
+    >
+      {/* Priority bar top */}
+      <div className="absolute top-0 left-0 right-0 h-px"
+        style={{ background: priorityConfig[task.priority].accent, opacity: 0.3 }} />
+
+      <div className="flex items-start gap-2.5 p-3">
+        {/* Select checkbox */}
+        <div onClick={e => { e.stopPropagation(); onSelect(); }} className="mt-0.5 shrink-0">
+          {isSelected
+            ? <CheckSquare size={14} className="text-orange-400" />
+            : <Square size={14} className="text-slate-700 group-hover:text-slate-500 transition-colors" />
+          }
+        </div>
+
+        <div className="flex-1 min-w-0">
+          {/* Title row */}
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {task.pinned && <Pin size={10} className="text-amber-400 fill-amber-400 shrink-0" />}
+                {task.isCollaborative && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wide border border-sky-500/30 text-sky-400 bg-sky-500/10 px-1.5 py-0.5">
+                    <Users size={8} /> TEAM
+                  </span>
+                )}
+                <p className={cn(
+                  "text-sm font-semibold text-slate-200 leading-snug truncate",
+                  task.status === "completed" && "line-through text-slate-500"
+                )}>
+                  {task.title}
+                </p>
+              </div>
+              {task.description && (
+                <p className="text-[11px] text-slate-500 mt-1 line-clamp-1 font-mono">{task.description}</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  onClick={e => e.stopPropagation()}
+                  className="shrink-0 w-6 h-6 flex items-center justify-center border border-orange-500/0 hover:border-orange-500/30 hover:bg-orange-500/10 transition-all opacity-0 group-hover:opacity-100 text-slate-500 hover:text-orange-400"
+                >
+                  <MoreVertical size={12} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-[#0d1117] border-orange-500/20 text-slate-300 min-w-[140px]">
+                {canEdit && (
+                  <DropdownMenuItem onClick={e => { e.stopPropagation(); onEdit(); }}
+                    className="text-[11px] font-mono hover:bg-orange-500/10 hover:text-orange-400 focus:bg-orange-500/10 focus:text-orange-400">
+                    <Edit size={11} className="mr-2" /> Edit
+                  </DropdownMenuItem>
+                )}
+                {isOwner && (
+                  <DropdownMenuItem onClick={e => { e.stopPropagation(); onCollaborate(); }}
+                    className="text-[11px] font-mono hover:bg-orange-500/10 hover:text-orange-400 focus:bg-orange-500/10 focus:text-orange-400">
+                    <UserPlus size={11} className="mr-2" /> Collaborate
+                  </DropdownMenuItem>
+                )}
+                {canEdit && (
+                  <DropdownMenuItem onClick={e => { e.stopPropagation(); onPin(); }}
+                    className="text-[11px] font-mono hover:bg-orange-500/10 hover:text-orange-400 focus:bg-orange-500/10 focus:text-orange-400">
+                    <Pin size={11} className={cn("mr-2", task.pinned && "fill-current")} />
+                    {task.pinned ? "Unpin" : "Pin"}
+                  </DropdownMenuItem>
+                )}
+                {canEdit && <DropdownMenuSeparator className="bg-orange-500/10" />}
+                {canEdit && (
+                  <DropdownMenuItem onClick={e => { e.stopPropagation(); onDelete(); }}
+                    className="text-[11px] font-mono text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 focus:text-red-400">
+                    <Trash2 size={11} className="mr-2" /> Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Badges */}
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            <StatusBadge status={task.status} />
+            <PriorityBadge priority={task.priority} />
+            {task.category && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-slate-700/60 text-slate-500 bg-slate-800/40">
+                <Tag size={8} /> {task.category}
+              </span>
+            )}
+            {task.dueDate && (
+              <span className={cn(
+                "inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono border",
+                dueStatus
+                  ? dueStatus.label === "Overdue"
+                    ? "text-red-400 border-red-500/30 bg-red-500/10"
+                    : dueStatus.label === "Due Today"
+                    ? "text-orange-400 border-orange-500/30 bg-orange-500/10"
+                    : "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                  : "text-slate-600 border-slate-700/40 bg-slate-800/30"
+              )}>
+                <CalendarIcon size={8} />
+                {dueStatus?.label ?? format(task.dueDate, "MMM d")}
+              </span>
+            )}
+          </div>
+
+          {/* Subtask progress */}
+          {subtasksTotal > 0 && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 h-0.5 bg-slate-800 overflow-hidden">
+                <div className="h-full bg-orange-500/60 transition-all"
+                  style={{ width: `${Math.round((subtasksDone / subtasksTotal) * 100)}%` }} />
+              </div>
+              <span className="text-[9px] font-mono text-slate-600 tabular-nums shrink-0">
+                {subtasksDone}/{subtasksTotal}
+              </span>
+            </div>
+          )}
+
+          {/* Tags */}
+          {task.tags && task.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {task.tags.map(tag => (
+                <span key={tag} className="text-[9px] font-mono text-orange-500/50">#{tag}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Due date helper ────────────────────────────────────────────── */
+
+function getDueDateStatus(dueDate?: Date, taskStatus?: string) {
+  if (!dueDate || taskStatus === "completed") return null;
+  if (isPast(dueDate) && !isToday(dueDate)) return { label: "Overdue" };
+  if (isToday(dueDate)) return { label: "Due Today" };
+  if (isTomorrow(dueDate)) return { label: "Due Tomorrow" };
+  return null;
+}
+
+/* ─── Ops Input / Textarea ───────────────────────────────────────── */
+
+const opsInput = "w-full bg-[#0a0d14] border border-orange-500/20 text-slate-300 placeholder:text-slate-700 font-mono text-xs px-3 py-2 focus:outline-none focus:border-orange-500/50 focus:ring-0 rounded-none";
+const opsTextarea = `${opsInput} resize-none`;
+const opsLabel = "text-[10px] font-mono font-bold uppercase tracking-widest text-slate-600";
+
+/* ─── Main Component ─────────────────────────────────────────────── */
 
 export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -217,15 +406,14 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [showOverdueOnly, setShowOverdueOnly] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [activeTab, setActiveTab] = useState<"mine" | "collab">("mine");
 
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
 
-  // State for enhanced collaborator data
   const [enhancedCollaborators, setEnhancedCollaborators] = useState<Map<string, Collaborator>>(new Map());
   const [viewTaskEnhancedCollaborators, setViewTaskEnhancedCollaborators] = useState<Collaborator[]>([]);
   const [isCollaborationDialogOpen, setIsCollaborationDialogOpen] = useState(false);
-  const [collaboratorEmail, setCollaboratorEmail] = useState("");
   const [collaboratorRole, setCollaboratorRole] = useState("viewer");
   const [collaboratingTask, setCollaboratingTask] = useState<Task | null>(null);
   const [collaborationMessage, setCollaborationMessage] = useState("");
@@ -235,2517 +423,951 @@ export function MyTaskDashboard({ userId, userName, userRole }: MyTaskDashboardP
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
+  /* ── Firestore listeners ── */
+
   useEffect(() => {
     if (!userId) return;
-
     const tasksRef = collection(db, "user_tasks");
-    
-    // Super Admin can see all tasks, regular users see their own + collaborative tasks
-    const q = userRole === "SuperAdmin" 
-      ? query(tasksRef) // No where clause for Super Admin
-      : query(tasksRef, 
-          where("userId", "==", userId) // User's own tasks
-        ); // We'll filter collaborative tasks client-side for now
+    const q = userRole === "SuperAdmin"
+      ? query(tasksRef)
+      : query(tasksRef, where("userId", "==", userId));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tasksData: Task[] = [];
       snapshot.forEach((doc) => {
-        const data = doc.data();
-        tasksData.push({
-          id: doc.id,
-          ...data,
-          dueDate: data.dueDate?.toDate?.(),
-          createdAt: data.createdAt?.toDate?.(),
-          updatedAt: data.updatedAt?.toDate?.(),
-          completedAt: data.completedAt?.toDate?.(),
-        } as Task);
+        const d = doc.data();
+        tasksData.push({ id: doc.id, ...d, dueDate: d.dueDate?.toDate?.(), createdAt: d.createdAt?.toDate?.(), updatedAt: d.updatedAt?.toDate?.(), completedAt: d.completedAt?.toDate?.() } as Task);
       });
-      
-      // For non-Super Admin, also fetch collaborative tasks
       if (userRole !== "SuperAdmin") {
-        // Use fallback method as primary since array-contains with objects is unreliable
-        const allTasksRef = collection(db, "user_tasks");
-        getDocs(allTasksRef).then((allSnapshot: QuerySnapshot<DocumentData>) => {
-          const collaborativeTasks: Task[] = [];
-          allSnapshot.forEach((doc: any) => {
-            const data = doc.data();
-            if (data.collaborators && Array.isArray(data.collaborators)) {
-              const userIsCollaborator = data.collaborators.some((collab: any) => 
-                collab.id === userId || collab.id === userId.toString()
-              );
-              if (userIsCollaborator) {
-                collaborativeTasks.push({
-                  id: doc.id,
-                  ...data,
-                  dueDate: data.dueDate?.toDate?.(),
-                  createdAt: data.createdAt?.toDate?.(),
-                  updatedAt: data.updatedAt?.toDate?.(),
-                  completedAt: data.completedAt?.toDate?.(),
-                } as Task);
-              }
+        getDocs(collection(db, "user_tasks")).then((all: QuerySnapshot<DocumentData>) => {
+          const collabTasks: Task[] = [];
+          all.forEach((doc: any) => {
+            const d = doc.data();
+            if (d.collaborators?.some((c: any) => c.id === userId)) {
+              collabTasks.push({ id: doc.id, ...d, dueDate: d.dueDate?.toDate?.(), createdAt: d.createdAt?.toDate?.(), updatedAt: d.updatedAt?.toDate?.(), completedAt: d.completedAt?.toDate?.() } as Task);
             }
           });
-          mergeAndSetTasks(tasksData, collaborativeTasks);
-        }).catch(error => {
-          console.error("Error fetching collaborative tasks:", error);
-        });
+          mergeAndSetTasks(tasksData, collabTasks);
+        }).catch(() => {});
       } else {
-        // Super Admin: just sort the tasks
-        tasksData.sort((a, b) => {
-          const priorityWeight = { high: 3, medium: 2, low: 1 };
-          const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
-          if (priorityDiff !== 0) return priorityDiff;
-          const dateA = a.dueDate || new Date(9999, 0, 1);
-          const dateB = b.dueDate || new Date(9999, 0, 1);
-          return dateA.getTime() - dateB.getTime();
-        });
-        setTasks(tasksData);
+        sortAndSet(tasksData);
       }
     });
-
     return () => unsubscribe();
   }, [userId, userRole]);
 
-  // Function to fetch enhanced collaborator data
-  const fetchEnhancedCollaboratorData = async (collaborator: Collaborator): Promise<Collaborator> => {
-    // Check if we already have enhanced data
-    if (enhancedCollaborators.has(collaborator.id)) {
-      return enhancedCollaborators.get(collaborator.id)!;
-    }
-
-    try {
-      const response = await fetch(`/api/users/${collaborator.id}`);
-      
-      if (response.ok) {
-        const userData = await response.json();
-        
-        const enhancedCollab: Collaborator = {
-          ...collaborator,
-          profilePicture: userData.profilePicture || `/avatars/${userData.firstName?.toLowerCase()}-${userData.lastName?.toLowerCase()}.jpg`,
-          department: userData.department,
-          position: userData.position,
-          email: userData.email || collaborator.email,
-          name: userData.fullName || `${userData.firstName} ${userData.lastName}` || collaborator.name,
-        };
-        
-        // Cache the enhanced data
-        setEnhancedCollaborators(prev => new Map(prev.set(collaborator.id, enhancedCollab)));
-        
-        return enhancedCollab;
-      }
-    } catch (error) {
-      console.warn("Could not fetch enhanced data for collaborator:", collaborator.id, error);
-    }
-    
-    return collaborator;
-  };
-
-  // Helper function to merge and set tasks
-  const mergeAndSetTasks = (ownTasks: Task[], collaborativeTasks: Task[]) => {
-    // Combine own tasks and collaborative tasks, remove duplicates
-    const allTasks = [...ownTasks, ...collaborativeTasks];
-    const uniqueTasks = allTasks.filter((task, index, self) => 
-      index === self.findIndex(t => t.id === task.id)
-    );
-    
-    uniqueTasks.sort((a, b) => {
-      const priorityWeight = { high: 3, medium: 2, low: 1 };
-      const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
-      if (priorityDiff !== 0) return priorityDiff;
-      const dateA = a.dueDate || new Date(9999, 0, 1);
-      const dateB = b.dueDate || new Date(9999, 0, 1);
-      return dateA.getTime() - dateB.getTime();
-    });
-    
-    setTasks(uniqueTasks);
-  };
-
-  // Listen for collaboration requests
   useEffect(() => {
     if (!userId) return;
-
-    const requestsRef = collection(db, "collaboration_requests");
-    const q = query(requestsRef, where("collaboratorId", "==", userId), where("status", "==", "pending"));
-
+    const q = query(collection(db, "collaboration_requests"), where("collaboratorId", "==", userId), where("status", "==", "pending"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const requestsData: CollaborationRequest[] = [];
+      const data: CollaborationRequest[] = [];
       snapshot.forEach((doc) => {
-        const data = doc.data();
-        requestsData.push({
-          id: doc.id, // Use Firestore document ID
-          taskId: data.taskId,
-          taskTitle: data.taskTitle,
-          requesterId: data.requesterId,
-          requesterName: data.requesterName,
-          collaboratorId: data.collaboratorId,
-          collaboratorName: data.collaboratorName,
-          collaboratorEmail: data.collaboratorEmail,
-          role: data.role,
-          status: data.status,
-          createdAt: data.createdAt?.toDate?.(),
-          message: data.message,
-        } as CollaborationRequest);
+        const d = doc.data();
+        data.push({ id: doc.id, ...d, createdAt: d.createdAt?.toDate?.() } as CollaborationRequest);
       });
-      
-      // Sort by creation date (newest first)
-      requestsData.sort((a, b) => {
-        const dateA = a.createdAt || new Date(0);
-        const dateB = b.createdAt || new Date(0);
-        return dateB.getTime() - dateA.getTime();
-      });
-      
-      // Check for new requests and show notification
-      const previousRequestIds = pendingRequests.map(r => r.id);
-      const newRequests = requestsData.filter(r => !previousRequestIds.includes(r.id));
-      
-      if (newRequests.length > 0) {
-        newRequests.forEach(request => {
-          toast.info(`New collaboration request from ${request.requesterName} for "${request.taskTitle}"`, {
-            duration: 5000,
-            action: {
-              label: "View",
-              onClick: () => {
-                // Scroll to notification section
-                const element = document.querySelector('[data-collaboration-notifications]');
-                element?.scrollIntoView({ behavior: 'smooth' });
-              }
-            }
-          });
-        });
-      }
-      
-      setPendingRequests(requestsData);
+      data.sort((a, b) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0));
+      setPendingRequests(data);
     });
-
     return () => unsubscribe();
-  }, [userId, pendingRequests]);
+  }, [userId]);
 
-  // Fetch available users
   useEffect(() => {
-    const fetchUsers = async (searchQuery = "") => {
+    if (!userId) return;
+    const fetchUsers = async () => {
+      setIsSearchingUsers(true);
       try {
-        setIsSearchingUsers(true);
-        const response = await fetch(`/api/users?currentUserId=${userId}&search=${encodeURIComponent(searchQuery)}`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          setAvailableUsers(data.users || []);
-        } else {
-          // Fallback to mock users if API fails
-          const mockUsers = [
-            { id: "user1", referenceId: "EMP001", firstName: "John", lastName: "Doe", fullName: "John Doe", email: "john.doe@company.com", role: "user", department: "IT", position: "Developer" },
-            { id: "user2", referenceId: "EMP002", firstName: "Jane", lastName: "Smith", fullName: "Jane Smith", email: "jane.smith@company.com", role: "user", department: "HR", position: "Manager" },
-            { id: "user3", referenceId: "EMP003", firstName: "Mike", lastName: "Johnson", fullName: "Mike Johnson", email: "mike.johnson@company.com", role: "admin", department: "IT", position: "Team Lead" },
-            { id: "user4", referenceId: "EMP004", firstName: "Sarah", lastName: "Wilson", fullName: "Sarah Wilson", email: "sarah.wilson@company.com", role: "user", department: "Finance", position: "Accountant" },
-            { id: "user5", referenceId: "EMP005", firstName: "Alex", lastName: "Turner", fullName: "Alex Turner", email: "alex.turner@company.com", role: "user", department: "IT", position: "Senior Developer" },
-            { id: "user6", referenceId: "EMP006", firstName: "Lisa", lastName: "Anderson", fullName: "Lisa Anderson", email: "lisa.anderson@company.com", role: "user", department: "IT", position: "DevOps Engineer" },
-          ];
-          
-          // Filter out current user and apply search (only by department)
-          const filteredUsers = mockUsers.filter(user => {
-            if (user.id === userId) return false;
-            
-            if (searchQuery.trim()) {
-              const query = searchQuery.toLowerCase();
-              return user.department && user.department.toLowerCase().includes(query);
-            }
-            return true;
-          });
-          
-          setAvailableUsers(filteredUsers);
-        }
-      } catch (error) {
-        console.error("Error fetching users:", error);
-        setAvailableUsers([]);
-      } finally {
-        setIsSearchingUsers(false);
-      }
+        const res = await fetch(`/api/users?currentUserId=${userId}&search=${encodeURIComponent(userSearchQuery)}`);
+        if (res.ok) { const d = await res.json(); setAvailableUsers(d.users || []); }
+        else setAvailableUsers([]);
+      } catch { setAvailableUsers([]); }
+      finally { setIsSearchingUsers(false); }
     };
-
-    if (userId) {
-      fetchUsers(userSearchQuery);
-    }
+    fetchUsers();
   }, [userId, userSearchQuery]);
 
-  // Fetch enhanced collaborator data when viewing a task
   useEffect(() => {
-    if (!viewingTask?.collaborators || viewingTask.collaborators.length === 0) {
-      setViewTaskEnhancedCollaborators([]);
-      return;
-    }
-
-    const fetchEnhancedData = async () => {
-      const enhancedCollabs = await Promise.all(
-        viewingTask.collaborators!.map(collab => fetchEnhancedCollaboratorData(collab))
-      );
-      setViewTaskEnhancedCollaborators(enhancedCollabs);
-    };
-
-    fetchEnhancedData();
+    if (!viewingTask?.collaborators?.length) { setViewTaskEnhancedCollaborators([]); return; }
+    Promise.all(viewingTask.collaborators.map(fetchEnhancedCollaboratorData)).then(setViewTaskEnhancedCollaborators);
   }, [viewingTask?.collaborators]);
 
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.tags?.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+  /* ── Helpers ── */
 
-      const matchesStatus = filterStatus === "all" || task.status === filterStatus;
-      const matchesPriority = filterPriority === "all" || task.priority === filterPriority;
-      const matchesCategory = filterCategory === "all" || task.category === filterCategory;
-      const matchesOverdue = !showOverdueOnly || (task.dueDate && isPast(task.dueDate) && task.status !== "completed");
-
-      return matchesSearch && matchesStatus && matchesPriority && matchesCategory && matchesOverdue;
+  const sortAndSet = (arr: Task[]) => {
+    const w = { high: 3, medium: 2, low: 1 };
+    arr.sort((a, b) => {
+      const pd = w[b.priority] - w[a.priority];
+      if (pd) return pd;
+      return ((a.dueDate?.getTime() ?? 9e15) - (b.dueDate?.getTime() ?? 9e15));
     });
-  }, [tasks, searchQuery, filterStatus, filterPriority, filterCategory, showOverdueOnly]);
-
-  const stats = useMemo(() => {
-    const total = tasks.length;
-    const completed = tasks.filter((t) => t.status === "completed").length;
-    const inProgress = tasks.filter((t) => t.status === "in-progress").length;
-    const pending = tasks.filter((t) => t.status === "pending").length;
-    const overdue = tasks.filter((t) => t.dueDate && isPast(t.dueDate) && t.status !== "completed").length;
-    const highPriority = tasks.filter((t) => t.priority === "high" && t.status !== "completed").length;
-
-    return {
-      total,
-      completed,
-      inProgress,
-      pending,
-      overdue,
-      highPriority,
-      completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
-    };
-  }, [tasks]);
-
-  const resetForm = () => {
-    setTitle("");
-    setDescription("");
-    setStatus("pending");
-    setPriority("medium");
-    setDueDate(undefined);
-    setCategory("");
-    setTags([]);
-    setTagInput("");
-    setSubtasks([]);
-    setSubtaskInput("");
-    setNotes("");
-    setEditingTask(null);
-    setViewingTask(null);
+    setTasks(arr);
   };
 
-  const handleCreateTask = async () => {
-    if (!title.trim()) {
-      toast.error("Please enter a task title");
-      return;
-    }
+  const mergeAndSetTasks = (own: Task[], collab: Task[]) => {
+    const all = [...own, ...collab];
+    const unique = all.filter((t, i, s) => i === s.findIndex(x => x.id === t.id));
+    sortAndSet(unique);
+  };
 
+  const fetchEnhancedCollaboratorData = async (c: Collaborator): Promise<Collaborator> => {
+    if (enhancedCollaborators.has(c.id)) return enhancedCollaborators.get(c.id)!;
+    try {
+      const res = await fetch(`/api/users/${c.id}`);
+      if (res.ok) {
+        const u = await res.json();
+        const enhanced = { ...c, profilePicture: u.profilePicture, department: u.department, position: u.position, email: u.email || c.email, name: u.fullName || c.name };
+        setEnhancedCollaborators(prev => new Map(prev.set(c.id, enhanced)));
+        return enhanced;
+      }
+    } catch {}
+    return c;
+  };
+
+  const resetForm = () => {
+    setTitle(""); setDescription(""); setStatus("pending"); setPriority("medium");
+    setDueDate(undefined); setCategory(""); setTags([]); setTagInput("");
+    setSubtasks([]); setSubtaskInput(""); setNotes(""); setEditingTask(null); setViewingTask(null);
+  };
+
+  /* ── CRUD ── */
+
+  const handleCreateTask = async () => {
+    if (!title.trim()) { toast.error("Mission title required"); return; }
     setIsLoading(true);
     try {
-      // Create initial history entry
-      const initialHistory: HistoryEntry[] = [{
-        id: crypto.randomUUID(),
-        action: "created",
-        performedBy: userName,
-        timestamp: new Date().toISOString(),
-      }];
-
       await addDoc(collection(db, "user_tasks"), {
-        userId,
-        userName,
-        title: title.trim(),
-        description: description.trim() || null,
-        status,
-        priority,
-        dueDate: dueDate || null,
-        category: category === "none" ? null : category || null,
-        tags: tags.length > 0 ? tags : null,
-        notes: notes.trim() || null,
-        subtasks: subtasks.length > 0 ? subtasks : null,
-        history: initialHistory,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        userId, userName, title: title.trim(),
+        description: description.trim() || null, status, priority,
+        dueDate: dueDate || null, category: category === "none" ? null : category || null,
+        tags: tags.length ? tags : null, notes: notes.trim() || null,
+        subtasks: subtasks.length ? subtasks : null,
+        history: [{ id: crypto.randomUUID(), action: "created", performedBy: userName, timestamp: new Date().toISOString() }],
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         completedAt: status === "completed" ? serverTimestamp() : null,
       });
-
-      toast.success("Task created successfully");
-      resetForm();
-      setIsCreateDialogOpen(false);
-    } catch (error) {
-      console.error("Error creating task:", error);
-      toast.error("Failed to create task");
-    } finally {
-      setIsLoading(false);
-    }
+      toast.success("Mission created");
+      resetForm(); setIsCreateDialogOpen(false);
+    } catch { toast.error("Failed to create mission"); }
+    finally { setIsLoading(false); }
   };
 
   const handleUpdateTask = async () => {
-    if (!editingTask || !title.trim()) {
-      toast.error("Please enter a task title");
-      return;
-    }
-
+    if (!editingTask || !title.trim()) { toast.error("Mission title required"); return; }
     setIsLoading(true);
     try {
-      const taskRef = doc(db, "user_tasks", editingTask.id);
-      
-      // Build history of changes
       const historyEntries: HistoryEntry[] = [];
-      
-      if (editingTask.title !== title.trim()) {
-        historyEntries.push({
-          id: crypto.randomUUID(),
-          action: "updated",
-          field: "title",
-          oldValue: editingTask.title,
-          newValue: title.trim(),
-          performedBy: userName,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (editingTask.status !== status) {
-        historyEntries.push({
-          id: crypto.randomUUID(),
-          action: "updated",
-          field: "status",
-          oldValue: editingTask.status,
-          newValue: status,
-          performedBy: userName,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if (editingTask.priority !== priority) {
-        historyEntries.push({
-          id: crypto.randomUUID(),
-          action: "updated",
-          field: "priority",
-          oldValue: editingTask.priority,
-          newValue: priority,
-          performedBy: userName,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      if ((editingTask.subtasks?.length || 0) !== subtasks.length) {
-        historyEntries.push({
-          id: crypto.randomUUID(),
-          action: "updated",
-          field: "subtasks",
-          oldValue: `${editingTask.subtasks?.length || 0} subtasks`,
-          newValue: `${subtasks.length} subtasks`,
-          performedBy: userName,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      const track = (field: string, oldV: string, newV: string) => {
+        if (oldV !== newV) historyEntries.push({ id: crypto.randomUUID(), action: "updated", field, oldValue: oldV, newValue: newV, performedBy: userName, timestamp: new Date().toISOString() });
+      };
+      track("title", editingTask.title, title.trim());
+      track("status", editingTask.status, status);
+      track("priority", editingTask.priority, priority);
 
       const updates: any = {
-        title: title.trim(),
-        description: description.trim() || null,
-        status,
-        priority,
-        dueDate: dueDate || null,
-        category: category === "none" ? null : category || null,
-        tags: tags.length > 0 ? tags : null,
-        notes: notes.trim() || null,
-        subtasks: subtasks.length > 0 ? subtasks : null,
-        updatedAt: serverTimestamp(),
+        title: title.trim(), description: description.trim() || null, status, priority,
+        dueDate: dueDate || null, category: category === "none" ? null : category || null,
+        tags: tags.length ? tags : null, notes: notes.trim() || null,
+        subtasks: subtasks.length ? subtasks : null, updatedAt: serverTimestamp(),
         completedAt: status === "completed" && editingTask.status !== "completed"
-          ? serverTimestamp()
-          : status !== "completed"
-          ? null
-          : editingTask.completedAt,
+          ? serverTimestamp() : status !== "completed" ? null : editingTask.completedAt,
       };
-
-      // Append new history entries to existing history
-      if (historyEntries.length > 0) {
-        const existingHistory = editingTask.history || [];
-        updates.history = [...historyEntries, ...existingHistory];
-      }
-
-      await updateDoc(taskRef, updates);
-
-      toast.success("Task updated successfully");
-      resetForm();
-      setIsEditDialogOpen(false);
-    } catch (error) {
-      console.error("Error updating task:", error);
-      toast.error("Failed to update task");
-    } finally {
-      setIsLoading(false);
-    }
+      if (historyEntries.length) updates.history = [...historyEntries, ...(editingTask.history || [])];
+      await updateDoc(doc(db, "user_tasks", editingTask.id), updates);
+      toast.success("Mission updated"); resetForm(); setIsEditDialogOpen(false);
+    } catch { toast.error("Failed to update mission"); }
+    finally { setIsLoading(false); }
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    try {
-      await deleteDoc(doc(db, "user_tasks", taskId));
-      toast.success("Task deleted successfully");
-    } catch (error) {
-      console.error("Error deleting task:", error);
-      toast.error("Failed to delete task");
-    }
+    try { await deleteDoc(doc(db, "user_tasks", taskId)); toast.success("Mission deleted"); }
+    catch { toast.error("Failed to delete mission"); }
   };
 
   const handleBulkDelete = async () => {
-    if (selectedTasks.size === 0) return;
-
+    if (!selectedTasks.size) return;
     try {
       const batch = writeBatch(db);
-      selectedTasks.forEach((taskId) => {
-        const taskRef = doc(db, "user_tasks", taskId);
-        batch.delete(taskRef);
-      });
+      selectedTasks.forEach(id => batch.delete(doc(db, "user_tasks", id)));
       await batch.commit();
-
-      toast.success(`${selectedTasks.size} tasks deleted successfully`);
-      setSelectedTasks(new Set());
-      setSelectAll(false);
-      setIsBulkActionsOpen(false);
-    } catch (error) {
-      console.error("Error bulk deleting tasks:", error);
-      toast.error("Failed to delete tasks");
-    }
+      toast.success(`${selectedTasks.size} missions deleted`);
+      setSelectedTasks(new Set()); setSelectAll(false); setIsBulkActionsOpen(false);
+    } catch { toast.error("Bulk delete failed"); }
   };
 
   const handleBulkStatusUpdate = async (newStatus: Task["status"]) => {
-    if (selectedTasks.size === 0) return;
-
+    if (!selectedTasks.size) return;
     try {
       const batch = writeBatch(db);
-      selectedTasks.forEach((taskId) => {
-        const taskRef = doc(db, "user_tasks", taskId);
-        const updates: any = {
-          status: newStatus,
-          updatedAt: serverTimestamp(),
-        };
-        if (newStatus === "completed") {
-          updates.completedAt = serverTimestamp();
-        }
-        batch.update(taskRef, updates);
+      selectedTasks.forEach(id => {
+        const u: any = { status: newStatus, updatedAt: serverTimestamp() };
+        if (newStatus === "completed") u.completedAt = serverTimestamp();
+        batch.update(doc(db, "user_tasks", id), u);
       });
       await batch.commit();
-
-      toast.success(`${selectedTasks.size} tasks updated to ${newStatus}`);
-      setSelectedTasks(new Set());
-      setSelectAll(false);
-      setIsBulkActionsOpen(false);
-    } catch (error) {
-      console.error("Error bulk updating tasks:", error);
-      toast.error("Failed to update tasks");
-    }
+      toast.success(`${selectedTasks.size} missions updated`);
+      setSelectedTasks(new Set()); setSelectAll(false); setIsBulkActionsOpen(false);
+    } catch { toast.error("Bulk update failed"); }
   };
 
   const openEditDialog = (task: Task) => {
-    setEditingTask(task);
-    setTitle(task.title);
-    setDescription(task.description || "");
-    setStatus(task.status);
-    setPriority(task.priority);
-    setDueDate(task.dueDate);
-    setCategory(task.category || "none");
-    setTags(task.tags || []);
-    setSubtasks(task.subtasks || []);
-    setSubtaskInput("");
-    setNotes(task.notes || "");
+    setEditingTask(task); setTitle(task.title); setDescription(task.description || "");
+    setStatus(task.status); setPriority(task.priority); setDueDate(task.dueDate);
+    setCategory(task.category || "none"); setTags(task.tags || []);
+    setSubtasks(task.subtasks || []); setSubtaskInput(""); setNotes(task.notes || "");
     setIsEditDialogOpen(true);
   };
 
-  const openViewDialog = (task: Task) => {
-    try {
-      setViewingTask(task);
-      setIsViewDialogOpen(true);
-    } catch (error) {
-      console.error("Error opening view dialog:", error);
-      toast.error("Failed to open task details");
-    }
-  };
+  const openViewDialog = (task: Task) => { setViewingTask(task); setIsViewDialogOpen(true); };
 
   const addTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()]);
-      setTagInput("");
-    }
+    if (tagInput.trim() && !tags.includes(tagInput.trim())) { setTags([...tags, tagInput.trim()]); setTagInput(""); }
   };
 
-  const removeTag = (tagToRemove: string) => {
-    setTags(tags.filter((tag) => tag !== tagToRemove));
-  };
-
-  // Subtask management functions
   const addSubtask = () => {
     if (subtaskInput.trim()) {
-      const newSubtask: Subtask = {
-        id: crypto.randomUUID(),
-        title: subtaskInput.trim(),
-        completed: false,
-        createdAt: new Date().toISOString(),
-      };
-      setSubtasks([...subtasks, newSubtask]);
+      setSubtasks([...subtasks, { id: crypto.randomUUID(), title: subtaskInput.trim(), completed: false, createdAt: new Date().toISOString() }]);
       setSubtaskInput("");
     }
   };
 
-  const toggleSubtask = (subtaskId: string) => {
-    setSubtasks(subtasks.map((st) =>
-      st.id === subtaskId
-        ? { ...st, completed: !st.completed, completedAt: !st.completed ? new Date().toISOString() : null }
-        : st
-    ));
-  };
+  const toggleSubtask = (id: string) => setSubtasks(subtasks.map(st =>
+    st.id === id ? { ...st, completed: !st.completed, completedAt: !st.completed ? new Date().toISOString() : null } : st
+  ));
 
-  const deleteSubtask = (subtaskId: string) => {
-    setSubtasks(subtasks.filter((st) => st.id !== subtaskId));
-  };
-
-  const toggleTaskSelection = (taskId: string) => {
-    const newSelected = new Set(selectedTasks);
-    if (newSelected.has(taskId)) {
-      newSelected.delete(taskId);
-    } else {
-      newSelected.add(taskId);
-    }
-    setSelectedTasks(newSelected);
-  };
-
-  const handleSelectAll = () => {
-    if (selectAll) {
-      setSelectedTasks(new Set());
-    } else {
-      setSelectedTasks(new Set(filteredTasks.map((t) => t.id)));
-    }
-    setSelectAll(!selectAll);
-  };
-
-  const getDueDateStatus = (dueDate?: Date, taskStatus?: string) => {
-    if (!dueDate || taskStatus === "completed") return null;
-    if (isPast(dueDate) && !isToday(dueDate)) {
-      return { label: "Overdue", color: "text-red-500 bg-red-500/10" };
-    }
-    if (isToday(dueDate)) {
-      return { label: "Due Today", color: "text-orange-500 bg-orange-500/10" };
-    }
-    if (isTomorrow(dueDate)) {
-      return { label: "Due Tomorrow", color: "text-yellow-500 bg-yellow-500/10" };
-    }
-    return null;
-  };
-
-  // Check if user can edit/delete task
-  const canEditTask = (task: Task) => {
-    return userRole === "SuperAdmin" || 
-           task.userId === userId || 
-           (task.collaborators && task.collaborators.some(collab => collab.id === userId));
-  };
-
-  // Check if user can view task
-  const canViewTask = (task: Task) => {
-    return userRole === "SuperAdmin" || 
-           task.userId === userId || 
-           (task.collaborators && task.collaborators.some(collab => collab.id === userId));
-  };
-
-  // Check if user is owner
-  const isOwner = (task: Task) => {
-    return task.userId === userId || userRole === "SuperAdmin";
-  };
-
-  // Open collaboration dialog
   const openCollaborationDialog = (task: Task) => {
-    setCollaboratingTask(task);
-    setCollaboratorEmail("");
-    setCollaboratorRole("viewer");
-    setUserSearchQuery("");
-    setSelectedUser(null);
-    setCollaborationMessage("");
+    setCollaboratingTask(task); setCollaboratorRole("viewer");
+    setUserSearchQuery(""); setSelectedUser(null); setCollaborationMessage("");
     setIsCollaborationDialogOpen(true);
   };
 
-  // Add collaborator
   const addCollaborator = async () => {
-    if (!collaboratingTask || !selectedUser) {
-      toast.error("Please select a collaborator");
-      return;
-    }
-
+    if (!collaboratingTask || !selectedUser) { toast.error("Select an operative"); return; }
     setIsLoading(true);
     try {
-      // Create collaboration request for specific user
-      const requestRef = collection(db, "collaboration_requests");
-      const requestData = {
-        taskId: collaboratingTask.id,
-        taskTitle: collaboratingTask.title,
-        requesterId: userId,
-        requesterName: userName,
-        collaboratorId: selectedUser.id,
-        collaboratorName: selectedUser.fullName,
-        collaboratorEmail: selectedUser.email,
-        role: collaboratorRole,
-        status: "pending",
-        createdAt: serverTimestamp(),
+      const docRef = await addDoc(collection(db, "collaboration_requests"), {
+        taskId: collaboratingTask.id, taskTitle: collaboratingTask.title,
+        requesterId: userId, requesterName: userName,
+        collaboratorId: selectedUser.id, collaboratorName: selectedUser.fullName,
+        collaboratorEmail: selectedUser.email, role: collaboratorRole,
+        status: "pending", createdAt: serverTimestamp(),
         message: collaborationMessage.trim() || undefined,
-      };
-
-      // Add document to Firestore and get the actual document reference
-      const docRef = await addDoc(requestRef, requestData);
-      const actualRequestId = docRef.id;
-
-      // Notify the selected user
-      toast.success(`Collaboration request sent to ${selectedUser.fullName} (${selectedUser.referenceId})`, {
-        description: "They will receive a notification about your collaboration request"
       });
-
-      // Add to task history
-      const historyEntry: HistoryEntry = {
-        id: crypto.randomUUID(),
-        action: "updated",
-        field: "collaboration_request",
-        oldValue: "No pending requests",
-        newValue: `Request sent to ${selectedUser.fullName} (${selectedUser.referenceId})`,
-        performedBy: userName,
-        timestamp: new Date().toISOString(),
-      };
-
-      const taskRef = doc(db, "user_tasks", collaboratingTask.id);
-      const existingHistory = collaboratingTask.history || [];
-      await updateDoc(taskRef, {
-        history: [historyEntry, ...existingHistory],
+      await updateDoc(doc(db, "user_tasks", collaboratingTask.id), {
+        history: [{ id: crypto.randomUUID(), action: "updated", field: "collaboration_request", oldValue: "none", newValue: `Request to ${selectedUser.fullName}`, performedBy: userName, timestamp: new Date().toISOString() }, ...(collaboratingTask.history || [])],
       });
-
-      toast.success(`Collaboration request sent to ${selectedUser.fullName}`);
-      setIsCollaborationDialogOpen(false);
-      setCollaboratingTask(null);
-      setSelectedUser(null);
-      setUserSearchQuery("");
-      setCollaboratorRole("viewer");
-      setCollaborationMessage("");
-    } catch (error) {
-      console.error("Error sending collaboration request:", error);
-      toast.error("Failed to send collaboration request");
-    } finally {
-      setIsLoading(false);
-    }
+      toast.success(`Request transmitted to ${selectedUser.fullName}`);
+      setIsCollaborationDialogOpen(false); setCollaboratingTask(null);
+      setSelectedUser(null); setUserSearchQuery(""); setCollaboratorRole("viewer"); setCollaborationMessage("");
+    } catch { toast.error("Transmission failed"); }
+    finally { setIsLoading(false); }
   };
 
-  // Remove collaborator
   const removeCollaborator = async (taskId: string, collaboratorId: string) => {
     try {
-      const taskRef = doc(db, "user_tasks", taskId);
       const task = tasks.find(t => t.id === taskId);
-      
       if (!task) return;
-
-      const updatedCollaborators = task.collaborators?.filter(c => c.id !== collaboratorId) || [];
-      
-      await updateDoc(taskRef, {
-        collaborators: updatedCollaborators,
-        isCollaborative: updatedCollaborators.length > 0,
-        updatedAt: serverTimestamp(),
-      });
-
-      toast.success("Collaborator removed successfully");
-    } catch (error) {
-      console.error("Error removing collaborator:", error);
-      toast.error("Failed to remove collaborator");
-    }
+      const updated = task.collaborators?.filter(c => c.id !== collaboratorId) || [];
+      await updateDoc(doc(db, "user_tasks", taskId), { collaborators: updated, isCollaborative: updated.length > 0, updatedAt: serverTimestamp() });
+      toast.success("Collaborator removed");
+    } catch { toast.error("Failed to remove collaborator"); }
   };
 
-  // Accept collaboration request
   const acceptCollaborationRequest = async (requestId: string) => {
     try {
       const requestRef = doc(db, "collaboration_requests", requestId);
       const requestDoc = await getDoc(requestRef);
-      
-      if (!requestDoc.exists()) {
-        toast.error("Collaboration request not found");
-        return;
-      }
-      
-      const requestData = requestDoc.data();
-      
-      // Update request status
+      if (!requestDoc.exists()) { toast.error("Request not found"); return; }
       await updateDoc(requestRef, { status: "accepted" });
-
-      // Add collaborator to task
       const request = pendingRequests.find(r => r.id === requestId);
-      
       if (request) {
-        const taskRef = doc(db, "user_tasks", request.taskId);
-        const taskDoc = await getDoc(taskRef);
-        
-        if (!taskDoc.exists()) {
-          toast.error("Task not found");
-          return;
-        }
-        
+        const taskDoc = await getDoc(doc(db, "user_tasks", request.taskId));
+        if (!taskDoc.exists()) { toast.error("Task not found"); return; }
         const taskData = taskDoc.data();
-        
-        // Fetch user profile FIRST before creating collaborator
-        let userProfileData = null;
-        try {
-          const userResponse = await fetch(`/api/users/${userId}`);
-          if (userResponse.ok) {
-            userProfileData = await userResponse.json();
-          }
-        } catch (profileError) {
-          console.warn("Could not fetch user profile:", profileError);
-        }
-        
-        // Create collaborator with real profile data or fallback to basic info
-        const newCollaborator: Collaborator = {
-          id: userId,
-          name: userProfileData?.fullName || 
-                (userProfileData?.firstName && userProfileData?.lastName 
-                  ? `${userProfileData.firstName} ${userProfileData.lastName}` 
-                  : userName),
-          email: userProfileData?.email || `${userName}@company.com`,
-          role: request.role,
-          addedAt: new Date().toISOString(),
-          addedBy: request.requesterName,
-          status: "accepted",
-          profilePicture: userProfileData?.profilePicture || 
-            (userProfileData?.firstName && userProfileData?.lastName 
-              ? `/avatars/${userProfileData.firstName.toLowerCase()}-${userProfileData.lastName.toLowerCase()}.jpg`
-              : undefined),
-          department: userProfileData?.department,
-          position: userProfileData?.position,
+        let profileData: any = null;
+        try { const r = await fetch(`/api/users/${userId}`); if (r.ok) profileData = await r.json(); } catch {}
+        const newCollab: Collaborator = {
+          id: userId, name: profileData?.fullName || userName,
+          email: profileData?.email || `${userName}@company.com`,
+          role: request.role, addedAt: new Date().toISOString(), addedBy: request.requesterName,
+          status: "accepted", profilePicture: profileData?.profilePicture,
+          department: profileData?.department, position: profileData?.position,
         };
-
-        // Get task data directly from Firestore instead of local state
-        const existingCollaborators = taskData.collaborators || [];
-        
-        // Check if user is already a collaborator
-        const isAlreadyCollaborator = existingCollaborators.some((collab: Collaborator) => collab.id === userId);
-        if (isAlreadyCollaborator) {
-          toast.info("You are already a collaborator on this task");
-          return;
-        }
-        
-        const updatedCollaborators = [...existingCollaborators, newCollaborator];
-        
-        const updateData = {
-          collaborators: updatedCollaborators,
-          isCollaborative: true,
-          updatedAt: serverTimestamp(),
-        };
-        
-        try {
-          await updateDoc(taskRef, updateData);
-          
-          // Verify the update
-          const updatedTaskDoc = await getDoc(taskRef);
-          const updatedTaskData = updatedTaskDoc.data();
-          
-          if (updatedTaskData) {
-            // Show success message with option to view task
-            toast.success(`You can now access "${request.taskTitle}"`, {
-              description: `You have been added as ${request.role}`,
-              duration: 5000,
-              action: {
-                label: "View Task",
-                onClick: () => {
-                  // Create task object for viewing from Firestore data
-                  const taskForView: Task = {
-                    id: request.taskId,
-                    userId: updatedTaskData.userId,
-                    userName: updatedTaskData.userName,
-                    title: updatedTaskData.title,
-                    status: updatedTaskData.status,
-                    priority: updatedTaskData.priority,
-                    description: updatedTaskData.description,
-                    dueDate: updatedTaskData.dueDate?.toDate?.(),
-                    createdAt: updatedTaskData.createdAt?.toDate?.(),
-                    updatedAt: updatedTaskData.updatedAt?.toDate?.(),
-                    completedAt: updatedTaskData.completedAt?.toDate?.(),
-                    category: updatedTaskData.category,
-                    tags: updatedTaskData.tags,
-                    notes: updatedTaskData.notes,
-                    subtasks: updatedTaskData.subtasks,
-                    history: updatedTaskData.history,
-                    pinned: updatedTaskData.pinned,
-                    collaborators: updatedTaskData.collaborators,
-                    isCollaborative: updatedTaskData.isCollaborative,
-                  };
-                  setViewingTask(taskForView);
-                  setIsViewDialogOpen(true);
-                }
-              }
-            });
-          }
-          
-        } catch (updateError) {
-          console.error("Error updating task:", updateError);
-          toast.error("Failed to update task with collaborator");
-          return;
-        }
+        const existing = taskData.collaborators || [];
+        if (existing.some((c: Collaborator) => c.id === userId)) { toast.info("Already a collaborator"); return; }
+        await updateDoc(doc(db, "user_tasks", request.taskId), {
+          collaborators: [...existing, newCollab], isCollaborative: true, updatedAt: serverTimestamp(),
+        });
+        toast.success(`Access granted to "${request.taskTitle}"`);
       }
-
-      toast.success("Collaboration request accepted");
       setPendingRequests(pendingRequests.filter(r => r.id !== requestId));
-    } catch (error) {
-      console.error("Error accepting collaboration request:", error);
-      toast.error("Failed to accept collaboration request");
-    }
+    } catch { toast.error("Failed to accept request"); }
   };
 
-  // Reject collaboration request
   const rejectCollaborationRequest = async (requestId: string) => {
     try {
-      const requestRef = doc(db, "collaboration_requests", requestId);
-      
-      await updateDoc(requestRef, {
-        status: "rejected",
-      });
-
-      toast.success("Collaboration request rejected");
+      await updateDoc(doc(db, "collaboration_requests", requestId), { status: "rejected" });
+      toast.success("Request declined");
       setPendingRequests(pendingRequests.filter(r => r.id !== requestId));
-    } catch (error) {
-      console.error("Error rejecting collaboration request:", error);
-      toast.error("Failed to reject collaboration request");
-    }
+    } catch { toast.error("Failed to decline request"); }
   };
 
-  // Toggle pin status for a task
-  const togglePin = async (taskId: string, currentPinned: boolean) => {
+  const togglePin = async (taskId: string, pinned: boolean) => {
     try {
-      const taskRef = doc(db, "user_tasks", taskId);
-      await updateDoc(taskRef, {
-        pinned: !currentPinned,
-        updatedAt: serverTimestamp(),
-      });
-      toast.success(!currentPinned ? "Task pinned" : "Task unpinned");
-    } catch (error) {
-      console.error("Error toggling pin:", error);
-      toast.error("Failed to pin/unpin task");
-    }
+      await updateDoc(doc(db, "user_tasks", taskId), { pinned: !pinned, updatedAt: serverTimestamp() });
+      toast.success(!pinned ? "Mission pinned" : "Mission unpinned");
+    } catch { toast.error("Failed"); }
   };
 
-  // Export task to PDF
   const exportTaskToPDF = (task: Task) => {
     try {
       const pdf = new jsPDF();
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      let yPosition = 30;
-      const margin = 20;
-      const contentWidth = pageWidth - (margin * 2);
-      
-      // Helper function to check if we need a new page
-      const checkPageBreak = (requiredHeight: number) => {
-        if (yPosition + requiredHeight > pageHeight - 20) {
-          pdf.addPage();
-          yPosition = 30;
-          return true;
-        }
-        return false;
-      };
-      
-      // Title
-      pdf.setFontSize(18);
-      pdf.setFont("helvetica", "bold");
-      const titleLines = pdf.splitTextToSize(task.title, contentWidth);
-      titleLines.forEach((line: string) => {
-        pdf.text(line, margin, yPosition);
-        yPosition += 8;
-      });
-      yPosition += 10;
-      
-      // Basic Info Section
-      pdf.setFontSize(14);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Task Information", margin, yPosition);
-      yPosition += 12;
-      
-      pdf.setFontSize(10);
-      pdf.setFont("helvetica", "normal");
-      
-      const basicInfo = [
-        `Status: ${statusConfig[task.status].label}`,
-        `Priority: ${priorityConfig[task.priority].label}`,
-        task.category ? `Category: ${task.category}` : null,
-        task.dueDate ? `Due Date: ${format(task.dueDate, "PPP")}` : null,
-        task.userName ? `Assigned to: ${task.userName}` : null,
-        task.createdAt ? `Created: ${format(task.createdAt, "PPP")}` : null
-      ].filter(Boolean);
-      
-      basicInfo.forEach((info) => {
-        if (info) {
-          checkPageBreak(8);
-          pdf.text(info, margin, yPosition);
-          yPosition += 8;
-        }
-      });
-      
-      // Description
+      const W = pdf.internal.pageSize.getWidth();
+      const H = pdf.internal.pageSize.getHeight();
+      let y = 30; const m = 20; const cw = W - m * 2;
+      const checkPage = (h: number) => { if (y + h > H - 20) { pdf.addPage(); y = 30; } };
+      pdf.setFontSize(18); pdf.setFont("helvetica", "bold");
+      pdf.splitTextToSize(task.title, cw).forEach((l: string) => { pdf.text(l, m, y); y += 8; });
+      y += 8;
+      pdf.setFontSize(10); pdf.setFont("helvetica", "normal");
+      [`Status: ${statusConfig[task.status].label}`, `Priority: ${priorityConfig[task.priority].label}`,
+       task.category ? `Category: ${task.category}` : null, task.dueDate ? `Due: ${format(task.dueDate, "PPP")}` : null,
+      ].filter(Boolean).forEach(info => { checkPage(8); pdf.text(info!, m, y); y += 8; });
       if (task.description) {
-        yPosition += 10;
-        checkPageBreak(20);
-        pdf.setFontSize(14);
-        pdf.setFont("helvetica", "bold");
-        pdf.text("Description", margin, yPosition);
-        yPosition += 10;
-        
-        pdf.setFontSize(10);
-        pdf.setFont("helvetica", "normal");
-        const descLines = pdf.splitTextToSize(task.description, contentWidth);
-        descLines.forEach((line: string) => {
-          checkPageBreak(8);
-          pdf.text(line, margin, yPosition);
-          yPosition += 6;
-        });
+        y += 8; pdf.setFontSize(14); pdf.setFont("helvetica", "bold"); pdf.text("Description", m, y); y += 10;
+        pdf.setFontSize(10); pdf.setFont("helvetica", "normal");
+        pdf.splitTextToSize(task.description, cw).forEach((l: string) => { checkPage(8); pdf.text(l, m, y); y += 6; });
       }
-      
-      // Notes
-      if (task.notes) {
-        yPosition += 10;
-        checkPageBreak(20);
-        pdf.setFontSize(14);
-        pdf.setFont("helvetica", "bold");
-        pdf.text("Notes", margin, yPosition);
-        yPosition += 10;
-        
-        pdf.setFontSize(10);
-        pdf.setFont("helvetica", "normal");
-        const notesLines = pdf.splitTextToSize(task.notes, contentWidth);
-        notesLines.forEach((line: string) => {
-          checkPageBreak(8);
-          pdf.text(line, margin, yPosition);
-          yPosition += 6;
-        });
-      }
-      
-      // Subtasks Table
-      if (task.subtasks && task.subtasks.length > 0) {
-        yPosition += 10;
-        checkPageBreak(30);
-        
-        pdf.setFontSize(14);
-        pdf.setFont("helvetica", "bold");
-        pdf.text("Subtasks", margin, yPosition);
-        yPosition += 12;
-        
-        pdf.setFontSize(10);
-        pdf.setFont("helvetica", "normal");
-        
-        // Table header
-        pdf.text("Status", margin, yPosition);
-        pdf.text("Subtask Title", margin + 25, yPosition);
-        yPosition += 8;
-        
-        // Draw line under header
-        pdf.line(margin, yPosition, pageWidth - margin, yPosition);
-        yPosition += 5;
-        
-        // Subtasks
-        task.subtasks.forEach((subtask) => {
-          checkPageBreak(10);
-          
-          const checkbox = subtask.completed ? "[-]" : "[ ]";
-          const status = subtask.completed ? "Completed" : "Pending";
-          
-          pdf.text(checkbox, margin, yPosition);
-          pdf.text(status, margin + 25, yPosition);
-          
-          // Word wrap for subtask title
-          const subtaskLines = pdf.splitTextToSize(subtask.title, contentWidth - 80);
-          subtaskLines.forEach((line: string, index: number) => {
-            const xPos = index === 0 ? margin + 80 : margin + 25;
-            pdf.text(line, xPos, yPosition);
-            yPosition += 6;
-          });
-          
-          yPosition += 2; // Space between subtasks
-        });
-        
-        // Summary
-        const completedCount = task.subtasks.filter(st => st.completed).length;
-        yPosition += 5;
-        checkPageBreak(10);
-        pdf.setFont("helvetica", "bold");
-        pdf.text(`Progress: ${completedCount}/${task.subtasks.length} completed`, margin, yPosition);
-      }
-      
-      // Tags
-      if (task.tags && task.tags.length > 0) {
-        yPosition += 10;
-        checkPageBreak(20);
-        
-        pdf.setFontSize(14);
-        pdf.setFont("helvetica", "bold");
-        pdf.text("Tags", margin, yPosition);
-        yPosition += 10;
-        
-        pdf.setFontSize(10);
-        pdf.setFont("helvetica", "normal");
-        const tagText = task.tags.map(tag => `#${tag}`).join(", ");
-        const tagLines = pdf.splitTextToSize(tagText, contentWidth);
-        tagLines.forEach((line: string) => {
-          checkPageBreak(8);
-          pdf.text(line, margin, yPosition);
-          yPosition += 6;
-        });
-      }
-      
-      // Footer
-      const footerY = pageHeight - 15;
-      pdf.setFontSize(8);
-      pdf.setFont("helvetica", "italic");
-      pdf.text(`Generated on ${format(new Date(), "PPP 'at' p")}`, margin, footerY);
-      pdf.text(`Page 1`, pageWidth - margin - 20, footerY);
-      
-      // Save PDF
-      const fileName = `task-${task.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-      pdf.save(fileName);
-      toast.success("Task exported to PDF successfully");
-    } catch (error) {
-      console.error("Error exporting PDF:", error);
-      toast.error("Failed to export task to PDF");
-    }
+      const fn = `task-${task.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}-${format(new Date(), "yyyy-MM-dd")}.pdf`;
+      pdf.save(fn); toast.success("PDF exported");
+    } catch { toast.error("Export failed"); }
   };
 
-  // Sort tasks: pinned first, then by priority and due date
-  const sortedTasks = useMemo(() => {
-    return [...filteredTasks].sort((a, b) => {
-      // Pinned tasks always come first
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      
-      // Then sort by priority
-      const priorityWeight = { high: 3, medium: 2, low: 1 };
-      const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
-      if (priorityDiff !== 0) return priorityDiff;
-      
-      // Then sort by due date
-      const dateA = a.dueDate || new Date(9999, 0, 1);
-      const dateB = b.dueDate || new Date(9999, 0, 1);
-      return dateA.getTime() - dateB.getTime();
-    });
-  }, [filteredTasks]);
+  /* ── Computed ── */
+
+  const canEditTask = (task: Task) =>
+    userRole === "SuperAdmin" || task.userId === userId || task.collaborators?.some(c => c.id === userId);
+  const isOwner = (task: Task) => task.userId === userId || userRole === "SuperAdmin";
+
+  const filteredTasks = useMemo(() => tasks.filter(task => {
+    const q = searchQuery.toLowerCase();
+    return (
+      (!q || task.title.toLowerCase().includes(q) || task.description?.toLowerCase().includes(q) || task.tags?.some(t => t.toLowerCase().includes(q))) &&
+      (filterStatus === "all" || task.status === filterStatus) &&
+      (filterPriority === "all" || task.priority === filterPriority) &&
+      (filterCategory === "all" || task.category === filterCategory) &&
+      (!showOverdueOnly || (task.dueDate && isPast(task.dueDate) && task.status !== "completed"))
+    );
+  }), [tasks, searchQuery, filterStatus, filterPriority, filterCategory, showOverdueOnly]);
+
+  const sortedTasks = useMemo(() => [...filteredTasks].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    const w = { high: 3, medium: 2, low: 1 };
+    const pd = w[b.priority] - w[a.priority];
+    if (pd) return pd;
+    return ((a.dueDate?.getTime() ?? 9e15) - (b.dueDate?.getTime() ?? 9e15));
+  }), [filteredTasks]);
+
+  const myTasks = sortedTasks.filter(t => !t.isCollaborative);
+  const collabTasks = sortedTasks.filter(t => t.isCollaborative);
+
+  const stats = useMemo(() => {
+    const total = tasks.length;
+    const completed = tasks.filter(t => t.status === "completed").length;
+    const inProgress = tasks.filter(t => t.status === "in-progress").length;
+    const pending = tasks.filter(t => t.status === "pending").length;
+    const overdue = tasks.filter(t => t.dueDate && isPast(t.dueDate) && t.status !== "completed").length;
+    const highPriority = tasks.filter(t => t.priority === "high" && t.status !== "completed").length;
+    return { total, completed, inProgress, pending, overdue, highPriority, rate: total > 0 ? Math.round((completed / total) * 100) : 0 };
+  }, [tasks]);
+
+  const hasFilters = filterStatus !== "all" || filterPriority !== "all" || filterCategory !== "all" || showOverdueOnly || !!searchQuery;
+
+  /* ── Select ops select styling ── */
+  const selectTriggerCls = "h-8 rounded-none bg-[#0a0d14] border border-orange-500/20 text-slate-400 text-[11px] font-mono focus:ring-0 focus:border-orange-500/40 hover:border-orange-500/30 [&>span]:truncate";
+  const selectContentCls = "rounded-none bg-[#0d1117] border border-orange-500/20 text-[11px] font-mono";
+  const selectItemCls = "text-slate-400 hover:bg-orange-500/10 hover:text-orange-400 focus:bg-orange-500/10 focus:text-orange-400 font-mono text-[11px] rounded-none cursor-pointer";
+
+  /* ── Form dialog shared content ── */
+  const TaskFormContent = () => (
+    <Tabs defaultValue="basic" className="w-full">
+      <TabsList className="grid w-full grid-cols-3 rounded-none bg-[#0a0d14] border border-orange-500/15 p-0 h-8">
+        {["basic","subtasks","notes"].map(v => (
+          <TabsTrigger key={v} value={v}
+            className="rounded-none text-[10px] font-mono uppercase tracking-widest text-slate-600 data-[state=active]:bg-orange-500/10 data-[state=active]:text-orange-400 data-[state=active]:shadow-none h-full border-r border-orange-500/10 last:border-r-0">
+            {v === "basic" ? "Parameters" : v === "subtasks" ? `Subtasks (${subtasks.length})` : "Notes"}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+
+      <TabsContent value="basic" className="space-y-4 mt-4">
+        <div>
+          <label className={opsLabel}>Mission Title *</label>
+          <input className={`${opsInput} mt-1`} placeholder="Enter designation..." value={title} onChange={e => setTitle(e.target.value)} />
+        </div>
+        <div>
+          <label className={opsLabel}>Mission Brief</label>
+          <textarea className={`${opsTextarea} mt-1`} rows={3} placeholder="Describe mission parameters..." value={description} onChange={e => setDescription(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={opsLabel}>Status</label>
+            <Select value={status} onValueChange={v => setStatus(v as Task["status"])}>
+              <SelectTrigger className={`${selectTriggerCls} mt-1`}><SelectValue /></SelectTrigger>
+              <SelectContent className={selectContentCls}>
+                {Object.entries(statusConfig).map(([k, v]) => (
+                  <SelectItem key={k} value={k} className={selectItemCls}>{v.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className={opsLabel}>Priority</label>
+            <Select value={priority} onValueChange={v => setPriority(v as Task["priority"])}>
+              <SelectTrigger className={`${selectTriggerCls} mt-1`}><SelectValue /></SelectTrigger>
+              <SelectContent className={selectContentCls}>
+                {Object.entries(priorityConfig).map(([k, v]) => (
+                  <SelectItem key={k} value={k} className={selectItemCls}>{v.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={opsLabel}>Due Date</label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={`${opsInput} mt-1 flex items-center gap-2 w-full text-left ${!dueDate ? "text-slate-700" : ""}`}>
+                  <CalendarIcon size={11} className="text-orange-500/50 shrink-0" />
+                  {dueDate ? format(dueDate, "PP") : "Select date"}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 rounded-none bg-[#0d1117] border border-orange-500/20" align="start">
+                <Calendar mode="single" selected={dueDate} onSelect={setDueDate} initialFocus
+                  className="bg-[#0d1117] text-slate-300 [&_.rdp-day_button:hover]:bg-orange-500/20 [&_.rdp-day_button.rdp-day_selected]:bg-orange-500/30" />
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div>
+            <label className={opsLabel}>Category</label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className={`${selectTriggerCls} mt-1`}><SelectValue placeholder="Select…" /></SelectTrigger>
+              <SelectContent className={selectContentCls}>
+                <SelectItem value="none" className={selectItemCls}>None</SelectItem>
+                {categories.map(c => <SelectItem key={c} value={c} className={selectItemCls}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div>
+          <label className={opsLabel}>Tags</label>
+          <div className="flex gap-2 mt-1">
+            <input className={opsInput} placeholder="Add tag..." value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addTag())} />
+            <button onClick={addTag} className="shrink-0 px-3 text-[10px] font-mono text-orange-400 border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors">ADD</button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {tags.map(tag => (
+              <span key={tag} className="inline-flex items-center gap-1 text-[10px] font-mono text-orange-500/70 border border-orange-500/20 px-2 py-0.5">
+                #{tag}
+                <button onClick={() => setTags(tags.filter(t => t !== tag))} className="text-slate-600 hover:text-red-400 transition-colors ml-0.5">×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="subtasks" className="space-y-3 mt-4">
+        <label className={opsLabel}>Subtasks — {subtasks.filter(s => s.completed).length}/{subtasks.length} complete</label>
+        <div className="flex gap-2">
+          <input className={opsInput} placeholder="Add subtask..." value={subtaskInput} onChange={e => setSubtaskInput(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addSubtask())} />
+          <button onClick={addSubtask} className="shrink-0 px-3 text-[10px] font-mono text-orange-400 border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors"><Plus size={12} /></button>
+        </div>
+        <div className="space-y-1.5 max-h-52 overflow-y-auto">
+          {subtasks.length === 0 ? (
+            <p className="text-[11px] font-mono text-slate-700 py-4 text-center">No subtasks defined</p>
+          ) : subtasks.map(st => (
+            <div key={st.id} className="flex items-center gap-2 px-3 py-2 border border-orange-500/10 bg-[#0a0d14]/60">
+              <Checkbox checked={st.completed} onCheckedChange={() => toggleSubtask(st.id)}
+                className="border-orange-500/30 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-none h-3.5 w-3.5" />
+              <span className={cn("flex-1 text-[11px] font-mono text-white", st.completed && "line-through text-white")}>{st.title}</span>
+              <button onClick={() => setSubtasks(subtasks.filter(s => s.id !== st.id))} className="text-slate-700 hover:text-red-400 transition-colors"><Trash2 size={10} /></button>
+            </div>
+          ))}
+        </div>
+      </TabsContent>
+
+      <TabsContent value="notes" className="mt-4">
+        <label className={opsLabel}>Notes & References</label>
+        <textarea className={`${opsTextarea} mt-1`} rows={10} placeholder="Additional notes, links, references..." value={notes} onChange={e => setNotes(e.target.value)} />
+      </TabsContent>
+    </Tabs>
+  );
+
+  /* ─────────────────────────────── RENDER ──────────────────────── */
 
   return (
-    <div className="min-h-screen w-full bg-[#050a14] relative overflow-hidden p-4">
-      {/* Animated background grid */}
-      <div className="absolute inset-0 h-full w-full">
-        <div 
-          className="h-full w-full opacity-10"
-          style={{
-            backgroundImage: `
-              linear-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(6, 182, 212, 0.15) 1px, transparent 1px)
-            `,
-            backgroundSize: '50px 50px',
-            backgroundRepeat: 'repeat'
-          }}
-        />
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
+    <div className="p-4 space-y-4">
 
-      {/* Floating particles */}
-      <div className="absolute inset-0 h-full w-full overflow-hidden pointer-events-none">
-        {[...Array(15)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-1 h-1 bg-cyan-400/40 rounded-full"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `float ${5 + Math.random() * 10}s linear infinite`,
-              animationDelay: `${Math.random() * 5}s` 
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Main Content */}
-      <div className="relative z-10 w-full px-4 py-4 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-wider text-white uppercase">
-              <span className="text-cyan-400">TASK</span> COMMAND
-            </h1>
-            <p className="text-white/80 text-xs tracking-[0.3em] uppercase mt-1">
-              Mission Control Center
-            </p>
-          </div>
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-cyan-300/80 font-mono">SYSTEM ONLINE</span>
-            </div>
-            <span className="text-cyan-500/50">|</span>
-            <span className="text-cyan-300/80 font-mono">V.2.0.6</span>
-          </div>
-        </div>
-
-        {/* Collaboration Notifications */}
-        {pendingRequests.length > 0 && (
-          <div className="relative group">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl blur opacity-30" />
-            <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-              <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-              <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-              <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-              <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-              
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                  <Users className="h-5 w-5" />
-                  Collaboration Requests ({pendingRequests.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {pendingRequests.map((request) => (
-                    <div key={request.id} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm text-cyan-100">{request.requesterName} wants to collaborate</p>
-                        <p className="text-xs text-white/70">Task: {request.taskTitle}</p>
-                        <p className="text-xs text-white/70">Role: {request.role}</p>
-                        {request.message && (
-                          <p className="text-xs text-white/50 mt-1 italic">"{request.message}"</p>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => acceptCollaborationRequest(request.id)}
-                          className="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
-                        >
-                          <CheckCircle2 className="h-4 w-4 mr-1" />
-                          Accept
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => rejectCollaborationRequest(request.id)}
-                          className="text-red-400 border-red-500/30 hover:bg-red-500/10 hover:border-red-400/50"
-                        >
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Decline
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+      {/* ── Collaboration Requests ── */}
+      {pendingRequests.length > 0 && (
+        <Panel className="overflow-hidden">
+          <SectionHeader label="Incoming Collaboration Requests" count={pendingRequests.length} icon={Radio} color="text-sky-400" />
+          <div className="p-3 space-y-2">
+            {pendingRequests.map(req => (
+              <div key={req.id} className="flex items-center justify-between gap-4 px-3 py-2.5 border border-sky-500/15 bg-sky-500/5">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-mono font-semibold text-slate-300 truncate">
+                    <span className="text-sky-400">{req.requesterName}</span> · {req.taskTitle}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-600 mt-0.5">Role: {req.role}{req.message ? ` · "${req.message}"` : ""}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => acceptCollaborationRequest(req.id)}
+                    className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors">
+                    Accept
+                  </button>
+                  <button onClick={() => rejectCollaborationRequest(req.id)}
+                    className="px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-wide text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors">
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+        </Panel>
+      )}
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl p-4 overflow-hidden">
-            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
-            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
-                <ListTodo className="h-5 w-5 text-cyan-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{stats.total}</p>
-                <p className="text-xs text-white/80 uppercase tracking-wider">Total Tasks</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-        
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-emerald-500/30 rounded-xl p-4 overflow-hidden">
-            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-emerald-500/50" />
-            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-emerald-500/50" />
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30">
-                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{stats.completed}</p>
-                <p className="text-xs text-emerald-400/60 uppercase tracking-wider">Completed</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-        
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-blue-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-blue-500/30 rounded-xl p-4 overflow-hidden">
-            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-blue-500/50" />
-            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-blue-500/50" />
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/20 border border-blue-500/30">
-                <PlayCircle className="h-5 w-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{stats.inProgress}</p>
-                <p className="text-xs text-white/80 uppercase tracking-wider">In Progress</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-        
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-yellow-500/30 rounded-xl p-4 overflow-hidden">
-            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-yellow-500/50" />
-            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-yellow-500/50" />
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-yellow-500/20 border border-yellow-500/30">
-                <Clock className="h-5 w-5 text-yellow-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{stats.pending}</p>
-                <p className="text-xs text-yellow-400/60 uppercase tracking-wider">Pending</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-        
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-red-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-red-500/30 rounded-xl p-4 overflow-hidden">
-            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-red-500/50" />
-            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-red-500/50" />
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-500/20 border border-red-500/30">
-                <AlertTriangle className="h-5 w-5 text-red-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{stats.overdue}</p>
-                <p className="text-xs text-red-400/60 uppercase tracking-wider">Overdue</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-        
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-orange-400 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
-          <Card className="relative bg-slate-900/90 backdrop-blur-xl border-orange-500/30 rounded-xl p-4 overflow-hidden">
-            <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-orange-500/50" />
-            <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-orange-500/50" />
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-orange-500/20 border border-orange-500/30">
-                <ArrowUpCircle className="h-5 w-5 text-orange-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{stats.highPriority}</p>
-                <p className="text-xs text-orange-400/60 uppercase tracking-wider">High Priority</p>
-              </div>
-            </div>
-          </Card>
-        </div>
+      {/* ── Stats grid ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <StatTile label="Total"       value={stats.total}       icon={Target}       accent="#f97316" />
+        <StatTile label="Completed"   value={stats.completed}   icon={CheckCircle2} accent="#10b981" />
+        <StatTile label="In Progress" value={stats.inProgress}  icon={Activity}     accent="#f97316" />
+        <StatTile label="Pending"     value={stats.pending}     icon={Clock}        accent="#f59e0b" />
+        <StatTile label="Overdue"     value={stats.overdue}     icon={AlertTriangle}accent="#ef4444" />
+        <StatTile label="High Pri."   value={stats.highPriority}icon={Zap}          accent="#f87171" />
       </div>
 
-      {/* Progress Bar */}
-      <div className="relative group">
-        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl blur opacity-20" />
-        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl p-4 overflow-hidden">
-          <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
-          <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-cyan-100 uppercase tracking-wider">Completion Rate</span>
-            <span className="text-sm font-bold text-cyan-400">{stats.completionRate}%</span>
-          </div>
-          <div className="h-2 bg-slate-800 rounded-full overflow-hidden border border-cyan-500/20">
-            <div 
-              className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.5)] transition-all duration-500"
-              style={{ width: `${stats.completionRate}%` }}
-            />
-          </div>
-        </Card>
-      </div>
+      {/* ── Completion bar ── */}
+      <Panel className="px-4 py-3">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-slate-600">Completion Rate</span>
+          <span className="text-[10px] font-mono font-bold text-orange-400 tabular-nums">{stats.rate}%</span>
+        </div>
+        <div className="h-1 bg-slate-800/80 overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-orange-600 to-orange-400 transition-all duration-700"
+            style={{ width: `${stats.rate}%` }} />
+        </div>
+      </Panel>
 
-      {/* Filters & Actions */}
-      <div className="relative group">
-        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500/50 to-purple-500/50 rounded-xl blur opacity-20" />
-        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl p-4 overflow-hidden">
-          <div className="absolute top-0 left-0 w-4 h-4 border-l border-t border-cyan-500/50" />
-          <div className="absolute top-0 right-0 w-4 h-4 border-r border-t border-cyan-500/50" />
-          <div className="absolute bottom-0 left-0 w-4 h-4 border-l border-b border-cyan-500/50" />
-          <div className="absolute bottom-0 right-0 w-4 h-4 border-r border-b border-cyan-500/50" />
-          
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-              <div className="flex flex-1 gap-2 items-center">
-                <div className="relative flex-1 max-w-md group/input">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70 group-focus-within/input:text-cyan-400 transition-colors" />
-                  <Input
-                    placeholder="Search missions..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-slate-800/50 border-cyan-500/30 text-white placeholder:text-white/50 rounded-lg focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all"
+      {/* ── Filter bar ── */}
+      <Panel className="px-4 py-3">
+        <div className="flex flex-col gap-3">
+          {/* Top row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[160px]">
+              <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
+              <input className={`${opsInput} pl-8`} placeholder="Search missions..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
+            <button onClick={() => setViewMode(m => m === "list" ? "grid" : "list")}
+              className="shrink-0 w-8 h-8 flex items-center justify-center border border-orange-500/20 bg-[#0a0d14] text-slate-500 hover:text-orange-400 hover:border-orange-500/40 transition-colors">
+              {viewMode === "list" ? <LayoutGrid size={13} /> : <List size={13} />}
+            </button>
+            {selectedTasks.size > 0 && (
+              <button onClick={() => setIsBulkActionsOpen(true)}
+                className="flex items-center gap-1.5 px-3 h-8 text-[10px] font-mono font-bold uppercase tracking-wide text-orange-400 border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors">
+                <CheckSquare size={11} /> {selectedTasks.size} selected
+              </button>
+            )}
+            <button onClick={() => setIsCreateDialogOpen(true)}
+              className="flex items-center gap-1.5 px-4 h-8 text-[10px] font-mono font-bold uppercase tracking-widest text-orange-400 border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors shrink-0">
+              <Plus size={11} /> New Mission
+            </button>
+          </div>
+
+          {/* Filter chips */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter size={10} className="text-slate-700 shrink-0" />
+            <Select value={filterStatus} onValueChange={v => setFilterStatus(v as any)}>
+              <SelectTrigger className={`${selectTriggerCls} w-32`}><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent className={selectContentCls}>
+                <SelectItem value="all" className={selectItemCls}>All Status</SelectItem>
+                {Object.entries(statusConfig).map(([k, v]) => <SelectItem key={k} value={k} className={selectItemCls}>{v.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterPriority} onValueChange={v => setFilterPriority(v as any)}>
+              <SelectTrigger className={`${selectTriggerCls} w-32`}><SelectValue placeholder="Priority" /></SelectTrigger>
+              <SelectContent className={selectContentCls}>
+                <SelectItem value="all" className={selectItemCls}>All Priority</SelectItem>
+                {Object.entries(priorityConfig).map(([k, v]) => <SelectItem key={k} value={k} className={selectItemCls}>{v.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className={`${selectTriggerCls} w-36`}><SelectValue placeholder="Category" /></SelectTrigger>
+              <SelectContent className={selectContentCls}>
+                <SelectItem value="all" className={selectItemCls}>All Categories</SelectItem>
+                {categories.map(c => <SelectItem key={c} value={c} className={selectItemCls}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <button
+              onClick={() => setShowOverdueOnly(!showOverdueOnly)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 h-8 text-[10px] font-mono font-bold uppercase tracking-wide border transition-colors",
+                showOverdueOnly
+                  ? "text-red-400 border-red-500/40 bg-red-500/10"
+                  : "text-slate-600 border-orange-500/15 bg-[#0a0d14] hover:border-orange-500/30 hover:text-slate-400"
+              )}>
+              <AlertTriangle size={10} /> Overdue
+            </button>
+
+            {hasFilters && (
+              <button
+                onClick={() => { setFilterStatus("all"); setFilterPriority("all"); setFilterCategory("all"); setShowOverdueOnly(false); setSearchQuery(""); }}
+                className="flex items-center gap-1 text-[10px] font-mono text-slate-700 hover:text-red-400 transition-colors">
+                <X size={10} /> Clear
+              </button>
+            )}
+          </div>
+        </div>
+      </Panel>
+
+      {/* ── Task Columns ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* My Tasks */}
+        <div className="flex flex-col">
+          <Panel className="flex flex-col flex-1">
+            <SectionHeader label="My Missions" count={myTasks.length} icon={Shield} />
+            <div className="px-3 py-2 border-b border-orange-500/10 flex items-center gap-2">
+              <Checkbox
+                checked={selectAll}
+                onCheckedChange={() => { if (selectAll) { setSelectedTasks(new Set()); } else { setSelectedTasks(new Set(myTasks.map(t => t.id))); } setSelectAll(!selectAll); }}
+                className="border-orange-500/30 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-none h-3 w-3"
+              />
+              <span className="text-[9px] font-mono text-slate-700 uppercase tracking-widest">Select all</span>
+            </div>
+            <ScrollArea className="flex-1" style={{ maxHeight: 540 }}>
+              <div className={cn("p-2", viewMode === "grid" ? "grid grid-cols-2 gap-2" : "space-y-1.5")}>
+                {myTasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-2">
+                    <Terminal size={24} className="text-slate-800" />
+                    <p className="text-[11px] font-mono text-slate-700 uppercase tracking-widest">No missions found</p>
+                  </div>
+                ) : myTasks.map(task => (
+                  <TaskCard key={task.id} task={task}
+                    isSelected={selectedTasks.has(task.id)}
+                    onSelect={() => { const n = new Set(selectedTasks); n.has(task.id) ? n.delete(task.id) : n.add(task.id); setSelectedTasks(n); }}
+                    onView={() => openViewDialog(task)}
+                    onEdit={() => openEditDialog(task)}
+                    onDelete={() => handleDeleteTask(task.id)}
+                    onPin={() => togglePin(task.id, task.pinned || false)}
+                    onCollaborate={() => openCollaborationDialog(task)}
+                    canEdit={!!canEditTask(task)} isOwner={isOwner(task)}
                   />
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setViewMode(viewMode === "list" ? "grid" : "list")}
-                  className="bg-slate-800/50 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-400/50"
-                >
-                  {viewMode === "list" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
-                </Button>
+                ))}
               </div>
-              <div className="flex gap-2">
-                {selectedTasks.size > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsBulkActionsOpen(true)}
-                    className="gap-2 bg-slate-800/50 border-cyan-500/30 text-white hover:bg-cyan-500/20 hover:border-cyan-400/50"
-                  >
-                    <CheckSquare className="h-4 w-4 text-cyan-400" />
-                    {selectedTasks.size} selected
-                  </Button>
-                )}
-                <Button 
-                  onClick={() => setIsCreateDialogOpen(true)}
-                  className="gap-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
-                >
-                  <Plus className="h-4 w-4" />
-                  New Mission
-                </Button>
-              </div>
-            </div>
-
-            {/* Filter Bar */}
-            <div className="flex flex-wrap gap-2 items-center">
-              <Filter className="h-4 w-4 text-white/70" />
-              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
-                <SelectTrigger className="w-[140px] h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-cyan-500/30">
-                  <SelectItem value="all" className="text-white focus:bg-cyan-500/20">All Status</SelectItem>
-                  <SelectItem value="pending" className="text-white focus:bg-cyan-500/20">Pending</SelectItem>
-                  <SelectItem value="in-progress" className="text-white focus:bg-cyan-500/20">In Progress</SelectItem>
-                  <SelectItem value="completed" className="text-white focus:bg-cyan-500/20">Completed</SelectItem>
-                  <SelectItem value="on-hold" className="text-white focus:bg-cyan-500/20">On Hold</SelectItem>
-                  <SelectItem value="cancelled" className="text-white focus:bg-cyan-500/20">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filterPriority} onValueChange={(v) => setFilterPriority(v as any)}>
-                <SelectTrigger className="w-[140px] h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
-                  <SelectValue placeholder="All Priorities" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-cyan-500/30">
-                  <SelectItem value="all" className="text-white focus:bg-cyan-500/20">All Priorities</SelectItem>
-                  <SelectItem value="high" className="text-white focus:bg-cyan-500/20">High</SelectItem>
-                  <SelectItem value="medium" className="text-white focus:bg-cyan-500/20">Medium</SelectItem>
-                  <SelectItem value="low" className="text-white focus:bg-cyan-500/20">Low</SelectItem>
-                </SelectContent>
-              </Select>
-
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-[140px] h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-cyan-500/30">
-              <SelectItem className="text-white focus:bg-cyan-500/20" value="all">All Categories</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem className="text-white focus:bg-cyan-500/20" key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            variant={showOverdueOnly ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowOverdueOnly(!showOverdueOnly)}
-            className="w-[140px] h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50"
-          >
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            Overdue Only
-          </Button>
-
-          {(filterStatus !== "all" || filterPriority !== "all" || filterCategory !== "all" || showOverdueOnly || searchQuery) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setFilterStatus("all");
-                setFilterPriority("all");
-                setFilterCategory("all");
-                setShowOverdueOnly(false);
-                setSearchQuery("");
-              }}
-              className="h-8"
-            >
-              Clear Filters
-            </Button>
-          )}
-        </div>
-        </div>
-      </Card>
-      </div>
-
-      {/* GRID LAYOUT: My Tasks (Left) | Collaborative Tasks (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* LEFT SIDE: My Tasks */}
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-xl blur opacity-20 group-hover:opacity-30 transition duration-500" />
-          <Card className="relative h-full bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-            <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-            <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-            <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-            <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-            
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                  <ListTodo className="h-5 w-5" />
-                  My Tasks ({sortedTasks.filter(task => !task.isCollaborative).length})
-                </CardTitle>
-                {sortedTasks.filter(task => !task.isCollaborative).length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={selectAll}
-                      onCheckedChange={handleSelectAll}
-                      id="select-all"
-                      className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
-                    />
-                    <Label htmlFor="select-all" className="text-sm cursor-pointer text-white">
-                      Select All
-                    </Label>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[500px] pr-4">
-                {sortedTasks.filter(task => !task.isCollaborative).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-32 text-cyan-300/70">
-                    <ListTodo className="h-8 w-8 mb-2 opacity-70" />
-                    <p className="text-sm text-white">No missions found</p>
-                    <p className="text-xs text-white/70">Initialize new mission</p>
-                  </div>
-                ) : (
-                  <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-2"}>
-                    {sortedTasks.filter(task => !task.isCollaborative).map((task) => {
-                    const statusConfigItem = statusConfig[task.status];
-                    const StatusIcon = statusConfigItem.icon;
-                    const priorityConfigItem = priorityConfig[task.priority];
-                    const PriorityIcon = priorityConfigItem.icon;
-                    const dueStatus = getDueDateStatus(task.dueDate, task.status);
-                    const isSelected = selectedTasks.has(task.id);
-
-                    return (
-                      <div
-                        key={task.id}
-                        onClick={() => openViewDialog(task)}
-                        className={cn(
-                          "group flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer bg-slate-800/50 border-cyan-500/20 hover:bg-cyan-500/10 hover:border-cyan-400/40",
-                          isSelected && "border-cyan-400 bg-cyan-500/20",
-                          task.pinned && "border-yellow-400/50 bg-yellow-500/10",
-                          task.priority === "high" && task.status !== "completed" && "border-l-4 border-l-red-500"
-                        )}
-                      >
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleTaskSelection(task.id);
-                          }}
-                          className="mt-1"
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="h-5 w-5 text-cyan-400" />
-                          ) : (
-                            <Square className="h-5 w-5 text-cyan-400/40" />
-                          )}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                {task.pinned && <Pin className="h-4 w-4 text-yellow-400 fill-yellow-400" />}
-                                {task.isCollaborative && (
-                                  <div className="flex items-center gap-1 bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full text-xs font-medium border border-cyan-400/30">
-                                    <Users className="h-3 w-3" />
-                                    Team
-                                  </div>
-                                )}
-                                <p className="font-medium leading-tight text-cyan-100">{task.title}</p>
-                              </div>
-                              {task.description && (
-                                <p className="text-sm text-white/80 mt-1 line-clamp-2">
-                                  {task.description}
-                                </p>
-                              )}
-                            </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800/50 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-400/50"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                {canEditTask(task) && (
-                                  <DropdownMenuItem onClick={(e) => {
-                                    e.stopPropagation();
-                                    openEditDialog(task);
-                                  }}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                )}
-                                {isOwner(task) && (
-                                  <DropdownMenuItem onClick={(e) => {
-                                    e.stopPropagation();
-                                    openCollaborationDialog(task);
-                                  }}>
-                                    <UserPlus className="h-4 w-4 mr-2" />
-                                    Add Collaborator
-                                  </DropdownMenuItem>
-                                )}
-                                {canEditTask(task) && (
-                                  <DropdownMenuItem onClick={(e) => {
-                                    e.stopPropagation();
-                                    togglePin(task.id, task.pinned || false);
-                                  }}>
-                                    <Pin className={cn("h-4 w-4 mr-2", task.pinned && "fill-current")} />
-                                    {task.pinned ? "Unpin" : "Pin"}
-                                  </DropdownMenuItem>
-                                )}
-                                {canEditTask(task) && <DropdownMenuSeparator />}
-                                {canEditTask(task) && (
-                                  <DropdownMenuItem
-                                    className="text-red-600"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteTask(task.id);
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2 mt-2">
-                            <Badge variant="outline" className={cn("text-xs", statusConfigItem.color)}>
-                              <StatusIcon className="h-3 w-3 mr-1" />
-                              {statusConfigItem.label}
-                            </Badge>
-
-                            <Badge variant="outline" className={cn("text-xs", priorityConfigItem.bgColor, priorityConfigItem.color)}>
-                              <PriorityIcon className="h-3 w-3 mr-1" />
-                              {priorityConfigItem.label}
-                            </Badge>
-
-                            {task.category && (
-                              <Badge className="text-xs">
-                                <Tag className="h-3 w-3 mr-1" />
-                                {task.category}
-                              </Badge>
-                            )}
-
-                            {task.dueDate && (
-                              <Badge
-                                
-                                className={cn(
-                                  "text-xs",
-                                  dueStatus?.color || "bg-gray-500/10 text-white"
-                                )}
-                              >
-                                <CalendarIcon className="h-3 w-3 mr-1" />
-                                {dueStatus?.label || format(task.dueDate, "MMM d")}
-                              </Badge>
-                            )}
-
-                            {task.tags?.map((tag) => (
-                              <Badge key={tag} variant="secondary" className="text-xs">
-                                #{tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </ScrollArea>
-          </CardContent>
-        </Card>
+          </Panel>
         </div>
 
-        {/* RIGHT SIDE: Collaborative Tasks */}
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-20 group-hover:opacity-30 transition duration-500" />
-          <Card className="relative h-full bg-slate-900/90 backdrop-blur-xl border-blue-500/30 rounded-xl overflow-hidden">
-            <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-blue-500/50" />
-            <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-blue-500/50" />
-            <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-blue-500/50" />
-            <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-blue-500/50" />
-            
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2 text-blue-400 tracking-wider uppercase">
-                <Users className="h-5 w-5" />
-                Collaborative Tasks ({sortedTasks.filter(task => task.isCollaborative).length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[500px] pr-4">
-                {sortedTasks.filter(task => task.isCollaborative).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-32 text-blue-300/70">
-                    <Users className="h-8 w-8 mb-2 opacity-70" />
-                    <p className="text-sm text-white">No collaborative missions</p>
-                    <p className="text-xs text-white/70">Add collaborators to missions</p>
+        {/* Collaborative Tasks */}
+        <div className="flex flex-col">
+          <Panel className="flex flex-col flex-1">
+            <SectionHeader label="Collaborative Missions" count={collabTasks.length} icon={Users} color="text-sky-400" />
+            <ScrollArea className="flex-1" style={{ maxHeight: 572 }}>
+              <div className={cn("p-2", viewMode === "grid" ? "grid grid-cols-2 gap-2" : "space-y-1.5")}>
+                {collabTasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-2">
+                    <Users size={24} className="text-slate-800" />
+                    <p className="text-[11px] font-mono text-slate-700 uppercase tracking-widest">No collaborative missions</p>
                   </div>
-                ) : (
-                <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-2"}>
-                  {sortedTasks.filter(task => task.isCollaborative).map((task) => {
-                    const statusConfigItem = statusConfig[task.status];
-                    const StatusIcon = statusConfigItem.icon;
-                    const priorityConfigItem = priorityConfig[task.priority];
-                    const PriorityIcon = priorityConfigItem.icon;
-                    const dueStatus = getDueDateStatus(task.dueDate, task.status);
-
-                    return (
-                      <div
-                        key={task.id}
-                        onClick={() => openViewDialog(task)}
-                        className={cn(
-                          "group flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer bg-white",
-                          task.pinned && "border-yellow-400 bg-yellow-50/30",
-                          task.priority === "high" && task.status !== "completed" && "border-l-4 border-l-red-500"
-                        )}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {task.pinned && <Pin className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
-                                <div className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
-                                  <Users className="h-3 w-3" />
-                                  Collaborative
-                                </div>
-                                <p className="font-medium leading-tight">{task.title}</p>
-                              </div>
-                              {task.description && (
-                                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                  {task.description}
-                                </p>
-                              )}
-                            </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  openViewDialog(task);
-                                }}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                {isOwner(task) && (
-                                  <DropdownMenuItem onClick={(e) => {
-                                    e.stopPropagation();
-                                    openCollaborationDialog(task);
-                                  }}>
-                                    <UserPlus className="h-4 w-4 mr-2" />
-                                    Add Collaborator
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                          
-                          <div className="flex flex-wrap items-center gap-2 mt-2">
-                            <Badge variant="outline" className={cn("text-xs", statusConfigItem.color)}>
-                              <StatusIcon className="h-3 w-3 mr-1" />
-                              {statusConfigItem.label}
-                            </Badge>
-
-                            <Badge variant="outline" className={cn("text-xs", priorityConfigItem.bgColor, priorityConfigItem.color)}>
-                              <PriorityIcon className="h-3 w-3 mr-1" />
-                              {priorityConfigItem.label}
-                            </Badge>
-
-                            {task.category && (
-                              <Badge variant="outline" className="text-xs">
-                                <Tag className="h-3 w-3 mr-1" />
-                                {task.category}
-                              </Badge>
-                            )}
-
-                            {task.dueDate && (
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-xs",
-                                  dueStatus?.color || "bg-gray-500/10 text-gray-600"
-                                )}
-                              >
-                                <CalendarIcon className="h-3 w-3 mr-1" />
-                                {dueStatus?.label || format(task.dueDate, "MMM d")}
-                              </Badge>
-                            )}
-
-                            {task.tags?.map((tag) => (
-                              <Badge key={tag} variant="secondary" className="text-xs">
-                                #{tag}
-                              </Badge>
-                            ))}
-                          </div>
-
-                          {task.userName && (
-                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <div className="h-5 w-5 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-semibold text-[8px]">
-                                  {task.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                                </div>
-                                <span>Owner: {task.userName}</span>
-                              </div>
-                              {task.collaborators && task.collaborators.length > 0 && (
-                                <div className="flex items-center gap-1">
-                                  <Users className="h-3 w-3 text-blue-500" />
-                                  <span>{task.collaborators.length} collaborator{task.collaborators.length > 1 ? 's' : ''}</span>
-                                </div>
-                              )}
-                              {dueStatus && (
-                                <div className={dueStatus.color}>
-                                  {dueStatus.label}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                ) : collabTasks.map(task => (
+                  <TaskCard key={task.id} task={task}
+                    isSelected={selectedTasks.has(task.id)}
+                    onSelect={() => { const n = new Set(selectedTasks); n.has(task.id) ? n.delete(task.id) : n.add(task.id); setSelectedTasks(n); }}
+                    onView={() => openViewDialog(task)}
+                    onEdit={() => openEditDialog(task)}
+                    onDelete={() => handleDeleteTask(task.id)}
+                    onPin={() => togglePin(task.id, task.pinned || false)}
+                    onCollaborate={() => openCollaborationDialog(task)}
+                    canEdit={!!canEditTask(task)} isOwner={isOwner(task)}
+                  />
+                ))}
+              </div>
             </ScrollArea>
-          </CardContent>
-        </Card>
-      </div>
+          </Panel>
+        </div>
       </div>
 
-      {/* Create/Edit Dialog */}
-      <Dialog
-        open={isCreateDialogOpen || isEditDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setIsCreateDialogOpen(false);
-            setIsEditDialogOpen(false);
-            resetForm();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-cyan-500/30 rounded-xl">
-          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-          
-          <DialogHeader>
-            <DialogTitle className="text-cyan-400 tracking-wider uppercase">{editingTask ? "Edit Mission" : "Create New Mission"}</DialogTitle>
-            <DialogDescription className="text-white/80">
-              {editingTask ? "Update mission parameters." : "Initialize new mission for tracking."}
+      {/* ══════════════════════════════════════════════════ */}
+      {/* ── Create / Edit Dialog ── */}
+      <Dialog open={isCreateDialogOpen || isEditDialogOpen} onOpenChange={open => { if (!open) { setIsCreateDialogOpen(false); setIsEditDialogOpen(false); resetForm(); } }}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto rounded-none bg-[#0d1117] border border-orange-500/20 p-0 gap-0">
+          <div className="px-5 py-3.5 border-b border-orange-500/15 bg-[#0a0d14]">
+            <DialogTitle className="text-[11px] font-mono font-bold uppercase tracking-widest text-orange-400 flex items-center gap-2">
+              <div className="w-1 h-4 bg-orange-500" />
+              {editingTask ? "Edit Mission Parameters" : "Initialize New Mission"}
+            </DialogTitle>
+            <DialogDescription className="text-[10px] font-mono text-slate-600 mt-0.5 ml-3">
+              {editingTask ? "Update existing mission record" : "Create new mission entry in the log"}
             </DialogDescription>
-          </DialogHeader>
+          </div>
+          <div className="p-5"><TaskFormContent /></div>
+          <div className="px-5 py-3 border-t border-orange-500/15 bg-[#0a0d14] flex justify-end gap-2">
+            <button onClick={() => { setIsCreateDialogOpen(false); setIsEditDialogOpen(false); resetForm(); }}
+              className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-slate-500 border border-slate-700/60 hover:border-slate-600 hover:text-slate-400 transition-colors">
+              Cancel
+            </button>
+            <button onClick={editingTask ? handleUpdateTask : handleCreateTask} disabled={isLoading}
+              className="px-4 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-orange-400 border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors disabled:opacity-40">
+              {isLoading ? "Saving…" : editingTask ? "Update Mission" : "Create Mission"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-          <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 bg-slate-800/50 border border-cyan-500/30">
-              <TabsTrigger value="basic" className="text-white data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300">Basic Info</TabsTrigger>
-              <TabsTrigger value="subtasks" className="text-white data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300">Subtasks ({subtasks.length})</TabsTrigger>
-              <TabsTrigger value="details" className="text-white data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300">Notes</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="basic" className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="title" className="text-white uppercase tracking-wider text-xs font-medium">Mission Title *</Label>
-                <Input
-                  id="title"
-                  placeholder="Enter mission designation"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="bg-slate-800/50 border-cyan-500/30 text-white placeholder:text-white/50 rounded-lg focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                />
+      {/* ── View Dialog ── */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto rounded-none bg-[#0d1117] border border-orange-500/20 p-0 gap-0">
+          {viewingTask && (
+            <>
+              <div className="px-5 py-3.5 border-b border-orange-500/15 bg-[#0a0d14]">
+                <DialogTitle className="text-[11px] font-mono font-bold uppercase tracking-widest text-orange-400 flex items-center gap-2">
+                  <div className="w-1 h-4 bg-orange-500" />Mission Details
+                </DialogTitle>
+                <DialogDescription className="text-[10px] font-mono text-slate-600 mt-0.5 ml-3 truncate">{viewingTask.title}</DialogDescription>
               </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="description" className="text-white uppercase tracking-wider text-xs font-medium">Mission Brief</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Describe mission parameters..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="bg-slate-800/50 border-cyan-500/30 text-white placeholder:text-white/50 rounded-lg focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="status" className="text-white uppercase tracking-wider text-xs font-medium">Mission Status</Label>
-                  <Select value={status} onValueChange={(v: Task["status"]) => setStatus(v)}>
-                    <SelectTrigger id="status" className="bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-cyan-500/30">
-                      <SelectItem value="pending" className="text-white focus:bg-cyan-500/20">Pending</SelectItem>
-                      <SelectItem value="in-progress" className="text-white focus:bg-cyan-500/20">In Progress</SelectItem>
-                      <SelectItem value="completed" className="text-white focus:bg-cyan-500/20">Completed</SelectItem>
-                      <SelectItem value="on-hold" className="text-white focus:bg-cyan-500/20">On Hold</SelectItem>
-                      <SelectItem value="cancelled" className="text-white focus:bg-cyan-500/20">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-200 leading-snug">{viewingTask.title}</h3>
+                  {viewingTask.description && <p className="text-[11px] font-mono text-slate-500 mt-1.5 leading-relaxed">{viewingTask.description}</p>}
                 </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="priority" className="text-white uppercase tracking-wider text-xs font-medium">Priority Level</Label>
-                  <Select value={priority} onValueChange={(v: Task["priority"]) => setPriority(v)}>
-                    <SelectTrigger id="priority" className="bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-cyan-500/30">
-                      <SelectItem value="low" className="text-white focus:bg-cyan-500/20">Low</SelectItem>
-                      <SelectItem value="medium" className="text-white focus:bg-cyan-500/20">Medium</SelectItem>
-                      <SelectItem value="high" className="text-white focus:bg-cyan-500/20">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-white uppercase tracking-wider text-xs font-medium">Due Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !dueDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dueDate ? format(dueDate, "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={dueDate}
-                        onSelect={setDueDate}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="category" className="text-white uppercase tracking-wider text-xs font-medium">Category</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger id="category" className="bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-cyan-500/30">
-                      <SelectItem value="none">No Category</SelectItem>
-                      {categories.map((cat) => (
-                        <SelectItem className="text-white focus:bg-cyan-500/20" key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid gap-2">
-                <Label className="text-white uppercase tracking-wider text-xs font-medium">Tags</Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add a tag..."
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
-                    className="text-white uppercase"
-                  />
-                  <Button type="button" variant="outline" onClick={addTag}>
-                    Add
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="gap-1 uppercase">
-                      #{tag}
-                      <button
-                        onClick={() => removeTag(tag)}
-                        className="ml-1 hover:text-red-500"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="subtasks" className="space-y-4">
-              <div className="grid gap-2">
-                <Label className="text-white uppercase tracking-wider text-xs font-medium">Subtasks ({subtasks.filter(st => st.completed).length}/{subtasks.length} completed)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add a subtask..."
-                    value={subtaskInput}
-                    onChange={(e) => setSubtaskInput(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addSubtask())}
-                    className="text-white"
-                  />
-                  <Button type="button" variant="outline" onClick={addSubtask}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                  {subtasks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No subtasks yet. Add some to break down this task.</p>
-                  ) : (
-                    subtasks.map((subtask) => (
-                      <div
-                        key={subtask.id}
-                        className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted/50 text-white"
-                      >
-                        <Checkbox
-                          checked={subtask.completed}
-                          onCheckedChange={() => toggleSubtask(subtask.id)}
-                        />
-                        <span className={cn("flex-1 text-sm", subtask.completed && "line-through text-muted-foreground")}>
-                          {subtask.title}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => deleteSubtask(subtask.id)}
-                        >
-                          <Trash2 className="h-3 w-3 text-red-500" />
-                        </Button>
-                      </div>
-                    ))
+                <div className="flex flex-wrap gap-1.5">
+                  <StatusBadge status={viewingTask.status} />
+                  <PriorityBadge priority={viewingTask.priority} />
+                  {viewingTask.category && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono border border-slate-700/60 text-slate-500">{viewingTask.category}</span>
                   )}
                 </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="details" className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="notes" className="text-white uppercase tracking-wider text-xs font-medium">Notes</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Additional notes, links, or references..."
-                  value={notes}
-                  className="text-white"
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={10}
-                />
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsCreateDialogOpen(false);
-                setIsEditDialogOpen(false);
-                resetForm();
-              }}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={editingTask ? handleUpdateTask : handleCreateTask}
-              disabled={isLoading}
-            >
-              {isLoading ? "Saving..." : editingTask ? "Update Task" : "Create Task"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Task Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-cyan-500/30 rounded-xl">
-          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-          
-          <DialogHeader>
-            <DialogTitle className="text-cyan-400 tracking-wider uppercase">Mission Details</DialogTitle>
-          </DialogHeader>
-          {viewingTask && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-white">{viewingTask.title}</h3>
-                {viewingTask.description && (
-                  <p className="text-white/70 mt-2">{viewingTask.description}</p>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Badge className={statusConfig[viewingTask.status].color}>
-                  {statusConfig[viewingTask.status].label}
-                </Badge>
-                <Badge className={cn(priorityConfig[viewingTask.priority].bgColor, priorityConfig[viewingTask.priority].color)}>
-                  {priorityConfig[viewingTask.priority].label} Priority
-                </Badge>
-                {viewingTask.category && <Badge>{viewingTask.category}</Badge>}
-              </div>
-
-              <div className="space-y-2 text-sm">
-                {viewingTask.dueDate && (
-                  <div className="flex items-center gap-2">
-                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-white/70">Due: {format(viewingTask.dueDate, "PPP")}</span>
+                <div className="space-y-1.5 text-[10px] font-mono text-slate-600">
+                  {viewingTask.dueDate && <div className="flex items-center gap-2"><CalendarIcon size={10} className="text-orange-500/50" />Due: {format(viewingTask.dueDate, "PPP")}</div>}
+                  <div className="flex items-center gap-2"><Clock size={10} className="text-orange-500/50" />Created: {viewingTask.createdAt ? format(viewingTask.createdAt, "PPp") : "—"}</div>
+                </div>
+                {viewingTask.notes && (
+                  <div className="px-3 py-2.5 border border-orange-500/10 bg-[#0a0d14]/60">
+                    <p className="text-[9px] font-mono uppercase tracking-widest text-slate-700 mb-1.5">Notes</p>
+                    <p className="text-[11px] font-mono text-slate-400 whitespace-pre-wrap leading-relaxed">{viewingTask.notes}</p>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-white/70">Created: {viewingTask.createdAt ? format(viewingTask.createdAt, "PPp") : "Just now"}</span>
-                </div>
-              </div>
-
-              {viewingTask.tags && viewingTask.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {viewingTask.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary">#{tag}</Badge>
-                  ))}
-                </div>
-              )}
-
-              {viewingTask.notes && (
-                <div className="bg-muted p-3 rounded-md">
-                  <Label className="text-xs text-muted-foreground">Notes</Label>
-                  <p className="text-sm mt-1 whitespace-pre-wrap">{viewingTask.notes}</p>
-                </div>
-              )}
-
-              {/* Subtasks Section */}
-              {viewingTask.subtasks && viewingTask.subtasks.length > 0 && (
-                <div className="border rounded-lg p-3">
-                  <Label className="text-xs text-white mb-2 block">
-                    Subtasks ({viewingTask.subtasks.filter(st => st.completed).length}/{viewingTask.subtasks.length})
-                  </Label>
-                  <div className="space-y-1 text-white/70">
-                    {viewingTask.subtasks.map((subtask) => (
-                      <div key={subtask.id} className="flex items-center gap-2 text-sm">
-                        {subtask.completed ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <Circle className="h-4 w-4 text-white" />
-                        )}
-                        <span className={cn(subtask.completed && "line-through text-white")}>
-                          {subtask.title}
-                        </span>
-                      </div>
-                    ))}
+                {viewingTask.tags && viewingTask.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {viewingTask.tags.map(t => <span key={t} className="text-[10px] font-mono text-orange-500/50">#{t}</span>)}
                   </div>
-                </div>
-              )}
-
-              {/* Collaborators Section */}
-              {viewingTask.collaborators && viewingTask.collaborators.length > 0 && (
-                <div className="border rounded-lg p-3">
-                  <Label className="text-xs text-muted-foreground mb-2 block">
-                    Collaborators ({viewingTask.collaborators.length})
-                  </Label>
-                  <div className="space-y-2">
-                    {viewTaskEnhancedCollaborators.map((collaborator) => (
-                      <div key={collaborator.id} className="flex items-center justify-between p-3 bg-muted/10 rounded-md">
-                        <div className="flex items-center gap-3">
-                          <div className="relative">
-                            <img
-                              src={collaborator.profilePicture || `/avatars/default.jpg`}
-                              alt={collaborator.name}
-                              className="h-10 w-10 rounded-full object-cover border-2 border-background"
-                              onError={(e) => {
-                                // Fallback to initials if image fails
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const fallback = target.nextElementSibling as HTMLDivElement;
-                                if (fallback) fallback.style.display = 'flex';
-                              }}
-                            />
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm hidden">
-                              {collaborator.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                )}
+                {/* Subtasks */}
+                {viewingTask.subtasks && viewingTask.subtasks.length > 0 && (
+                  <div className="border border-orange-500/10">
+                    <div className="px-3 py-1.5 border-b border-orange-500/10 bg-[#0a0d14]/60">
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-slate-700">Subtasks — {viewingTask.subtasks.filter(s => s.completed).length}/{viewingTask.subtasks.length}</span>
+                    </div>
+                    <div className="p-2 space-y-1">
+                      {viewingTask.subtasks.map(st => (
+                        <div key={st.id} className="flex items-center gap-2 text-[11px] font-mono">
+                          {st.completed ? <CheckCircle2 size={11} className="text-emerald-400 shrink-0" /> : <Circle size={11} className="text-slate-700 shrink-0" />}
+                          <span className={cn("text-slate-400", st.completed && "line-through text-slate-700")}>{st.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Collaborators */}
+                {viewTaskEnhancedCollaborators.length > 0 && (
+                  <div className="border border-orange-500/10">
+                    <div className="px-3 py-1.5 border-b border-orange-500/10 bg-[#0a0d14]/60">
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-slate-700">Collaborators ({viewTaskEnhancedCollaborators.length})</span>
+                    </div>
+                    <div className="p-2 space-y-1.5">
+                      {viewTaskEnhancedCollaborators.map(c => (
+                        <div key={c.id} className="flex items-center justify-between gap-2 px-2 py-1.5 border border-orange-500/5 bg-[#0a0d14]/40">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 flex items-center justify-center bg-gradient-to-br from-orange-500/20 to-orange-400/10 border border-orange-500/20 text-[9px] font-mono text-orange-400 shrink-0">
+                              {c.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
                             </div>
-                            {collaborator.status === 'accepted' && (
-                              <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-background"></div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-mono text-slate-300 truncate">{c.name}</p>
+                              <p className="text-[9px] font-mono text-slate-700 truncate">{c.position || c.role}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[9px] font-mono uppercase tracking-wide text-orange-500/50 border border-orange-500/20 px-1.5 py-0.5">{c.role}</span>
+                            {isOwner(viewingTask) && (
+                              <button onClick={() => removeCollaborator(viewingTask.id, c.id)} className="text-slate-700 hover:text-red-400 transition-colors"><UserMinus size={11} /></button>
                             )}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium">{collaborator.name}</p>
-                              <Badge className="text-xs uppercase">
-                                {collaborator.role}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              {collaborator.department && (
-                                <span>{collaborator.department}</span>
-                              )}
-                              {collaborator.position && (
-                                <>
-                                  {collaborator.department && <span>·</span>}
-                                  <span>{collaborator.position}</span>
-                                </>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">{collaborator.email}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* History */}
+                {viewingTask.history && viewingTask.history.length > 0 && (
+                  <div className="border border-orange-500/10">
+                    <div className="px-3 py-1.5 border-b border-orange-500/10 bg-[#0a0d14]/60">
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-slate-700">Activity Log</span>
+                    </div>
+                    <div className="p-2 space-y-1.5 max-h-40 overflow-y-auto">
+                      {viewingTask.history.map((entry, i) => (
+                        <div key={entry.id || i} className="flex items-start gap-2 text-[10px] font-mono">
+                          <div className="w-3 h-3 mt-0.5 flex items-center justify-center shrink-0">
+                            {entry.action === "created" ? <Plus size={9} className="text-emerald-400" /> : <Edit size={9} className="text-orange-400" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-slate-400">{entry.action === "created" ? "Created" : entry.field ? `Updated ${entry.field}` : "Updated"}</span>
+                            {entry.oldValue && entry.newValue && <span className="text-slate-700"> · {entry.oldValue} → {entry.newValue}</span>}
+                            <p className="text-slate-700 mt-0.5">by {entry.performedBy} · {entry.timestamp ? format(typeof entry.timestamp === "string" ? new Date(entry.timestamp) : entry.timestamp.toDate?.() ?? new Date(), "MMM d, h:mm a") : "—"}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {collaborator.addedBy && (
-                            <div className="text-xs text-muted-foreground text-right">
-                              Added by {collaborator.addedBy}
-                            </div>
-                          )}
-                          {isOwner(viewingTask) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => removeCollaborator(viewingTask.id, collaborator.id)}
-                            >
-                              <UserMinus className="h-3 w-3 text-red-500" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* History/Timeline Section */}
-              {viewingTask.history && viewingTask.history.length > 0 && (
-                <div className="border rounded-lg p-3">
-                  <Label className="text-xs text-muted-foreground mb-2 block">Activity History</Label>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto text-white">
-                    {viewingTask.history.map((entry, index) => (
-                      <div key={entry.id || index} className="flex items-start gap-2 text-sm">
-                        <div className="mt-1">
-                          {entry.action === "created" && <Plus className="h-3 w-3 text-green-500" />}
-                          {entry.action === "updated" && <Edit className="h-3 w-3 text-blue-500" />}
-                          {entry.action === "completed" && <CheckCircle2 className="h-3 w-3 text-green-500" />}
-                          {entry.action === "deleted" && <Trash2 className="h-3 w-3 text-red-500" />}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm">
-                            {entry.action === "created" && "Task created"}
-                            {entry.action === "updated" && entry.field && `Updated ${entry.field}`}
-                            {entry.action === "completed" && "Task completed"}
-                            {entry.action === "deleted" && "Task deleted"}
-                          </p>
-                          {entry.oldValue && entry.newValue && (
-                            <p className="text-xs text-muted-foreground">
-                              {entry.oldValue} → {entry.newValue}
-                            </p>
-                          )}
-                          <p className="text-xs text-muted-foreground">
-                            by {entry.performedBy} • {entry.timestamp ? (typeof entry.timestamp === 'string' ? format(new Date(entry.timestamp), "MMM d, h:mm a") : format(entry.timestamp.toDate(), "MMM d, h:mm a")) : "Just now"}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                {canEditTask(viewingTask) && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsViewDialogOpen(false);
-                      openEditDialog(viewingTask);
-                    }}
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                )}
-                {isOwner(viewingTask) && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsViewDialogOpen(false);
-                      openCollaborationDialog(viewingTask);
-                    }}
-                  >
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Add Collaborator
-                  </Button>
-                )}
-                {canEditTask(viewingTask) && (
-                  <Button
-                    variant="outline"
-                    onClick={() => exportTaskToPDF(viewingTask)}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Export PDF
-                  </Button>
-                )}
-                {canEditTask(viewingTask) && (
-                  <Button
-                    variant="outline"
-                    className="text-red-600"
-                    onClick={() => {
-                      handleDeleteTask(viewingTask.id);
-                      setIsViewDialogOpen(false);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </Button>
                 )}
               </div>
-            </div>
+              <div className="px-5 py-3 border-t border-orange-500/15 bg-[#0a0d14] flex flex-wrap gap-2">
+                {canEditTask(viewingTask) && (
+                  <button onClick={() => { setIsViewDialogOpen(false); openEditDialog(viewingTask); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wide text-orange-400 border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors">
+                    <Edit size={10} /> Edit
+                  </button>
+                )}
+                {isOwner(viewingTask) && (
+                  <button onClick={() => { setIsViewDialogOpen(false); openCollaborationDialog(viewingTask); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wide text-sky-400 border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 transition-colors">
+                    <UserPlus size={10} /> Collaborate
+                  </button>
+                )}
+                {canEditTask(viewingTask) && (
+                  <button onClick={() => exportTaskToPDF(viewingTask)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wide text-slate-400 border border-slate-700/60 hover:border-slate-600 hover:text-slate-300 transition-colors">
+                    <Download size={10} /> Export PDF
+                  </button>
+                )}
+                {canEditTask(viewingTask) && (
+                  <button onClick={() => { handleDeleteTask(viewingTask.id); setIsViewDialogOpen(false); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wide text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors ml-auto">
+                    <Trash2 size={10} /> Delete
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Collaboration Dialog */}
+      {/* ── Collaboration Dialog ── */}
       <Dialog open={isCollaborationDialogOpen} onOpenChange={setIsCollaborationDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-cyan-500/30 rounded-xl">
-          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-          
-          <DialogHeader>
-            <DialogTitle className="text-cyan-400 tracking-wider uppercase">Transmit Collaboration Request</DialogTitle>
-            <DialogDescription className="text-white/80">
-              Transmit collaboration request for "{collaboratingTask?.title}". The recipient will receive notification and can accept or decline.
+        <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto rounded-none bg-[#0d1117] border border-orange-500/20 p-0 gap-0">
+          <div className="px-5 py-3.5 border-b border-orange-500/15 bg-[#0a0d14]">
+            <DialogTitle className="text-[11px] font-mono font-bold uppercase tracking-widest text-orange-400 flex items-center gap-2">
+              <div className="w-1 h-4 bg-orange-500" />Transmit Collaboration Request
+            </DialogTitle>
+            <DialogDescription className="text-[10px] font-mono text-slate-600 mt-0.5 ml-3 truncate">
+              Mission: {collaboratingTask?.title}
             </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="collaborator-select" className="text-white uppercase tracking-wider text-xs font-medium">Select Operative</Label>
-              <div className="relative group/input">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70 group-focus-within/input:text-cyan-400 transition-colors z-10" />
-                <Input
-                  id="collaborator-search"
-                  placeholder="Search operative..."
-                  value={userSearchQuery}
-                  onChange={(e) => {
-                    setUserSearchQuery(e.target.value);
-                    setSelectedUser(null);
-                  }}
-                  className="pl-10 bg-slate-800/50 border-cyan-500/30 text-white placeholder:text-white/50 rounded-lg focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all"
-                />
-                {isSearchingUsers && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                )}
+          </div>
+          <div className="p-5 space-y-4">
+            <div>
+              <label className={opsLabel}>Select Operative</label>
+              <div className="relative mt-1">
+                <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
+                <input className={`${opsInput} pl-8`} placeholder="Search by name or department..."
+                  value={userSearchQuery} onChange={e => { setUserSearchQuery(e.target.value); setSelectedUser(null); }} />
               </div>
-              
-              {/* User List */}
               {availableUsers.length > 0 && (
-                <div className="border rounded-lg max-h-60 overflow-y-auto text-white hover:text-black">
-                  {availableUsers.map((user) => (
-                    <div
-                      key={user.id}
-                      className={cn(
-                        "flex items-center gap-3 p-3 hover:bg-muted cursor-pointer border-b last:border-b-0",
-                        selectedUser?.id === user.id && "bg-blue-50"
-                      )}
-                      onClick={() => {
-                        setSelectedUser(user);
-                        setUserSearchQuery(user.fullName);
-                      }}
-                    >
-                      {user.avatar ? (
-                        <img 
-                          src={user.avatar} 
-                          alt={user.fullName} 
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-sm font-medium">
-                            {user.firstName?.charAt(0).toUpperCase()}{user.lastName?.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="font-medium">{user.fullName}</div>
-                        <div className="text-xs text-blue-600 font-semibold">ID: {user.referenceId}</div>
-                        <div className="text-xs text-muted-foreground">{user.email}</div>
-                        {user.department && user.position && (
-                          <div className="text-xs text-blue-600">
-                            {user.department} - {user.position}
-                          </div>
-                        )}
+                <div className="mt-1 border border-orange-500/15 max-h-52 overflow-y-auto">
+                  {availableUsers.map(u => (
+                    <div key={u.id} onClick={() => { setSelectedUser(u); setUserSearchQuery(u.fullName); }}
+                      className={cn("flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-orange-500/10 last:border-b-0 transition-colors",
+                        selectedUser?.id === u.id ? "bg-orange-500/10" : "hover:bg-orange-500/5")}>
+                      <div className="w-7 h-7 shrink-0 flex items-center justify-center bg-orange-500/10 border border-orange-500/20 text-[9px] font-mono text-orange-400">
+                        {u.firstName?.[0]}{u.lastName?.[0]}
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <Badge className="text-xs uppercase">
-                          {user.role}
-                        </Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-mono text-slate-300">{u.fullName}</p>
+                        <p className="text-[9px] font-mono text-slate-700">{u.referenceId} · {u.department}</p>
                       </div>
+                      <span className="text-[9px] font-mono text-orange-500/40 uppercase">{u.role}</span>
                     </div>
                   ))}
                 </div>
               )}
-              
-              {/* No results message */}
-              {userSearchQuery && availableUsers.length === 0 && !isSearchingUsers && (
-                <div className="p-3 text-center text-muted-foreground border rounded-lg">
-                  No users found
-                </div>
+              {userSearchQuery && !availableUsers.length && !isSearchingUsers && (
+                <p className="mt-2 text-[10px] font-mono text-slate-700 text-center py-3 border border-orange-500/10">No operatives found</p>
               )}
             </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="collaborator-role" className="text-white uppercase tracking-wider text-xs font-medium">Role</Label>
-              <Select value={collaboratorRole} onValueChange={setCollaboratorRole} >
-                <SelectTrigger id="collaborator-role" className="w-full h-8 bg-slate-800/50 border-cyan-500/30 text-white focus:ring-cyan-400/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-cyan-500/30">
-                  <SelectItem className="text-white focus:bg-cyan-500/20" value="viewer">Viewer (Can view only)</SelectItem>
-                  <SelectItem className="text-white focus:bg-cyan-500/20" value="editor">Editor (Can view and edit)</SelectItem>
+            <div>
+              <label className={opsLabel}>Role</label>
+              <Select value={collaboratorRole} onValueChange={setCollaboratorRole}>
+                <SelectTrigger className={`${selectTriggerCls} mt-1 w-full`}><SelectValue /></SelectTrigger>
+                <SelectContent className={selectContentCls}>
+                  <SelectItem value="viewer" className={selectItemCls}>Viewer — view only</SelectItem>
+                  <SelectItem value="editor" className={selectItemCls}>Editor — view & edit</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="collaboration-message" className="text-white uppercase tracking-wider text-xs font-medium">Message (Optional)</Label>
-              <Textarea
-                id="collaboration-message"
-                className="text-white"
-                placeholder="Add a message to the collaborator..."
-                value={collaborationMessage}
-                onChange={(e) => setCollaborationMessage(e.target.value)}
-                rows={3}
-              />
+            <div>
+              <label className={opsLabel}>Message (Optional)</label>
+              <textarea className={`${opsTextarea} mt-1`} rows={3} placeholder="Add a message to the operative..."
+                value={collaborationMessage} onChange={e => setCollaborationMessage(e.target.value)} />
             </div>
           </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsCollaborationDialogOpen(false);
-                setCollaboratingTask(null);
-                setSelectedUser(null);
-                setUserSearchQuery("");
-                setCollaboratorRole("viewer");
-                setCollaborationMessage("");
-              }}
-              disabled={isLoading}
-            >
+          <div className="px-5 py-3 border-t border-orange-500/15 bg-[#0a0d14] flex justify-end gap-2">
+            <button onClick={() => { setIsCollaborationDialogOpen(false); setCollaboratingTask(null); setSelectedUser(null); setUserSearchQuery(""); setCollaboratorRole("viewer"); setCollaborationMessage(""); }}
+              className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-slate-500 border border-slate-700/60 hover:border-slate-600 hover:text-slate-400 transition-colors">
               Cancel
-            </Button>
-            <Button
-              onClick={addCollaborator}
-              disabled={isLoading || !selectedUser}
-            >
-              {isLoading ? "Sending..." : "Send Request"}
-            </Button>
-          </DialogFooter>
+            </button>
+            <button onClick={addCollaborator} disabled={isLoading || !selectedUser}
+              className="px-4 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-orange-400 border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors disabled:opacity-40">
+              {isLoading ? "Transmitting…" : "Transmit Request"}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Actions Dialog */}
+      {/* ── Bulk Actions Dialog ── */}
       <Dialog open={isBulkActionsOpen} onOpenChange={setIsBulkActionsOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-cyan-500/30 rounded-xl">
-          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-          
-          <DialogHeader>
-            <DialogTitle className="text-cyan-400 tracking-wider uppercase">Bulk Operations ({selectedTasks.size} selected)</DialogTitle>
-            <DialogDescription className="text-white/80">
-              Select operation to apply to all selected missions.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label>Change Status</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleBulkStatusUpdate("pending")}
-                  className="bg-slate-800/50 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20 hover:border-yellow-400/50"
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  Pending
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleBulkStatusUpdate("in-progress")}
-                  className="bg-slate-800/50 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:border-blue-400/50"
-                >
-                  <PlayCircle className="h-4 w-4 mr-2" />
-                  In Progress
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleBulkStatusUpdate("completed")}
-                  className="bg-slate-800/50 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-400/50"
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Completed
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleBulkStatusUpdate("on-hold")}
-                  className="bg-slate-800/50 border-orange-500/30 text-orange-400 hover:bg-orange-500/20 hover:border-orange-400/50"
-                >
-                  <PauseCircle className="h-4 w-4 mr-2" />
-                  On Hold
-                </Button>
+        <DialogContent className="sm:max-w-[420px] rounded-none bg-[#0d1117] border border-orange-500/20 p-0 gap-0">
+          <div className="px-5 py-3.5 border-b border-orange-500/15 bg-[#0a0d14]">
+            <DialogTitle className="text-[11px] font-mono font-bold uppercase tracking-widest text-orange-400 flex items-center gap-2">
+              <div className="w-1 h-4 bg-orange-500" />Bulk Operations
+            </DialogTitle>
+            <DialogDescription className="text-[10px] font-mono text-slate-600 mt-0.5 ml-3">{selectedTasks.size} missions selected</DialogDescription>
+          </div>
+          <div className="p-5 space-y-4">
+            <div>
+              <p className={`${opsLabel} mb-2`}>Change Status</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([["pending", "Pending", "#f59e0b"], ["in-progress", "In Progress", "#f97316"], ["completed", "Completed", "#10b981"], ["on-hold", "On Hold", "#64748b"]] as const).map(([s, label, color]) => (
+                  <button key={s} onClick={() => handleBulkStatusUpdate(s)}
+                    className="px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wide border border-orange-500/15 bg-[#0a0d14] hover:border-orange-500/30 hover:bg-orange-500/5 transition-colors text-left"
+                    style={{ color }}>
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
-
-            <div className="grid gap-2">
-              <Label>Danger Zone</Label>
-              <Button
-                variant="destructive"
-                onClick={handleBulkDelete}
-                className="w-full"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete {selectedTasks.size} Tasks
-              </Button>
+            <div>
+              <p className={`${opsLabel} mb-2`}>Danger Zone</p>
+              <button onClick={handleBulkDelete}
+                className="w-full px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wide text-red-400 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2">
+                <Trash2 size={11} /> Delete {selectedTasks.size} Missions
+              </button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+
     </div>
   );
 }

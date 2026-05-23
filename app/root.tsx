@@ -1,7 +1,6 @@
 "use client";
 
 import React, { Suspense } from "react";
-
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Analytics } from "@vercel/analytics/next";

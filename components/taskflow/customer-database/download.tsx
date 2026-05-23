@@ -125,7 +125,7 @@ export const Download: React.FC<DownloadProps> = ({ data, filename = "CustomerDa
       variant="outline"
       onClick={handleDownload}
       disabled={isDownloading}
-      className="bg-slate-900 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300 rounded-none h-9 text-xs uppercase tracking-wider"
+      className="bg-[#0d1117] border-slate-800 text-[11px] text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 uppercase tracking-wider font-mono"
     >
       <DownloadIcon className="size-4 mr-1" /> Export
     </Button>

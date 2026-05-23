@@ -654,39 +654,48 @@ export default function CustomizePage() {
 
     return (
         <ProtectedPageWrapper>
-            <SidebarProvider className="dark">
+            <SidebarProvider>
                 <AppSidebar />
-                <SidebarInset className="bg-slate-950 text-slate-100 flex flex-col h-svh overflow-hidden">
+                <SidebarInset className="bg-[#0a0d14] text-slate-100 flex flex-col h-svh overflow-hidden">
 
                     {/* ── Header ── */}
-                    <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4 border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-sm">
-                        <SidebarTrigger className="-ml-1 text-slate-400 hover:text-cyan-400" />
-                        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")} className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 text-xs hidden sm:flex">
+                    <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
+                        <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
+                        <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
+                        <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
+                        <div className="flex items-center gap-2 px-4 relative z-10">
+                        <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
+                        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")} className="text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 text-xs hidden sm:flex font-mono">
                             Home
                         </Button>
-                        <Separator orientation="vertical" className="h-4 bg-slate-700 hidden sm:block" />
+                        <Separator orientation="vertical" className="h-4 bg-orange-500/20 hidden sm:block" />
                         <Breadcrumb>
                             <BreadcrumbList>
                                 <BreadcrumbItem>
-                                    <BreadcrumbLink href="#" className="text-slate-500 hover:text-cyan-400 text-xs hidden sm:block">Taskflow</BreadcrumbLink>
+                                    <BreadcrumbLink href="#" className="text-slate-500 hover:text-orange-400 text-xs hidden sm:block font-mono uppercase tracking-wider">Taskflow</BreadcrumbLink>
                                 </BreadcrumbItem>
-                                <BreadcrumbSeparator className="text-slate-600 hidden sm:block" />
+                                <BreadcrumbSeparator className="text-slate-700 hidden sm:block" />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage className="text-cyan-400 text-xs font-semibold tracking-wide">Customize</BreadcrumbPage>
+                                    <BreadcrumbPage className="text-orange-400 text-xs font-mono tracking-widest uppercase">Customize</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
+                        </div>
                     </header>
 
                     {/* ── Page title ── */}
-                    <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800">
+                    <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800/60">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-sm bg-cyan-500/10 border border-cyan-500/30">
-                                <Settings2 className="size-4 text-cyan-400" />
+                            <div className="relative p-2 bg-orange-500/10 border border-orange-500/30">
+                                <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-orange-500/50" />
+                                <div className="absolute top-0 right-0 w-2 h-2 border-r border-t border-orange-500/50" />
+                                <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
+                                <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
+                                <Settings2 className="size-4 text-orange-400" />
                             </div>
                             <div>
-                                <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-cyan-400 leading-tight">Customize</h1>
-                                <p className="text-[11px] text-slate-500 mt-0.5">Configure Taskflow settings and preferences</p>
+                                <h1 className="text-sm font-bold tracking-widest uppercase text-orange-400 font-mono leading-tight">Customize</h1>
+                                <p className="text-[10px] text-slate-600 font-mono mt-0.5 uppercase tracking-wider">Configure Taskflow settings and preferences</p>
                             </div>
                         </div>
                     </div>
@@ -694,27 +703,27 @@ export default function CustomizePage() {
                     {/* ── Body ── */}
                     <div className="flex-1 overflow-hidden">
                         {isFetching ? (
-                            <div className="flex items-center justify-center h-full gap-3 text-slate-500 text-xs">
-                                <Loader2 className="size-5 animate-spin text-cyan-500" />
-                                <span>Loading settings…</span>
+                            <div className="flex items-center justify-center h-full gap-3 text-slate-600 text-xs font-mono">
+                                <Loader2 className="size-4 animate-spin text-orange-500" />
+                                <span className="uppercase tracking-widest">Loading settings…</span>
                             </div>
                         ) : (
                             <div className="flex h-full">
 
                                 {/* ── Left tab rail ── */}
-                                <nav className="w-52 shrink-0 border-r border-slate-800 bg-slate-900/40 flex flex-col py-3 gap-0.5 overflow-y-auto">
+                                <nav className="w-52 shrink-0 border-r border-slate-800/60 bg-[#0d1117]/60 flex flex-col py-3 gap-0.5 overflow-y-auto">
                                     {TABS.map((tab) => {
                                         const isActive = activeTab === tab.id
                                         return (
                                             <button
                                                 key={tab.id}
                                                 onClick={() => setActiveTab(tab.id)}
-                                                className={`w-full text-left px-4 py-3 transition-all border-l-2 ${isActive ? "border-l-cyan-400 bg-cyan-500/8 text-cyan-400" : "border-l-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`}
+                                                className={`w-full text-left px-4 py-3 transition-all border-l-2 ${isActive ? "border-l-orange-400 bg-orange-500/8 text-orange-400" : "border-l-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/40"}`}
                                             >
-                                                <p className={`text-[11px] font-bold uppercase tracking-widest leading-tight ${isActive ? "text-cyan-400" : "text-slate-400"}`}>
+                                                <p className={`text-[11px] font-bold uppercase tracking-widest leading-tight font-mono ${isActive ? "text-orange-400" : "text-slate-500"}`}>
                                                     {tab.label}
                                                 </p>
-                                                <p className="text-[10px] text-slate-600 mt-0.5 leading-snug">{tab.description}</p>
+                                                <p className="text-[10px] text-slate-700 mt-0.5 leading-snug font-mono">{tab.description}</p>
                                             </button>
                                         )
                                     })}

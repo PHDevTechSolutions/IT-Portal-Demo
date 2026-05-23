@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Database, ArrowRightCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Database, ArrowRightCircle, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 
 interface DataMigratorProps {
   userId: string;
@@ -15,6 +14,7 @@ interface DataMigratorProps {
 export function DataMigrator({ userId, userName }: DataMigratorProps) {
   const [isMigrating, setIsMigrating] = useState(false);
   const [migratedCount, setMigratedCount] = useState(0);
+  const [progress, setProgress] = useState(0);
 
   const migrateData = async () => {
     if (!userId) {
@@ -23,23 +23,23 @@ export function DataMigrator({ userId, userName }: DataMigratorProps) {
     }
 
     setIsMigrating(true);
+    setProgress(0);
     try {
-      // Fetch old data from user_activities
       const oldActivitiesRef = collection(db, "user_activities");
       const oldQuery = query(oldActivitiesRef, where("userId", "==", userId));
       const oldSnapshot = await getDocs(oldQuery);
 
       if (oldSnapshot.empty) {
-        toast.info("No old data found to migrate");
+        toast.info("No legacy data found to migrate.");
         setIsMigrating(false);
         return;
       }
 
+      const total = oldSnapshot.docs.length;
       let count = 0;
-      // Migrate each activity to user_tasks
+
       for (const docSnapshot of oldSnapshot.docs) {
         const oldData = docSnapshot.data();
-        
         await addDoc(collection(db, "user_tasks"), {
           userId: oldData.userId,
           userName: oldData.userName,
@@ -53,83 +53,117 @@ export function DataMigrator({ userId, userName }: DataMigratorProps) {
           notes: null,
           createdAt: oldData.createdAt || serverTimestamp(),
           updatedAt: oldData.updatedAt || serverTimestamp(),
-          completedAt: oldData.status === "completed" ? oldData.updatedAt || serverTimestamp() : null,
+          completedAt: oldData.status === "completed"
+            ? oldData.updatedAt || serverTimestamp()
+            : null,
         });
         count++;
+        setProgress(Math.round((count / total) * 100));
       }
 
       setMigratedCount(count);
-      toast.success(`Successfully migrated ${count} tasks!`);
+      toast.success(`Transfer complete — ${count} records migrated.`);
     } catch (error) {
-      console.error("Error migrating data:", error);
-      toast.error("Failed to migrate data");
+      console.error("Migration error:", error);
+      toast.error("Transfer failed. Check console for details.");
     } finally {
       setIsMigrating(false);
     }
   };
 
   return (
-    <div className="relative group mx-4 mb-4 mt-4">
-      {/* Glow effect */}
-      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl blur opacity-20 group-hover:opacity-30 transition duration-500" />
-      
-      {/* Main card */}
-      <div className="relative bg-slate-900/90 backdrop-blur-xl border border-cyan-500/30 p-4 overflow-hidden">
+    <div className="relative group mx-4 mt-4 mb-0">
+      {/* Glow */}
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500/20 to-orange-400/5 blur opacity-20 group-hover:opacity-40 transition duration-500" />
+
+      <div className="relative bg-[#0d1117]/95 border border-orange-500/20 overflow-hidden p-4">
         {/* Corner brackets */}
-        <div className="absolute top-0 left-0 w-4 h-4 border-l-2 border-t-2 border-cyan-500/50" />
-        <div className="absolute top-0 right-0 w-4 h-4 border-r-2 border-t-2 border-cyan-500/50" />
-        <div className="absolute bottom-0 left-0 w-4 h-4 border-l-2 border-b-2 border-cyan-500/50" />
-        <div className="absolute bottom-0 right-0 w-4 h-4 border-r-2 border-b-2 border-cyan-500/50" />
-        
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="p-2 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
-            <Database className="h-5 w-5 text-cyan-400" />
+        <div className="absolute top-0 left-0 w-3 h-3 border-l border-t border-orange-500/40" />
+        <div className="absolute top-0 right-0 w-3 h-3 border-r border-t border-orange-500/40" />
+        <div className="absolute bottom-0 left-0 w-3 h-3 border-l border-b border-orange-500/40" />
+        <div className="absolute bottom-0 right-0 w-3 h-3 border-r border-b border-orange-500/40" />
+
+        <div className="flex items-start gap-4">
+          {/* Icon */}
+          <div className="p-2 bg-orange-500/10 border border-orange-500/30 shrink-0">
+            <Database className="h-4 w-4 text-orange-400" />
           </div>
-          <div>
-            <h3 className="font-semibold text-white tracking-wider uppercase text-sm">Data Migration</h3>
-            <p className="text-xs text-white/60 font-mono">SYSTEM ARCHIVE TRANSFER</p>
-          </div>
-        </div>
-        
-        {/* Description */}
-        <p className="text-sm text-white/80 mb-4 leading-relaxed">
-          Legacy task data detected in archive storage. Initiate transfer protocol to migrate previous mission logs to current command center.
-        </p>
-        
-        {/* Action button */}
-        <Button
-          onClick={migrateData}
-          disabled={isMigrating}
-          className="w-full gap-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isMigrating ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span className="uppercase tracking-wider text-xs">Transferring Data...</span>
-            </>
-          ) : (
-            <>
-              <ArrowRightCircle className="h-4 w-4" />
-              <span className="uppercase tracking-wider text-xs">Initiate Transfer</span>
-            </>
-          )}
-        </Button>
-        
-        {/* Success message */}
-        {migratedCount > 0 && (
-          <div className="mt-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-400" />
-            <p className="text-sm text-white/90">
-              Transfer complete. <span className="text-green-400 font-mono">{migratedCount}</span> mission logs archived.
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-xs font-bold tracking-widest uppercase text-orange-400 font-mono">
+                Data Migration
+              </h3>
+              <span className="text-[9px] font-mono text-slate-600 uppercase tracking-widest">
+                · Archive Transfer
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-mono leading-relaxed mb-3">
+              Legacy task data detected. Migrate previous records to the current task system.
             </p>
+
+            {/* Progress bar (visible during migration) */}
+            {isMigrating && (
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-mono text-orange-400/60 uppercase tracking-widest">Transferring…</span>
+                  <span className="text-[10px] font-mono text-orange-300">{progress}%</span>
+                </div>
+                <div className="h-px bg-slate-800 relative overflow-hidden">
+                  <div
+                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-orange-500 to-orange-300 transition-all duration-150"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Success */}
+            {migratedCount > 0 && !isMigrating && (
+              <div className="mb-3 flex items-center gap-2 text-[11px] font-mono text-green-400/80 border border-green-500/20 bg-green-500/5 px-2 py-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Transfer complete —{" "}
+                  <span className="text-green-300 font-bold">{migratedCount}</span> records migrated.
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Action button */}
+              <button
+                onClick={migrateData}
+                disabled={isMigrating}
+                className="
+                  flex items-center gap-2 px-3 py-1.5
+                  text-[10px] font-mono uppercase tracking-widest
+                  bg-orange-500/10 border border-orange-500/30
+                  text-orange-300 hover:bg-orange-500/20 hover:border-orange-500/50
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  transition-all duration-150
+                "
+              >
+                {isMigrating ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Transferring…
+                  </>
+                ) : (
+                  <>
+                    <ArrowRightCircle className="h-3 w-3" />
+                    Initiate Transfer
+                  </>
+                )}
+              </button>
+
+              {/* Warning */}
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-700">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                <span>Irreversible operation</span>
+              </div>
+            </div>
           </div>
-        )}
-        
-        {/* Warning note */}
-        <div className="mt-3 flex items-start gap-2 text-xs text-white/50">
-          <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
-          <p>Archive transfer is irreversible. Ensure backup protocols are in place.</p>
         </div>
       </div>
     </div>

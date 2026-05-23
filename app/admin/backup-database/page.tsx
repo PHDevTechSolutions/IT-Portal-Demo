@@ -472,36 +472,34 @@ export default function BackupDatabaseSettingsPage() {
               {/* Main Content */}
               <div className="relative z-10 w-full">
                 {/* Header */}
-                <header className="flex h-14 shrink-0 items-center gap-2 px-4 bg-slate-950/80 backdrop-blur-sm border-b border-cyan-500/20">
-                  <div className="flex items-center gap-2">
-                    <SidebarTrigger className="-ml-1 text-cyan-400 hover:text-cyan-300" />
-                    <Separator orientation="vertical" className="h-4 bg-cyan-500/30" />
+                <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
+                  <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
+                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
+                  <div className="flex items-center gap-2 px-4 relative z-10">
+                    <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
+                    <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
                     <Breadcrumb>
                       <BreadcrumbList>
                         <BreadcrumbItem>
-                          <BreadcrumbLink href="/dashboard" className="text-slate-400 hover:text-cyan-400">Dashboard</BreadcrumbLink>
+                          <BreadcrumbLink href="/dashboard" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Dashboard</BreadcrumbLink>
                         </BreadcrumbItem>
-                        <BreadcrumbSeparator className="text-cyan-500/50" />
+                        <BreadcrumbSeparator className="text-slate-700" />
                         <BreadcrumbItem>
-                          <BreadcrumbLink href="/settings/general" className="text-slate-400 hover:text-cyan-400">Settings</BreadcrumbLink>
+                          <BreadcrumbLink href="/settings/general" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Settings</BreadcrumbLink>
                         </BreadcrumbItem>
-                        <BreadcrumbSeparator className="text-cyan-500/50" />
+                        <BreadcrumbSeparator className="text-slate-700" />
                         <BreadcrumbItem>
-                          <BreadcrumbPage className="text-cyan-400 font-medium uppercase tracking-wider text-sm">
-                            Database Backup
-                          </BreadcrumbPage>
+                          <BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">Database Backup</BreadcrumbPage>
                         </BreadcrumbItem>
                       </BreadcrumbList>
                     </Breadcrumb>
                   </div>
-                  
-                  <div className="flex items-center gap-4 ml-auto text-xs">
+                  <div className="flex items-center gap-4 px-4 text-xs relative z-10">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-cyan-300/80 font-mono">SYSTEM ONLINE</span>
+                      <div className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
+                      <span className="text-orange-400/60 font-mono uppercase tracking-widest text-[10px]">System Online</span>
                     </div>
-                    <span className="text-cyan-500/50">|</span>
-                    <span className="text-cyan-300/80 font-mono">V.2.0.6</span>
                   </div>
                 </header>
 
