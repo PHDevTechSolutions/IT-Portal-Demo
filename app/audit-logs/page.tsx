@@ -1,1783 +1,899 @@
 "use client";
-
 import * as React from "react";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
+import { collection, query, orderBy, getDocs, Timestamp, limit } from "firebase/firestore";
 import {
-  collection,
-  query,
-  orderBy,
-  getDocs,
-  Timestamp,
-  limit,
-} from "firebase/firestore";
-
-import {
-  ArrowRight,
-  Search,
-  Activity,
-  Clock,
-  Plus,
-  Pencil,
-  Trash2,
-  Hash,
-  ChevronLeft,
-  ChevronRight,
-  X,
-  RefreshCw,
-  Eye,
-  DatabaseBackup,
-  LogIn,
-  LogOut,
+  ArrowRight, Search, Activity, Clock, Plus, Pencil, Trash2, Hash,
+  ChevronLeft, ChevronRight, X, RefreshCw, Eye, DatabaseBackup,
+  LogIn, LogOut, FileDown, FileSpreadsheet, Calendar as CalendarIcon,
+  Users, Layers, Download,
 } from "lucide-react";
-
 import { AppSidebar } from "@/components/app-sidebar";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import {
-  TooltipProvider,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { exportAuditLogsToPDF } from "@/lib/utils/audit-pdf-export";
 import { exportAuditLogsToCSV } from "@/lib/utils/audit-csv-export";
-import { FileDown, FileSpreadsheet, Calendar as CalendarIcon, Users, Layers } from "lucide-react";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-/** All action types from the customer-audit collection */
-type CustomerAuditAction =
-  | "transfer"
-  | "create"
-  | "update"
-  | "delete"
-  | "autoid";
-
-/** Action types from system audits */
-type SystemAuditAction =
-  | "assign"
-  | "approve"
-  | "reject"
-  | "lock"
-  | "unlock"
-  | "reset_password"
-  | "change_role"
-  | "change_status"
-  | "bulk_create"
-  | "bulk_update"
-  | "bulk_delete"
-  | "export"
-  | "import"
-  | "view";
-
-/** Action types from the activity_logs collection */
-type ActivityLogAction = "transfer" | "login" | "logout" | "other";
-
-/** Action types from audit_trails collection */
-type AuditTrailAction =
-  | "create"
-  | "update"
-  | "delete"
-  | "login"
-  | "logout"
-  | "view"
-  | "export"
-  | "import"
-  | "assign"
-  | "transfer"
-  | "approve"
-  | "reject"
-  | "other";
-
+type CustomerAuditAction = "transfer"|"create"|"update"|"delete"|"autoid";
+type SystemAuditAction   = "assign"|"approve"|"reject"|"lock"|"unlock"|"reset_password"|"change_role"|"change_status"|"bulk_create"|"bulk_update"|"bulk_delete"|"export"|"import"|"view";
+type ActivityLogAction   = "transfer"|"login"|"logout"|"other";
+type AuditTrailAction    = "create"|"update"|"delete"|"login"|"logout"|"view"|"export"|"import"|"assign"|"transfer"|"approve"|"reject"|"other";
 type AnyAction = CustomerAuditAction | ActivityLogAction | SystemAuditAction | AuditTrailAction;
 
-interface AuditActor {
-  uid?: string | null;
-  name?: string | null;
-  email?: string | null;
-  role?: string | null;
-  referenceId?: string | null;
-}
-
+interface AuditActor { uid?: string|null; name?: string|null; email?: string|null; role?: string|null; referenceId?: string|null; }
 interface TransferDetail {
-  tsa?: {
-    fromId?: string | null;
-    fromName?: string | null;
-    toId?: string | null;
-    toName?: string | null;
-  } | null;
-  tsm?: { fromName?: string | null; toName?: string | null } | null;
-  manager?: { fromName?: string | null; toName?: string | null } | null;
+  tsa?: { fromId?: string|null; fromName?: string|null; toId?: string|null; toName?: string|null }|null;
+  tsm?: { fromName?: string|null; toName?: string|null }|null;
+  manager?: { fromName?: string|null; toName?: string|null }|null;
 }
-
-/** Unified log entry — handles both Firestore collections */
 interface UnifiedLog {
   id: string;
-  /** Which Firestore collection this came from */
-  source: "customer_audit" | "activity_logs" | "system_audit" | "audit_trails";
+  source: "customer_audit"|"activity_logs"|"system_audit"|"audit_trails";
   action: AnyAction;
-  affectedCount?: number;
-  customerId?: string | null;
-  customerName?: string | null;
-  resourceId?: string | null;
-  resourceName?: string | null;
-  resourceType?: string | null;
-  module?: string | null;
-  page?: string | null;
-  transfer?: TransferDetail | null;
-  changes?: Record<string, { before: unknown; after: unknown }> | null;
-  actor?: AuditActor | null;
-  timestamp?: Timestamp | null;
-  context?: {
-    page?: string;
-    source?: string;
-    bulk?: boolean;
-  } | null;
-  // activity_logs-specific raw fields
-  ReferenceID?: string | null;
-  TSM?: string | null;
-  Manager?: string | null;
-  previousTSM?: string | null;
-  previousManager?: string | null;
-  // system audit fields
-  metadata?: Record<string, unknown> | null;
-  // audit_trails-specific fields
-  details?: string | null;
-  message?: string | null;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-  entityName?: string | null;
-  entityId?: string | null;
-  entityType?: string | null;
-  department?: string | null;
+  affectedCount?: number; customerId?: string|null; customerName?: string|null;
+  resourceId?: string|null; resourceName?: string|null; resourceType?: string|null;
+  module?: string|null; page?: string|null;
+  transfer?: TransferDetail|null;
+  changes?: Record<string,{before:unknown;after:unknown}>|null;
+  actor?: AuditActor|null;
+  timestamp?: Timestamp|null;
+  context?: { page?: string; source?: string; bulk?: boolean }|null;
+  ReferenceID?: string|null; TSM?: string|null; Manager?: string|null;
+  previousTSM?: string|null; previousManager?: string|null;
+  metadata?: Record<string,unknown>|null;
+  details?: string|null; message?: string|null; ipAddress?: string|null;
+  userAgent?: string|null; entityName?: string|null; entityId?: string|null;
+  entityType?: string|null; department?: string|null;
 }
 
 const PAGE_SIZE = 20;
 
-// ─── Action config ─────────────────────────────────────────────────────────────
-
-type ActionCfg = {
-  label: string;
-  icon: React.ReactNode;
-  color: string;
-  bg: string;
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  text:   "#c8d8e8",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
 };
 
+// ─── Action config ────────────────────────────────────────────────────────────
+type ActionCfg = { label: string; icon: React.ReactNode; badge: string };
 const ACTION_CONFIG: Record<string, ActionCfg> = {
-  transfer: {
-    label: "Transferred",
-    icon: <ArrowRight className="h-3 w-3" />,
-    color: "text-violet-700 dark:text-violet-400",
-    bg: "bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800",
-  },
-  create: {
-    label: "Created",
-    icon: <Plus className="h-3 w-3" />,
-    color: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800",
-  },
-  update: {
-    label: "Updated",
-    icon: <Pencil className="h-3 w-3" />,
-    color: "text-blue-700 dark:text-blue-400",
-    bg: "bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800",
-  },
-  delete: {
-    label: "Deleted",
-    icon: <Trash2 className="h-3 w-3" />,
-    color: "text-red-700 dark:text-red-400",
-    bg: "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-800",
-  },
-  autoid: {
-    label: "Auto-ID",
-    icon: <Hash className="h-3 w-3" />,
-    color: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800",
-  },
-  login: {
-    label: "Login",
-    icon: <LogIn className="h-3 w-3" />,
-    color: "text-green-700 dark:text-green-400",
-    bg: "bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-800",
-  },
-  logout: {
-    label: "Logout",
-    icon: <LogOut className="h-3 w-3" />,
-    color: "text-slate-700 dark:text-slate-400",
-    bg: "bg-slate-50 border-slate-200 dark:bg-slate-950/40 dark:border-slate-800",
-  },
-  other: {
-    label: "Activity",
-    icon: <Activity className="h-3 w-3" />,
-    color: "text-zinc-700 dark:text-zinc-400",
-    bg: "bg-zinc-50 border-zinc-200 dark:bg-zinc-950/40 dark:border-zinc-800",
-  },
+  transfer: { label: "Transfer",  icon: <ArrowRight className="h-3 w-3" />, badge: "text-violet-400 border-violet-500/30 bg-violet-500/10" },
+  create:   { label: "Create",    icon: <Plus       className="h-3 w-3" />, badge: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  update:   { label: "Update",    icon: <Pencil     className="h-3 w-3" />, badge: "text-sky-400 border-sky-500/30 bg-sky-500/10" },
+  delete:   { label: "Delete",    icon: <Trash2     className="h-3 w-3" />, badge: "text-red-400 border-red-500/30 bg-red-500/10" },
+  autoid:   { label: "Auto-ID",   icon: <Hash       className="h-3 w-3" />, badge: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
+  login:    { label: "Login",     icon: <LogIn      className="h-3 w-3" />, badge: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  logout:   { label: "Logout",    icon: <LogOut     className="h-3 w-3" />, badge: "text-slate-400 border-slate-500/30 bg-slate-500/10" },
+  other:    { label: "Activity",  icon: <Activity   className="h-3 w-3" />, badge: "text-slate-400 border-slate-500/30 bg-slate-500/10" },
+};
+const getActionCfg = (a: string): ActionCfg => ACTION_CONFIG[a] ?? ACTION_CONFIG.other;
+
+const SOURCE_BADGE: Record<string, string> = {
+  customer_audit: "text-sky-400 border-sky-500/30",
+  activity_logs:  "text-violet-400 border-violet-500/30",
+  system_audit:   "text-amber-400 border-amber-500/30",
+  audit_trails:   "text-pink-400 border-pink-500/30",
 };
 
-function getActionCfg(action: string): ActionCfg {
-  return ACTION_CONFIG[action] ?? ACTION_CONFIG.other;
-}
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatTimestamp(ts: Timestamp | null | undefined): string {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatTimestamp(ts: Timestamp|null|undefined): string {
   if (!ts) return "—";
   return new Intl.DateTimeFormat("en-PH", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Manila",
+    month:"short", day:"numeric", year:"numeric",
+    hour:"2-digit", minute:"2-digit", hour12:true, timeZone:"Asia/Manila",
   }).format(ts.toDate());
 }
-
-function timeAgo(ts: Timestamp | null | undefined): string {
+function timeAgo(ts: Timestamp|null|undefined): string {
   if (!ts) return "—";
-  const diff = Date.now() - ts.toDate().getTime();
-  const m = Math.floor(diff / 60000);
+  const m = Math.floor((Date.now() - ts.toDate().getTime()) / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  return `${Math.floor(h/24)}d ago`;
 }
-
-function getInitials(name: string | null | undefined): string {
+function getInitials(name?: string|null): string {
   if (!name) return "?";
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  return name.split(" ").map(n => n[0]).slice(0,2).join("").toUpperCase();
+}
+const AVATAR_COLORS = [
+  "from-sky-500 to-sky-700","from-violet-500 to-violet-700","from-emerald-500 to-emerald-700",
+  "from-amber-500 to-amber-700","from-rose-500 to-rose-700","from-cyan-500 to-cyan-700",
+  "from-fuchsia-500 to-fuchsia-700","from-teal-500 to-teal-700",
+];
+function avatarColor(s?: string|null): string {
+  if (!s) return "from-slate-500 to-slate-700";
+  const h = s.split("").reduce((a,c) => a + c.charCodeAt(0), 0);
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
-function avatarColor(str: string | null | undefined): string {
-  if (!str) return "from-slate-400 to-slate-600";
-  const palette = [
-    "from-blue-400 to-blue-600",
-    "from-violet-400 to-violet-600",
-    "from-emerald-400 to-emerald-600",
-    "from-amber-400 to-amber-600",
-    "from-rose-400 to-rose-600",
-    "from-cyan-400 to-cyan-600",
-    "from-fuchsia-400 to-fuchsia-600",
-    "from-teal-400 to-teal-600",
-  ];
-  const hash = str.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return palette[hash % palette.length];
-}
-
-// ─── Transfer pill ─────────────────────────────────────────────────────────────
-
+// ─── Sub-components ───────────────────────────────────────────────────────────
 function TransferPill({ log }: { log: UnifiedLog }) {
-  // Unified view of transfer data across both sources
-  const tsa = log.transfer?.tsa;
-  const tsm = log.transfer?.tsm;
-  const manager = log.transfer?.manager;
-
-  // activity_logs source — use PascalCase fields directly
-  const activityTSM = log.TSM;
-  const activityManager = log.Manager;
-  const activityReferenceID = log.ReferenceID;
-
   if (log.source === "activity_logs") {
     return (
-      <div className="space-y-0.5">
-        {activityReferenceID && (
-          <div className="flex items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className="text-[10px] font-semibold px-1.5 py-0.5"
-            >
-              REF
-            </Badge>
-            <span className="text-xs font-semibold font-mono">
-              {activityReferenceID}
-            </span>
-          </div>
-        )}
-        {activityTSM && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Badge
-              variant="outline"
-              className="text-[10px] font-semibold px-1.5 py-0.5"
-            >
-              TSM
-            </Badge>
-            {log.previousTSM && (
-              <>
-                <span className="text-xs text-muted-foreground font-mono">
-                  {log.previousTSM}
-                </span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              </>
-            )}
-            <span className="text-xs font-semibold font-mono">
-              {activityTSM}
-            </span>
-          </div>
-        )}
-        {activityManager && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Badge
-              variant="outline"
-              className="text-[10px] font-semibold px-1.5 py-0.5"
-            >
-              MGR
-            </Badge>
-            {log.previousManager && (
-              <>
-                <span className="text-xs text-muted-foreground font-mono">
-                  {log.previousManager}
-                </span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              </>
-            )}
-            <span className="text-xs font-semibold font-mono">
-              {activityManager}
-            </span>
-          </div>
-        )}
+      <div className="space-y-0.5 text-[11px]" style={{ fontFamily: C.font }}>
+        {log.ReferenceID && <div className="flex items-center gap-1.5"><span className="px-1 border text-[9px] font-bold uppercase" style={{ borderColor: C.border, color: C.dim }}>REF</span><span style={{ color: C.text }}>{log.ReferenceID}</span></div>}
+        {log.TSM && <div className="flex items-center gap-1.5 flex-wrap"><span className="px-1 border text-[9px] font-bold uppercase" style={{ borderColor: C.border, color: C.dim }}>TSM</span>{log.previousTSM && <><span style={{ color: C.muted }}>{log.previousTSM}</span><ArrowRight className="size-3" style={{ color: C.muted }} /></>}<span style={{ color: C.text }}>{log.TSM}</span></div>}
+        {log.Manager && <div className="flex items-center gap-1.5 flex-wrap"><span className="px-1 border text-[9px] font-bold uppercase" style={{ borderColor: C.border, color: C.dim }}>MGR</span>{log.previousManager && <><span style={{ color: C.muted }}>{log.previousManager}</span><ArrowRight className="size-3" style={{ color: C.muted }} /></>}<span style={{ color: C.text }}>{log.Manager}</span></div>}
       </div>
     );
   }
-
-  // customer_audit source
+  const tsa = log.transfer?.tsa;
   if (tsa) {
-    const extras: string[] = [];
-    if (tsm?.toName) extras.push(`TSM → ${tsm.toName}`);
-    if (manager?.toName) extras.push(`Mgr → ${manager.toName}`);
+    const extras = [log.transfer?.tsm?.toName && `TSM → ${log.transfer.tsm.toName}`, log.transfer?.manager?.toName && `Mgr → ${log.transfer.manager.toName}`].filter(Boolean);
     return (
-      <div className="space-y-0.5">
+      <div className="space-y-0.5 text-[11px]" style={{ fontFamily: C.font }}>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Badge
-            variant="outline"
-            className="text-[10px] font-semibold px-1.5 py-0.5"
-          >
-            TSA
-          </Badge>
-          <span className="text-xs text-muted-foreground font-medium">
-            {tsa.fromName || tsa.fromId || "—"}
-          </span>
-          <ArrowRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-          <span className="text-xs font-semibold">
-            {tsa.toName || tsa.toId || "—"}
-          </span>
+          <span className="px-1 border text-[9px] font-bold uppercase" style={{ borderColor: C.border, color: C.dim }}>TSA</span>
+          <span style={{ color: C.muted }}>{tsa.fromName || tsa.fromId || "—"}</span>
+          <ArrowRight className="size-3" style={{ color: C.muted }} />
+          <span style={{ color: C.text }}>{tsa.toName || tsa.toId || "—"}</span>
         </div>
-        {extras.length > 0 && (
-          <p className="text-[10px] text-muted-foreground">
-            {extras.join(" · ")}
-          </p>
-        )}
+        {extras.length > 0 && <p style={{ color: C.muted, fontSize: "10px" }}>{extras.join(" · ")}</p>}
       </div>
     );
   }
-
-  return <span className="text-[10px] text-muted-foreground">—</span>;
+  return <span style={{ color: C.muted }}>—</span>;
 }
 
-// ─── Source badge ──────────────────────────────────────────────────────────────
-
-function SourceBadge({ source }: { source: UnifiedLog["source"] }) {
-  if (source === "activity_logs") {
-    return (
-      <Badge
-        variant="outline"
-        className="text-[9px] px-1 py-0 border-violet-300 text-violet-600 font-mono"
-      >
-        activity_logs
-      </Badge>
-    );
-  }
-  if (source === "system_audit") {
-    return (
-      <Badge
-        variant="outline"
-        className="text-[9px] px-1 py-0 border-amber-300 text-amber-600 font-mono"
-      >
-        system_audit
-      </Badge>
-    );
-  }
-  if (source === "audit_trails") {
-    return (
-      <Badge
-        variant="outline"
-        className="text-[9px] px-1 py-0 border-pink-300 text-pink-600 font-mono"
-      >
-        audit_trails
-      </Badge>
-    );
-  }
+function SourceTag({ source }: { source: UnifiedLog["source"] }) {
+  const cls = SOURCE_BADGE[source] ?? "text-slate-400 border-slate-500/30";
   return (
-    <Badge
-      variant="outline"
-      className="text-[9px] px-1 py-0 border-sky-300 text-sky-600 font-mono"
-    >
-      customer_audit
-    </Badge>
+    <span className={`text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 border ${cls}`}
+      style={{ fontFamily: C.font, backgroundColor: "transparent" }}>
+      {source.replace("_", " ")}
+    </span>
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
-
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CustomerAuditLogsPage() {
   const router = useRouter();
   const currentUser = useCurrentUser();
 
   const [customerAuditLogs, setCustomerAuditLogs] = useState<UnifiedLog[]>([]);
-  const [activityLogs, setActivityLogs] = useState<UnifiedLog[]>([]);
-  const [systemAuditLogs, setSystemAuditLogs] = useState<UnifiedLog[]>([]);
-  const [auditTrailLogs, setAuditTrailLogs] = useState<UnifiedLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [search, setSearch] = useState("");
-  const [filterAction, setFilterAction] = useState<string>("all");
-  const [filterSource, setFilterSource] = useState<string>("all");
-  const [filterDate, setFilterDate] = useState<string>("all");
-  const [filterActor, setFilterActor] = useState<string>("all");
-  const [filterModule, setFilterModule] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-    from: undefined,
-    to: undefined,
-  });
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedLog, setSelectedLog] = useState<UnifiedLog | null>(null);
-  const [activeView, setActiveView] = useState<"logs" | "analytics">("logs");
-  
-  // ── Bulk Selection ───────────────────────────────────────────────────────
-  const [selectedLogs, setSelectedLogs] = useState<Set<string>>(new Set());
+  const [activityLogs,      setActivityLogs]      = useState<UnifiedLog[]>([]);
+  const [systemAuditLogs,   setSystemAuditLogs]   = useState<UnifiedLog[]>([]);
+  const [auditTrailLogs,    setAuditTrailLogs]    = useState<UnifiedLog[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(false);
 
-  // ── fetchAllLogs: one-time getDocs fetch for all four collections ─────────
+  const [search,        setSearch]        = useState("");
+  const [filterAction,  setFilterAction]  = useState("all");
+  const [filterSource,  setFilterSource]  = useState("all");
+  const [filterDate,    setFilterDate]    = useState("all");
+  const [filterActor,   setFilterActor]   = useState("all");
+  const [filterModule,  setFilterModule]  = useState("all");
+  const [dateRange,     setDateRange]     = useState<{from:Date|undefined;to:Date|undefined}>({ from:undefined, to:undefined });
+  const [currentPage,   setCurrentPage]   = useState(1);
+  const [selectedLog,   setSelectedLog]   = useState<UnifiedLog|null>(null);
+  const [activeView,    setActiveView]    = useState<"logs"|"analytics">("logs");
+  const [selectedLogs,  setSelectedLogs]  = useState<Set<string>>(new Set());
+  const [calOpen,       setCalOpen]       = useState(false);
+
+  // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchAllLogs = useCallback(async () => {
-    setError(false);
-    setLoading(true);
-
-    // Primary collection — failure is fatal
+    setError(false); setLoading(true);
     let primaryDocs: UnifiedLog[] = [];
     try {
-      const q = query(
-        collection(db, "taskflow_customer_audit_logs"),
-        orderBy("timestamp", "desc"),
-        limit(500),
-      );
-      const snap = await getDocs(q);
-      primaryDocs = snap.docs.map((d) => ({
-        id: d.id,
-        source: "customer_audit" as const,
-        ...(d.data() as Omit<UnifiedLog, "id" | "source">),
-      }));
-    } catch (err) {
-      console.error("[taskflow_customer_audit_logs] getDocs failed:", err);
-      setError(true);
-      setLoading(false);
-      return;
-    }
+      const snap = await getDocs(query(collection(db,"taskflow_customer_audit_logs"), orderBy("timestamp","desc"), limit(500)));
+      primaryDocs = snap.docs.map(d => ({ id:d.id, source:"customer_audit" as const, ...(d.data() as any) }));
+    } catch { setError(true); setLoading(false); return; }
 
-    // Optional collections — failures are silent
-    const [activityResult, systemResult, trailsResult] = await Promise.allSettled([
-      getDocs(query(collection(db, "activity_logs"), orderBy("date_created", "desc"), limit(500))),
-      getDocs(query(collection(db, "systemAudits"), orderBy("timestamp", "desc"), limit(500))),
-      getDocs(query(collection(db, "audit_trails"), orderBy("timestamp", "desc"), limit(500))),
+    const [actRes, sysRes, trailRes] = await Promise.allSettled([
+      getDocs(query(collection(db,"activity_logs"),  orderBy("date_created","desc"), limit(500))),
+      getDocs(query(collection(db,"systemAudits"),   orderBy("timestamp","desc"),    limit(500))),
+      getDocs(query(collection(db,"audit_trails"),   orderBy("timestamp","desc"),    limit(500))),
     ]);
 
-    // Normalise activity_logs (same logic as existing onSnapshot handler)
-    const activityDocs: UnifiedLog[] =
-      activityResult.status === "fulfilled"
-        ? activityResult.value.docs.map((d) => {
-            const data = d.data();
-            // Normalise action — activity_logs stores "status" as the action-like field
-            // with values like "transfer", "login", "logout"
-            const rawAction = (data.action ?? data.status ?? "other") as string;
-            const action: AnyAction =
-              rawAction === "transfer"
-                ? "transfer"
-                : rawAction === "login"
-                  ? "login"
-                  : rawAction === "logout"
-                    ? "logout"
-                    : "other";
+    const actDocs: UnifiedLog[] = actRes.status === "fulfilled" ? actRes.value.docs.map(d => {
+      const data = d.data();
+      const rawAction = (data.action ?? data.status ?? "other") as string;
+      const action: AnyAction = rawAction === "transfer" ? "transfer" : rawAction === "login" ? "login" : rawAction === "logout" ? "logout" : "other";
+      return { id:d.id, source:"activity_logs" as const, action,
+        actor:{ name:data.actorName??null, email:data.actorEmail??data.email??null, referenceId:data.actorReferenceID??data.ReferenceID??null, uid:data.userId??null, role:null },
+        timestamp:data.date_created??data.timestamp??null,
+        ReferenceID:data.ReferenceID??null, TSM:data.TSM??null, Manager:data.Manager??null,
+        previousTSM:data.previousTSM??null, previousManager:data.previousManager??null,
+        transfer:null, changes:null, context:null, customerName:data.ReferenceID??null,
+      } satisfies UnifiedLog;
+    }) : [];
 
-            // Build a unified actor from activity_logs fields
-            // The collection stores: actorName, actorEmail, actorReferenceID
-            // (PascalCase legacy fields: email, userId are also present from login logs)
-            const actor: AuditActor = {
-              name: data.actorName ?? null,
-              email: data.actorEmail ?? data.email ?? null,
-              referenceId: data.actorReferenceID ?? data.ReferenceID ?? null,
-              uid: data.userId ?? null,
-              role: null,
-            };
+    const sysDocs: UnifiedLog[] = sysRes.status === "fulfilled" ? sysRes.value.docs.map(d => {
+      const data = d.data();
+      return { id:d.id, source:"system_audit" as const, action:(data.action??"other") as AnyAction,
+        resourceId:data.resourceId??null, resourceName:data.resourceName??null, resourceType:data.resourceType??null,
+        module:data.module??null, page:data.page??null,
+        actor:{ uid:data.actorUid??null, name:data.actorName??null, email:data.actorEmail??null, role:data.actorRole??null, referenceId:data.actorReferenceId??null },
+        timestamp:data.timestamp??null, affectedCount:data.affectedCount??1,
+        changes:data.changes??null, transfer:data.transfer??null, metadata:data.metadata??null,
+        context:{ source:data.source??null, page:data.page??null },
+      } satisfies UnifiedLog;
+    }) : [];
 
-            return {
-              id: d.id,
-              source: "activity_logs" as const,
-              action,
-              actor,
-              timestamp: data.date_created ?? data.timestamp ?? null,
-              // activity_logs PascalCase fields
-              ReferenceID: data.ReferenceID ?? null,
-              TSM: data.TSM ?? null,
-              Manager: data.Manager ?? null,
-              previousTSM: data.previousTSM ?? null,
-              previousManager: data.previousManager ?? null,
-              // customer_audit compat fields — not present, but keep typed
-              transfer: null,
-              changes: null,
-              context: null,
-              customerName: data.ReferenceID ?? null,
-            } satisfies UnifiedLog;
-          })
-        : [];
-
-    // Normalise systemAudits (same logic as existing onSnapshot handler)
-    const systemDocs: UnifiedLog[] =
-      systemResult.status === "fulfilled"
-        ? systemResult.value.docs.map((d) => {
-            const data = d.data();
-            return {
-              id: d.id,
-              source: "system_audit" as const,
-              action: (data.action ?? "other") as AnyAction,
-              resourceId: data.resourceId ?? null,
-              resourceName: data.resourceName ?? null,
-              resourceType: data.resourceType ?? null,
-              module: data.module ?? null,
-              page: data.page ?? null,
-              actor: {
-                uid: data.actorUid ?? null,
-                name: data.actorName ?? null,
-                email: data.actorEmail ?? null,
-                role: data.actorRole ?? null,
-                referenceId: data.actorReferenceId ?? null,
-              },
-              timestamp: data.timestamp ?? null,
-              affectedCount: data.affectedCount ?? 1,
-              changes: data.changes ?? null,
-              transfer: data.transfer ?? null,
-              metadata: data.metadata ?? null,
-              context: {
-                source: data.source ?? null,
-                page: data.page ?? null,
-              },
-            } satisfies UnifiedLog;
-          })
-        : [];
-
-    // Normalise audit_trails (same logic as existing onSnapshot handler)
-    const trailsDocs: UnifiedLog[] =
-      trailsResult.status === "fulfilled"
-        ? trailsResult.value.docs.map((d) => {
-            const data = d.data();
-            return {
-              id: d.id,
-              source: "audit_trails" as const,
-              action: (data.action ?? "other") as AnyAction,
-              actor: {
-                name: data.fullName ?? `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim() ?? null,
-                email: data.email ?? null,
-                referenceId: data.referenceId ?? null,
-                role: data.role ?? null,
-                uid: null,
-              },
-              timestamp: data.timestamp ?? data.createdAt ?? null,
-              changes: data.changes ?? null,
-              details: data.details ?? null,
-              message: data.message ?? null,
-              ipAddress: data.ipAddress ?? null,
-              userAgent: data.userAgent ?? null,
-              entityName: data.entityname ?? data.entityName ?? null,
-              entityId: data.entityId ?? null,
-              entityType: data.entityType ?? null,
-              department: data.department ?? null,
-            } satisfies UnifiedLog;
-          })
-        : [];
+    const trailDocs: UnifiedLog[] = trailRes.status === "fulfilled" ? trailRes.value.docs.map(d => {
+      const data = d.data();
+      return { id:d.id, source:"audit_trails" as const, action:(data.action??"other") as AnyAction,
+        actor:{ name:data.fullName??`${data.firstName??""} ${data.lastName??""}`.trim()??null, email:data.email??null, referenceId:data.referenceId??null, role:data.role??null, uid:null },
+        timestamp:data.timestamp??data.createdAt??null,
+        changes:data.changes??null, details:data.details??null, message:data.message??null,
+        ipAddress:data.ipAddress??null, userAgent:data.userAgent??null,
+        entityName:data.entityname??data.entityName??null, entityId:data.entityId??null,
+        entityType:data.entityType??null, department:data.department??null,
+      } satisfies UnifiedLog;
+    }) : [];
 
     setCustomerAuditLogs(primaryDocs);
-    setActivityLogs(activityDocs);
-    setSystemAuditLogs(systemDocs);
-    setAuditTrailLogs(trailsDocs);
+    setActivityLogs(actDocs);
+    setSystemAuditLogs(sysDocs);
+    setAuditTrailLogs(trailDocs);
     setLoading(false);
   }, []);
 
-  // ── Mount: fetch all collections once ────────────────────────────────────
   useEffect(() => { fetchAllLogs(); }, [fetchAllLogs]);
 
-  // ── Merge + sort all collections ─────────────────────────────────────────
   const allLogs = useMemo<UnifiedLog[]>(() => {
-    const merged = [...customerAuditLogs, ...activityLogs, ...systemAuditLogs, ...auditTrailLogs];
-    return merged.sort((a, b) => {
-      const ta = a.timestamp?.toMillis?.() ?? 0;
-      const tb = b.timestamp?.toMillis?.() ?? 0;
-      return tb - ta;
-    });
+    return [...customerAuditLogs, ...activityLogs, ...systemAuditLogs, ...auditTrailLogs]
+      .sort((a,b) => (b.timestamp?.toMillis?.()??0) - (a.timestamp?.toMillis?.()??0));
   }, [customerAuditLogs, activityLogs, systemAuditLogs, auditTrailLogs]);
 
-  // ── Unique actors and modules for filter dropdowns ───────────────────────
   const uniqueActors = useMemo(() => {
-    const actors = new Map<string, { name: string; email: string }>();
-    allLogs.forEach((log) => {
-      const key = log.actor?.email || log.actor?.name || "unknown";
-      if (key !== "unknown" && !actors.has(key)) {
-        actors.set(key, {
-          name: log.actor?.name || "Unknown",
-          email: log.actor?.email || "",
-        });
-      }
+    const m = new Map<string,{name:string;email:string}>();
+    allLogs.forEach(l => {
+      const k = l.actor?.email || l.actor?.name || "unknown";
+      if (k !== "unknown" && !m.has(k)) m.set(k, { name:l.actor?.name||"Unknown", email:l.actor?.email||"" });
     });
-    return Array.from(actors.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
+    return Array.from(m.entries()).sort((a,b) => a[1].name.localeCompare(b[1].name));
   }, [allLogs]);
 
   const uniqueModules = useMemo(() => {
-    const modules = new Set<string>();
-    allLogs.forEach((log) => {
-      if (log.module) modules.add(log.module);
-    });
-    return Array.from(modules).sort();
+    const s = new Set<string>();
+    allLogs.forEach(l => { if (l.module) s.add(l.module); });
+    return Array.from(s).sort();
   }, [allLogs]);
 
-  // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const s = {
-      total: allLogs.length,
-      transfers: 0,
-      creates: 0,
-      updates: 0,
-      deletes: 0,
-      autoids: 0,
-      logins: 0,
-    };
+    const s = { total:0, transfers:0, creates:0, updates:0, deletes:0, autoids:0, logins:0 };
     for (const l of allLogs) {
-      if (l.action === "transfer") s.transfers++;
-      else if (l.action === "create") s.creates++;
-      else if (l.action === "update") s.updates++;
-      else if (l.action === "delete") s.deletes++;
-      else if (l.action === "autoid") s.autoids++;
-      else if (l.action === "login" || l.action === "logout") s.logins++;
+      s.total++;
+      if (l.action==="transfer") s.transfers++;
+      else if (l.action==="create") s.creates++;
+      else if (l.action==="update") s.updates++;
+      else if (l.action==="delete") s.deletes++;
+      else if (l.action==="autoid") s.autoids++;
+      else if (l.action==="login"||l.action==="logout") s.logins++;
     }
     return s;
   }, [allLogs]);
 
-  // ── Date filter ────────────────────────────────────────────────────────────
-  const isWithinDateRange = useCallback(
-    (ts: Timestamp | null | undefined) => {
-      if (!ts) return true;
-      const date = ts.toDate();
-
-      // Custom date range picker takes priority
-      if (dateRange.from || dateRange.to) {
-        const from = dateRange.from ? new Date(dateRange.from.setHours(0, 0, 0, 0)) : null;
-        const to = dateRange.to ? new Date(dateRange.to.setHours(23, 59, 59, 999)) : null;
-
-        if (from && date < from) return false;
-        if (to && date > to) return false;
-        return true;
-      }
-
-      // Preset filters
-      if (filterDate === "all") return true;
-      const now = new Date();
-      if (filterDate === "today")
-        return date.toDateString() === now.toDateString();
-      if (filterDate === "week")
-        return date >= new Date(now.getTime() - 7 * 86400000);
-      if (filterDate === "month")
-        return date >= new Date(now.getTime() - 30 * 86400000);
+  const isWithinDateRange = useCallback((ts: Timestamp|null|undefined) => {
+    if (!ts) return true;
+    const date = ts.toDate();
+    if (dateRange.from || dateRange.to) {
+      const from = dateRange.from ? new Date(new Date(dateRange.from).setHours(0,0,0,0)) : null;
+      const to   = dateRange.to   ? new Date(new Date(dateRange.to).setHours(23,59,59,999)) : null;
+      if (from && date < from) return false;
+      if (to   && date > to)   return false;
       return true;
-    },
-    [filterDate, dateRange],
-  );
+    }
+    if (filterDate === "all") return true;
+    const now = new Date();
+    if (filterDate === "today") return date.toDateString() === now.toDateString();
+    if (filterDate === "week")  return date >= new Date(now.getTime() - 7*86400000);
+    if (filterDate === "month") return date >= new Date(now.getTime() - 30*86400000);
+    return true;
+  }, [filterDate, dateRange]);
 
-  // ── Filtered list ──────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return allLogs.filter((log) => {
-      if (filterAction !== "all" && log.action !== filterAction) return false;
-      if (filterSource !== "all" && log.source !== filterSource) return false;
-      if (filterActor !== "all") {
-        const actorKey = log.actor?.email || log.actor?.name || "unknown";
-        if (actorKey !== filterActor) return false;
-      }
-      if (filterModule !== "all" && log.module !== filterModule) return false;
-      if (!isWithinDateRange(log.timestamp)) return false;
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        return (
-          log.customerName?.toLowerCase().includes(q) ||
-          log.resourceName?.toLowerCase().includes(q) ||
-          log.customerId?.toLowerCase().includes(q) ||
-          log.resourceId?.toLowerCase().includes(q) ||
-          log.actor?.name?.toLowerCase().includes(q) ||
-          log.actor?.email?.toLowerCase().includes(q) ||
-          log.actor?.referenceId?.toLowerCase().includes(q) ||
-          log.module?.toLowerCase().includes(q) ||
-          log.ReferenceID?.toLowerCase().includes(q) ||
-          log.TSM?.toLowerCase().includes(q) ||
-          log.Manager?.toLowerCase().includes(q) ||
-          log.transfer?.tsa?.fromName?.toLowerCase().includes(q) ||
-          log.transfer?.tsa?.toName?.toLowerCase().includes(q) ||
-          log.transfer?.tsm?.toName?.toLowerCase().includes(q) ||
-          log.transfer?.manager?.toName?.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [
-    allLogs,
-    filterAction,
-    filterSource,
-    filterActor,
-    filterModule,
-    filterDate,
-    dateRange,
-    search,
-    isWithinDateRange,
-  ]);
+  const filtered = useMemo(() => allLogs.filter(log => {
+    if (filterAction !== "all" && log.action !== filterAction) return false;
+    if (filterSource !== "all" && log.source !== filterSource) return false;
+    if (filterActor  !== "all" && (log.actor?.email||log.actor?.name||"unknown") !== filterActor) return false;
+    if (filterModule !== "all" && log.module !== filterModule) return false;
+    if (!isWithinDateRange(log.timestamp)) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return [log.customerName, log.resourceName, log.customerId, log.resourceId,
+        log.actor?.name, log.actor?.email, log.actor?.referenceId, log.module,
+        log.ReferenceID, log.TSM, log.Manager,
+        log.transfer?.tsa?.fromName, log.transfer?.tsa?.toName,
+        log.transfer?.tsm?.toName, log.transfer?.manager?.toName,
+      ].some(v => v?.toLowerCase().includes(q));
+    }
+    return true;
+  }), [allLogs, filterAction, filterSource, filterActor, filterModule, filterDate, dateRange, search, isWithinDateRange]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE,
-  );
+  const paginated  = filtered.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
 
-  useEffect(
-    () => setCurrentPage(1),
-    [search, filterAction, filterSource, filterDate, filterActor, filterModule, dateRange],
-  );
+  useEffect(() => setCurrentPage(1), [search, filterAction, filterSource, filterDate, filterActor, filterModule, dateRange]);
 
-  // ── Bulk Selection Handlers ──────────────────────────────────────────────
-  const toggleLogSelection = (logId: string) => {
-    setSelectedLogs((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(logId)) {
-        newSet.delete(logId);
-      } else {
-        newSet.add(logId);
-      }
-      return newSet;
-    });
-  };
-
-  const selectAllVisible = () => {
-    const visibleIds = paginated.map((log) => `${log.source}-${log.id}`);
-    setSelectedLogs((prev) => {
-      const newSet = new Set(prev);
-      visibleIds.forEach((id) => newSet.add(id));
-      return newSet;
-    });
-  };
-
-  const clearSelection = () => {
-    setSelectedLogs(new Set());
-  };
-
-  const exportSelectedLogs = () => {
-    const selected = filtered.filter((log) =>
-      selectedLogs.has(`${log.source}-${log.id}`)
-    );
-    exportAuditLogsToCSV(selected);
-  };
+  const hasFilters = !!search || filterAction!=="all" || filterSource!=="all" || filterDate!=="all" || filterActor!=="all" || filterModule!=="all" || dateRange.from || dateRange.to;
 
   const clearFilters = () => {
-    setSearch("");
-    setFilterAction("all");
-    setFilterSource("all");
-    setFilterDate("all");
-    setFilterActor("all");
-    setFilterModule("all");
-    setDateRange({ from: undefined, to: undefined });
+    setSearch(""); setFilterAction("all"); setFilterSource("all"); setFilterDate("all");
+    setFilterActor("all"); setFilterModule("all"); setDateRange({from:undefined,to:undefined});
     setSelectedLogs(new Set());
   };
 
-  // ── Analytics Data ────────────────────────────────────────────────────────
-  const analyticsData = useMemo(() => {
-    // Actions per day (last 30 days)
-    const actionsPerDay: Record<string, number> = {};
-    const today = new Date();
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split("T")[0];
-      actionsPerDay[dateStr] = 0;
-    }
+  const toggleLogSelection = (id: string) => setSelectedLogs(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
+  const selectAllVisible   = () => setSelectedLogs(prev => { const n=new Set(prev); paginated.forEach(l=>n.add(`${l.source}-${l.id}`)); return n; });
+  const clearSelection     = () => setSelectedLogs(new Set());
+  const exportSelected     = () => exportAuditLogsToCSV(filtered.filter(l => selectedLogs.has(`${l.source}-${l.id}`)));
 
-    // Top actors
-    const actorCounts: Record<string, { name: string; count: number }> = {};
+  const startRow = filtered.length === 0 ? 0 : (currentPage-1)*PAGE_SIZE+1;
+  const endRow   = Math.min(currentPage*PAGE_SIZE, filtered.length);
 
-    // Action distribution
-    const actionCounts: Record<string, number> = {};
-
-    // Hourly activity (0-23)
-    const hourlyActivity: number[] = new Array(24).fill(0);
-
-    filtered.forEach((log) => {
-      // Actions per day
-      if (log.timestamp?.toDate) {
-        const dateStr = log.timestamp.toDate().toISOString().split("T")[0];
-        if (actionsPerDay[dateStr] !== undefined) {
-          actionsPerDay[dateStr]++;
-        }
-
-        // Hourly activity
-        const hour = log.timestamp.toDate().getHours();
-        hourlyActivity[hour]++;
-      }
-
-      // Actor counts
-      const actorKey = log.actor?.email || log.actor?.name || "Unknown";
-      if (!actorCounts[actorKey]) {
-        actorCounts[actorKey] = { name: log.actor?.name || actorKey, count: 0 };
-      }
-      actorCounts[actorKey].count++;
-
-      // Action counts
-      const action = log.action || "other";
-      actionCounts[action] = (actionCounts[action] || 0) + 1;
-    });
-
-    // Convert to arrays for charts
-    const actionsPerDayArray = Object.entries(actionsPerDay).map(([date, count]) => ({
-      date: format(new Date(date), "MMM dd"),
-      fullDate: date,
-      count,
-    }));
-
-    const topActorsArray = Object.entries(actorCounts)
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 10)
-      .map(([key, data]) => ({
-        name: data.name,
-        count: data.count,
-      }));
-
-    const actionDistributionArray = Object.entries(actionCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([action, count]) => ({
-        action,
-        label: ACTION_CONFIG[action]?.label || action,
-        count,
-        color: ACTION_CONFIG[action]?.color || "text-gray-500",
-      }));
-
-    const hourlyActivityArray = hourlyActivity.map((count, hour) => ({
-      hour: `${hour}:00`,
-      hour12: hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`,
-      count,
-    }));
-
-    return {
-      actionsPerDay: actionsPerDayArray,
-      topActors: topActorsArray,
-      actionDistribution: actionDistributionArray,
-      hourlyActivity: hourlyActivityArray,
-    };
-  }, [filtered]);
-
-  const hasFilters =
-    !!search ||
-    filterAction !== "all" ||
-    filterSource !== "all" ||
-    filterDate !== "all" ||
-    filterActor !== "all" ||
-    filterModule !== "all" ||
-    dateRange.from ||
-    dateRange.to;
-
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <ProtectedPageWrapper>
       <TooltipProvider delayDuration={0}>
-        <SidebarProvider className="dark">
+        <SidebarProvider>
           <AppSidebar />
-          <SidebarInset className="bg-slate-950 text-slate-100 flex flex-col h-svh overflow-hidden">
+          <SidebarInset className="flex flex-col h-svh overflow-hidden"
+            style={{ backgroundColor: C.bg, fontFamily: C.font, color: C.text }}>
+
+            {/* Dot-grid */}
+            <div className="fixed inset-0 pointer-events-none" style={{
+              backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+              backgroundSize: "24px 24px", opacity: 0.15, zIndex: 0,
+            }} />
+
             {/* ── Header ── */}
-            <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4 border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-sm">
-              <SidebarTrigger className="-ml-1 text-slate-400 hover:text-cyan-400" />
+            <header className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b"
+              style={{ backgroundColor: C.bg, borderColor: C.border }}>
+              <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: C.dim }} />
+              <div className="w-px h-4" style={{ backgroundColor: C.border }} />
               <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}
-                className="text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 text-xs hidden sm:flex">
-                Home
-              </Button>
-              <Separator orientation="vertical" className="h-4 bg-slate-700 hidden sm:block" />
+                className="hidden sm:flex h-7 px-2 text-[10px] uppercase tracking-widest rounded-none hover:bg-transparent"
+                style={{ color: C.dim }}>Home</Button>
+              <div className="w-px h-4 hidden sm:block" style={{ backgroundColor: C.border }} />
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbLink href="#" className="text-slate-500 hover:text-cyan-400 text-xs hidden sm:block">Admin</BreadcrumbLink>
+                    <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>Admin</BreadcrumbLink>
                   </BreadcrumbItem>
-                  <BreadcrumbSeparator className="text-slate-600 hidden sm:block" />
+                  <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
                   <BreadcrumbItem>
-                    <BreadcrumbPage className="text-cyan-400 text-xs font-semibold tracking-wide">Audit Logs</BreadcrumbPage>
+                    <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: C.accent }}>Audit Logs</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
+              <div className="ml-auto flex items-center gap-1.5">
+                {loading && <span className="text-[10px] uppercase tracking-wider" style={{ color: C.muted }}>Loading…</span>}
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Live</span>
+              </div>
             </header>
 
-            {/* ── Title + Stats + Toolbar (shrink-0, never scrolls) ── */}
-            <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800 space-y-3">
-              {/* Title row */}
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-cyan-400 leading-tight">Audit Logs</h1>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {loading ? "Loading…" : <><span className="font-semibold text-slate-300">{filtered.length}</span> events</>}
-                    {currentUser.name && <span className="ml-2">· <span className="text-slate-400">{currentUser.name}</span></span>}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={fetchAllLogs}
-                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider gap-1">
-                    <RefreshCw className="h-3.5 w-3.5" /> Refresh
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => exportAuditLogsToCSV(filtered)} disabled={filtered.length === 0}
-                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider gap-1">
-                    <FileSpreadsheet className="h-3.5 w-3.5" /> CSV
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => exportAuditLogsToPDF(filtered)} disabled={filtered.length === 0}
-                    className="bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 rounded-none h-9 text-xs uppercase tracking-wider gap-1">
-                    <FileDown className="h-3.5 w-3.5" /> PDF
-                  </Button>
-                </div>
+            {/* ── Title bar ── */}
+            <div className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b"
+              style={{ borderColor: C.border, backgroundColor: C.panel }}>
+              <div className="flex h-8 w-8 items-center justify-center border"
+                style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+                <DatabaseBackup className="size-4" style={{ color: C.accent }} />
               </div>
-
-              {/* Stats pills */}
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { label: "Total",       value: stats.total,     color: "text-slate-300",   border: "border-slate-700" },
-                  { label: "Transferred", value: stats.transfers, color: "text-violet-400",  border: "border-violet-500/30" },
-                  { label: "Created",     value: stats.creates,   color: "text-emerald-400", border: "border-emerald-500/30" },
-                  { label: "Updated",     value: stats.updates,   color: "text-blue-400",    border: "border-blue-500/30" },
-                  { label: "Deleted",     value: stats.deletes,   color: "text-red-400",     border: "border-red-500/30" },
-                  { label: "Auto-ID",     value: stats.autoids,   color: "text-amber-400",   border: "border-amber-500/30" },
-                  { label: "Sessions",    value: stats.logins,    color: "text-green-400",   border: "border-green-500/30" },
-                ].map((s) => (
-                  <div key={s.label} className={`rounded-none border ${s.border} bg-slate-800/60 px-3 py-1.5 text-center min-w-[64px]`}>
-                    <div className={`text-base font-bold tabular-nums ${s.color}`}>{loading ? "—" : s.value.toLocaleString()}</div>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wide">{s.label}</div>
-                  </div>
-                ))}
+              <div>
+                <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>Audit Logs</h1>
+                <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>
+                  {loading ? "Syncing…" : <><span style={{ color: C.text }}>{filtered.length}</span> events · {currentUser.name && <span style={{ color: C.dim }}>{currentUser.name}</span>}</>}
+                </p>
               </div>
-
-              {/* Toolbar */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative flex-1 min-w-[180px] max-w-sm">
-                  <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-slate-500" />
-                  <Input className="pl-7 h-9 text-xs bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:border-cyan-500/50 rounded-none"
-                    placeholder="Search by name, email, ReferenceID…" value={search} onChange={(e) => setSearch(e.target.value)} />
-                  {search && <button onClick={() => setSearch("")} className="absolute right-2 top-2.5 text-slate-500 hover:text-slate-300"><X className="h-3.5 w-3.5" /></button>}
-                </div>
-                <Select value={filterSource} onValueChange={setFilterSource}>
-                  <SelectTrigger className="h-9 w-[150px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><SelectValue placeholder="Source" /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
-                    <SelectItem value="all" className="text-xs">All Sources</SelectItem>
-                    <SelectItem value="customer_audit" className="text-xs">customer_audit</SelectItem>
-                    <SelectItem value="activity_logs" className="text-xs">activity_logs</SelectItem>
-                    <SelectItem value="system_audit" className="text-xs">system_audit</SelectItem>
-                    <SelectItem value="audit_trails" className="text-xs">audit_trails</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={filterAction} onValueChange={setFilterAction}>
-                  <SelectTrigger className="h-9 w-[140px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><SelectValue placeholder="Action" /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
-                    <SelectItem value="all" className="text-xs">All Actions</SelectItem>
-                    <SelectItem value="transfer" className="text-xs">Transferred</SelectItem>
-                    <SelectItem value="create" className="text-xs">Created</SelectItem>
-                    <SelectItem value="update" className="text-xs">Updated</SelectItem>
-                    <SelectItem value="delete" className="text-xs">Deleted</SelectItem>
-                    <SelectItem value="autoid" className="text-xs">Auto-ID</SelectItem>
-                    <SelectItem value="login" className="text-xs">Login</SelectItem>
-                    <SelectItem value="logout" className="text-xs">Logout</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={filterDate} onValueChange={setFilterDate}>
-                  <SelectTrigger className="h-9 w-[130px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><SelectValue placeholder="Date" /></SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
-                    <SelectItem value="all" className="text-xs">All Time</SelectItem>
-                    <SelectItem value="today" className="text-xs">Today</SelectItem>
-                    <SelectItem value="week" className="text-xs">Last 7 Days</SelectItem>
-                    <SelectItem value="month" className="text-xs">Last 30 Days</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className={cn("h-9 text-xs rounded-none bg-slate-800 border-slate-700 text-slate-300 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-400 gap-1", (dateRange.from || dateRange.to) && "border-cyan-500/40 text-cyan-400 bg-cyan-500/5")}>
-                      <CalendarIcon className="h-3.5 w-3.5" />
-                      {dateRange.from ? (dateRange.to ? `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d, yy")}` : format(dateRange.from, "MMM d, yyyy")) : "Date range"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-slate-900 border-slate-700" align="start">
-                    <Calendar initialFocus mode="range" defaultMonth={dateRange.from}
-                      selected={{ from: dateRange.from, to: dateRange.to }}
-                      onSelect={(r) => setDateRange({ from: r?.from, to: r?.to })}
-                      numberOfMonths={2} />
-                  </PopoverContent>
-                </Popover>
-                {uniqueActors.length > 0 && (
-                  <Select value={filterActor} onValueChange={setFilterActor}>
-                    <SelectTrigger className="h-9 w-[160px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><Users className="mr-1 h-3 w-3" /><SelectValue placeholder="Actor" /></SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
-                      <SelectItem value="all" className="text-xs">All Actors</SelectItem>
-                      {uniqueActors.map(([key, actor]) => (
-                        <SelectItem key={key} value={key} className="text-xs">{actor.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                {uniqueModules.length > 0 && (
-                  <Select value={filterModule} onValueChange={setFilterModule}>
-                    <SelectTrigger className="h-9 w-[150px] text-xs bg-slate-800 border-slate-700 text-slate-200 rounded-none"><Layers className="mr-1 h-3 w-3" /><SelectValue placeholder="Module" /></SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
-                      <SelectItem value="all" className="text-xs">All Modules</SelectItem>
-                      {uniqueModules.map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
+              <div className="ml-auto flex items-center gap-2">
                 {/* View toggle */}
-                <div className="flex items-center border border-slate-700 rounded-none overflow-hidden ml-auto">
-                  {(["logs", "analytics"] as const).map((v) => (
+                <div className="flex border" style={{ borderColor: C.border }}>
+                  {(["logs","analytics"] as const).map(v => (
                     <button key={v} onClick={() => setActiveView(v)}
-                      className={cn("px-3 h-9 text-xs uppercase tracking-wider font-medium transition-colors",
-                        activeView === v ? "bg-cyan-600 text-white" : "bg-slate-800 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10")}>
-                      {v === "logs" ? <><DatabaseBackup className="inline-block mr-1 h-3.5 w-3.5" />Logs</> : <><Activity className="inline-block mr-1 h-3.5 w-3.5" />Analytics</>}
+                      className="px-3 h-7 text-[10px] font-bold uppercase tracking-wider transition-colors"
+                      style={{
+                        backgroundColor: activeView===v ? C.accent : "transparent",
+                        color: activeView===v ? "#080d12" : C.dim,
+                      }}>
+                      {v}
                     </button>
                   ))}
                 </div>
-                {hasFilters && (
-                  <Button variant="ghost" size="sm" onClick={clearFilters}
-                    className="h-9 text-xs rounded-none text-slate-400 hover:text-red-400 hover:bg-red-500/10 gap-1">
-                    <X className="h-3.5 w-3.5" /> Clear
-                  </Button>
-                )}
+                <button onClick={() => exportAuditLogsToCSV(filtered)} disabled={!filtered.length}
+                  className="flex items-center gap-1 h-7 px-2 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-30"
+                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color=C.accent; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.dim; }}>
+                  <FileSpreadsheet className="size-3" /> CSV
+                </button>
+                <button onClick={() => exportAuditLogsToPDF(filtered)} disabled={!filtered.length}
+                  className="flex items-center gap-1 h-7 px-2 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-30"
+                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color=C.accent; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.dim; }}>
+                  <FileDown className="size-3" /> PDF
+                </button>
+                <button onClick={fetchAllLogs}
+                  className="flex items-center gap-1 h-7 px-2 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor=C.accent; e.currentTarget.style.color=C.accent; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.dim; }}>
+                  <RefreshCw className="size-3" />
+                </button>
               </div>
             </div>
 
-            {/* ── Scrollable content ── */}
-            <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-4 pb-3 min-h-0 pt-3">
-            <main className="flex-1 overflow-hidden flex flex-col min-h-0">
-              {/* removed old heading — now in shrink-0 bar above */}
-
-              {/* Bulk selection bar */}
-              {activeView === "logs" && selectedLogs.size > 0 && (
-                <div className="shrink-0 flex items-center justify-between px-3 py-2 mb-2 bg-cyan-500/5 border border-cyan-500/20 rounded-none">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-medium text-slate-300">
-                      {selectedLogs.size} log{selectedLogs.size > 1 ? "s" : ""} selected
-                    </span>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400 hover:text-cyan-400" onClick={selectAllVisible}>Select all visible</Button>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400 hover:text-red-400" onClick={clearSelection}>Clear</Button>
-                  </div>
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1 bg-slate-800 border-slate-600 text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-none" onClick={exportSelectedLogs}>
-                    <FileSpreadsheet className="h-3 w-3" /> Export Selected
-                  </Button>
+            {/* ── Stats bar ── */}
+            <div className="relative z-10 shrink-0 grid grid-cols-7 border-b" style={{ borderColor: C.border }}>
+              {[
+                { label:"Total",     value:stats.total,     color:C.text },
+                { label:"Transfer",  value:stats.transfers, color:"#a78bfa" },
+                { label:"Create",    value:stats.creates,   color:"#34d399" },
+                { label:"Update",    value:stats.updates,   color:"#60a5fa" },
+                { label:"Delete",    value:stats.deletes,   color:"#f87171" },
+                { label:"Auto-ID",   value:stats.autoids,   color:"#fbbf24" },
+                { label:"Sessions",  value:stats.logins,    color:"#6ee7b7" },
+              ].map(({ label, value, color }, i) => (
+                <div key={i} className="flex flex-col items-center justify-center py-2.5 border-r last:border-r-0"
+                  style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                  <span className="text-base font-bold leading-none" style={{ color }}>{loading ? "—" : value}</span>
+                  <span className="text-[9px] uppercase tracking-widest mt-1" style={{ color: C.muted }}>{label}</span>
                 </div>
+              ))}
+            </div>
+
+            {/* ── Toolbar ── */}
+            <div className="relative z-10 shrink-0 flex items-center gap-2 px-4 py-2 border-b flex-wrap"
+              style={{ borderColor: C.border, backgroundColor: C.bg }}>
+
+              {/* Search */}
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3" style={{ color: C.dim }} />
+                <input placeholder="Search name, email, ref ID…" value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-8 pr-8 h-8 text-[11px] focus:outline-none"
+                  style={{ backgroundColor: C.panel, border:`1px solid ${C.border}`, color:C.text, fontFamily:C.font }}
+                  onFocus={e => (e.currentTarget.style.borderColor=C.accent)}
+                  onBlur={e  => (e.currentTarget.style.borderColor=C.border)}
+                />
+                {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="size-3" style={{ color:C.dim }} /></button>}
+              </div>
+
+              {/* Source */}
+              <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
+                className="h-8 text-[11px] px-2 focus:outline-none"
+                style={{ backgroundColor:C.panel, border:`1px solid ${C.border}`, color:C.text, fontFamily:C.font }}>
+                <option value="all">All Sources</option>
+                <option value="customer_audit">customer_audit</option>
+                <option value="activity_logs">activity_logs</option>
+                <option value="system_audit">system_audit</option>
+                <option value="audit_trails">audit_trails</option>
+              </select>
+
+              {/* Action */}
+              <select value={filterAction} onChange={e => setFilterAction(e.target.value)}
+                className="h-8 text-[11px] px-2 focus:outline-none"
+                style={{ backgroundColor:C.panel, border:`1px solid ${C.border}`, color:C.text, fontFamily:C.font }}>
+                <option value="all">All Actions</option>
+                {["transfer","create","update","delete","autoid","login","logout"].map(a => (
+                  <option key={a} value={a}>{ACTION_CONFIG[a]?.label ?? a}</option>
+                ))}
+              </select>
+
+              {/* Date preset */}
+              <select value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="h-8 text-[11px] px-2 focus:outline-none"
+                style={{ backgroundColor:C.panel, border:`1px solid ${C.border}`, color:C.text, fontFamily:C.font }}>
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">Last 7 Days</option>
+                <option value="month">Last 30 Days</option>
+              </select>
+
+              {/* Date range calendar */}
+              <Popover open={calOpen} onOpenChange={setCalOpen}>
+                <PopoverTrigger asChild>
+                  <button className="flex items-center gap-2 h-8 px-3 text-[11px] border transition-colors"
+                    style={{
+                      backgroundColor: C.panel,
+                      borderColor: calOpen ? C.accent : (dateRange.from ? C.accent : C.border),
+                      color: dateRange.from ? C.text : C.dim,
+                    }}>
+                    <CalendarIcon className="size-3" style={{ color: dateRange.from ? C.accent : C.dim }} />
+                    {dateRange.from
+                      ? dateRange.to
+                        ? `${format(dateRange.from,"MMM d")} – ${format(dateRange.to,"MMM d, yy")}`
+                        : format(dateRange.from,"MMM d, yyyy")
+                      : "Date range"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-0 border"
+                  style={{ backgroundColor: C.panel, borderColor: C.border, fontFamily: C.font }}>
+                  <style>{`
+                    .al-cal .rdp-month_caption,.al-cal .rdp-caption_label{color:${C.accent};font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+                    .al-cal .rdp-weekday{color:${C.dim};font-size:10px}
+                    .al-cal .rdp-day_button{color:${C.text};font-size:11px;border-radius:0}
+                    .al-cal .rdp-day_button:hover{background:rgba(232,99,10,.15)!important;color:${C.accent}!important}
+                    .al-cal [data-selected-single=true] .rdp-day_button,.al-cal [data-range-start=true] .rdp-day_button,.al-cal [data-range-end=true] .rdp-day_button{background:${C.accent}!important;color:#080d12!important;font-weight:700}
+                    .al-cal [data-range-middle=true] .rdp-day_button{background:rgba(232,99,10,.18)!important;color:${C.accent}!important;border-radius:0!important}
+                    .al-cal .rdp-today .rdp-day_button{border:1px solid ${C.accent};color:${C.accent}}
+                    .al-cal button[class*="button_previous"],.al-cal button[class*="button_next"]{color:${C.dim};background:transparent;border:1px solid ${C.border};border-radius:0}
+                    .al-cal button[class*="button_previous"]:hover,.al-cal button[class*="button_next"]:hover{border-color:${C.accent};color:${C.accent}}
+                  `}</style>
+                  <Calendar mode="range" selected={{ from:dateRange.from, to:dateRange.to }}
+                    onSelect={r => { setDateRange({from:r?.from,to:r?.to}); if(r?.from&&r?.to) setCalOpen(false); }}
+                    numberOfMonths={2} initialFocus className="al-cal p-3" />
+                </PopoverContent>
+              </Popover>
+              {dateRange.from && <button onClick={() => setDateRange({from:undefined,to:undefined})}><X className="size-3" style={{ color:C.dim }} /></button>}
+
+              {/* Actor filter */}
+              {uniqueActors.length > 0 && (
+                <select value={filterActor} onChange={e => setFilterActor(e.target.value)}
+                  className="h-8 text-[11px] px-2 focus:outline-none max-w-[160px]"
+                  style={{ backgroundColor:C.panel, border:`1px solid ${C.border}`, color:C.text, fontFamily:C.font }}>
+                  <option value="all">All Actors</option>
+                  {uniqueActors.map(([k,a]) => <option key={k} value={k}>{a.name}</option>)}
+                </select>
               )}
 
+              {/* Module filter */}
+              {uniqueModules.length > 0 && (
+                <select value={filterModule} onChange={e => setFilterModule(e.target.value)}
+                  className="h-8 text-[11px] px-2 focus:outline-none"
+                  style={{ backgroundColor:C.panel, border:`1px solid ${C.border}`, color:C.text, fontFamily:C.font }}>
+                  <option value="all">All Modules</option>
+                  {uniqueModules.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              )}
+
+              {hasFilters && (
+                <button onClick={clearFilters}
+                  className="flex items-center gap-1 h-8 px-2 text-[10px] font-bold uppercase tracking-wider transition-colors"
+                  style={{ color:C.dim }}
+                  onMouseEnter={e => (e.currentTarget.style.color="#f87171")}
+                  onMouseLeave={e => (e.currentTarget.style.color=C.dim)}>
+                  <X className="size-3" /> Clear
+                </button>
+              )}
+            </div>
+
+            {/* ── Bulk bar ── */}
+            {activeView === "logs" && selectedLogs.size > 0 && (
+              <div className="relative z-10 shrink-0 flex items-center justify-between px-4 py-1.5 border-b"
+                style={{ borderColor: C.border, backgroundColor: "rgba(232,99,10,0.06)" }}>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <span style={{ color: C.accent }}>{selectedLogs.size} selected</span>
+                  <button onClick={selectAllVisible} style={{ color: C.dim }}
+                    onMouseEnter={e=>(e.currentTarget.style.color=C.accent)} onMouseLeave={e=>(e.currentTarget.style.color=C.dim)}>
+                    Select visible
+                  </button>
+                  <button onClick={clearSelection} style={{ color: C.dim }}
+                    onMouseEnter={e=>(e.currentTarget.style.color="#f87171")} onMouseLeave={e=>(e.currentTarget.style.color=C.dim)}>
+                    Clear
+                  </button>
+                </div>
+                <button onClick={exportSelected}
+                  className="flex items-center gap-1 h-6 px-2 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                  style={{ borderColor:C.border, color:C.dim, backgroundColor:"transparent" }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>
+                  <FileSpreadsheet className="size-3" /> Export selected
+                </button>
+              </div>
+            )}
+
+            {/* ── Table / Analytics ── */}
+            <div className="relative z-10 flex-1 overflow-auto">
               {activeView === "logs" ? (
                 <>
-                  {/* Error state */}
-                  {error && (
-                    <div className="flex flex-col items-center gap-4 py-16 text-center">
-                      <p className="text-sm font-semibold text-red-400">Failed to load audit logs</p>
-                      <p className="text-xs text-slate-500 max-w-md">The primary collection could not be fetched.</p>
-                      <Button variant="outline" size="sm" className="gap-2 text-xs bg-slate-800 border-slate-600 text-slate-300 rounded-none" onClick={fetchAllLogs}>
-                        <RefreshCw className="h-3.5 w-3.5" /> Refresh
-                      </Button>
+                  {error ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-3">
+                      <p className="text-sm" style={{ color:"#f87171" }}>Failed to load audit logs</p>
+                      <button onClick={fetchAllLogs}
+                        className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border"
+                        style={{ borderColor:C.border, color:C.dim, backgroundColor:"transparent" }}>
+                        <RefreshCw className="size-3" /> Retry
+                      </button>
                     </div>
-                  )}
-
-                  {!error && <>
-                  {/* Table */}
-                  <div className="flex-1 overflow-auto min-h-0 border border-slate-700/50 rounded-none bg-slate-900/40">
-                    <table className="w-full whitespace-nowrap text-[12px] min-w-full">
-                      <thead className="bg-slate-800/80 sticky top-0 z-10 border-b border-slate-700/50">
-                        <tr>
-                          <th className="px-3 py-3 w-[40px] text-slate-400">
-                            <input
-                              type="checkbox"
-                              checked={paginated.length > 0 && paginated.every(log => selectedLogs.has(`${log.source}-${log.id}`))}
-                              onChange={() => {
-                                if (paginated.every(log => selectedLogs.has(`${log.source}-${log.id}`))) {
-                                  setSelectedLogs(prev => {
-                                    const newSet = new Set(prev);
-                                    paginated.forEach(log => newSet.delete(`${log.source}-${log.id}`));
-                                    return newSet;
-                                  });
-                                } else {
-                                  selectAllVisible();
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-slate-600"
+                  ) : (
+                    <table className="w-full border-collapse" style={{ fontSize:"11px", fontFamily:C.font }}>
+                      <thead className="sticky top-0 z-10">
+                        <tr style={{ backgroundColor:C.panel, borderBottom:`1px solid ${C.border}` }}>
+                          <th className="px-3 py-2.5 w-10" style={{ borderRight:`1px solid ${C.border}` }}>
+                            <input type="checkbox"
+                              checked={paginated.length>0 && paginated.every(l=>selectedLogs.has(`${l.source}-${l.id}`))}
+                              onChange={() => paginated.every(l=>selectedLogs.has(`${l.source}-${l.id}`))
+                                ? setSelectedLogs(prev=>{const n=new Set(prev);paginated.forEach(l=>n.delete(`${l.source}-${l.id}`));return n;})
+                                : selectAllVisible()}
+                              className="h-3.5 w-3.5"
+                              style={{ accentColor: C.accent }}
                             />
                           </th>
-                          <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-[180px]">Actor</th>
-                          <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-[110px]">Action</th>
-                          <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-[220px]">Subject / Detail</th>
-                          <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-[160px]">Time</th>
-                          <th className="text-center px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider w-[50px]">View</th>
+                          {["Actor","Action","Subject / Detail","Time",""].map((h,i) => (
+                            <th key={i} className="text-left px-3 py-2.5 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
+                              style={{ color:C.accent, borderRight:i<4?`1px solid ${C.border}`:"none" }}>
+                              {h}
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
                         {loading ? (
-                          Array.from({ length: 8 }).map((_, i) => (
-                            <tr key={i} className="animate-pulse border-b border-slate-800/60">
-                              {Array.from({ length: 6 }).map((_, j) => (
+                          Array.from({length:8}).map((_,i) => (
+                            <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
+                              {Array.from({length:6}).map((_,j) => (
                                 <td key={j} className="px-3 py-3">
-                                  <div className="h-4 bg-slate-800 rounded w-full" />
+                                  <div className="h-3 rounded animate-pulse" style={{ backgroundColor:C.muted, width:`${60+Math.random()*30}%` }} />
                                 </td>
                               ))}
                             </tr>
                           ))
                         ) : paginated.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="text-center py-16">
-                              <div className="flex flex-col items-center gap-3 text-slate-500">
-                                <DatabaseBackup className="h-10 w-10 opacity-20" />
-                                <p className="text-sm font-medium">No logs found</p>
-                                {hasFilters && (
-                                  <Button variant="outline" size="sm" onClick={clearFilters}
-                                    className="text-xs bg-slate-800 border-slate-600 text-slate-300 rounded-none">
-                                    Clear filters
-                                  </Button>
-                                )}
-                              </div>
+                            <td colSpan={6} className="text-center py-16" style={{ color:C.muted }}>
+                              No logs match your filters.
+                              {hasFilters && <button onClick={clearFilters} className="ml-2 underline" style={{ color:C.accent }}>Clear filters</button>}
                             </td>
                           </tr>
-                        ) : (
-                          paginated.map((log) => {
-                            const cfg = getActionCfg(log.action);
-                            const isBulk = log.context?.bulk || (log.affectedCount ?? 0) > 1;
-                            const actorDisplay = log.actor?.name || log.actor?.email || log.actor?.referenceId || "Unknown";
+                        ) : paginated.map((log, i) => {
+                          const cfg = getActionCfg(log.action);
+                          const isBulk = log.context?.bulk || (log.affectedCount??0) > 1;
+                          const actorDisplay = log.actor?.name || log.actor?.email || log.actor?.referenceId || "Unknown";
+                          const logKey = `${log.source}-${log.id}`;
+                          const isSelected = selectedLogs.has(logKey);
+                          return (
+                            <tr key={logKey}
+                              style={{
+                                backgroundColor: isSelected ? "rgba(232,99,10,0.06)" : i%2===0 ? C.bg : C.panel,
+                                borderBottom:`1px solid ${C.border}`,
+                              }}
+                              onMouseEnter={e => { if(!isSelected) e.currentTarget.style.backgroundColor="rgba(232,99,10,0.03)"; }}
+                              onMouseLeave={e => { if(!isSelected) e.currentTarget.style.backgroundColor=i%2===0?C.bg:C.panel; }}>
 
-                            return (
-                              <tr
-                                key={`${log.source}-${log.id}`}
-                                className={cn(
-                                  "border-b border-slate-800/60 hover:bg-slate-800/40 transition-colors text-slate-300",
-                                  selectedLogs.has(`${log.source}-${log.id}`) && "bg-cyan-500/5",
+                              {/* Checkbox */}
+                              <td className="px-3 py-2.5" style={{ borderRight:`1px solid ${C.border}` }}>
+                                <input type="checkbox" checked={isSelected} onChange={() => toggleLogSelection(logKey)}
+                                  className="h-3.5 w-3.5" style={{ accentColor:C.accent }} />
+                              </td>
+
+                              {/* Actor */}
+                              <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight:`1px solid ${C.border}` }}>
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-7 h-7 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${avatarColor(log.actor?.name||log.actor?.email)}`}>
+                                    {getInitials(log.actor?.name||log.actor?.email)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-semibold truncate max-w-[140px]" style={{ color:C.text }}>{actorDisplay}</p>
+                                    {log.actor?.email && log.actor.email !== actorDisplay && (
+                                      <p className="text-[10px] truncate max-w-[140px]" style={{ color:C.dim }}>{log.actor.email}</p>
+                                    )}
+                                    <SourceTag source={log.source} />
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Action */}
+                              <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight:`1px solid ${C.border}` }}>
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${cfg.badge}`}>
+                                  {cfg.icon}{cfg.label}
+                                </span>
+                                {isBulk && <p className="text-[9px] mt-0.5" style={{ color:C.muted }}>Bulk · {log.affectedCount??""}</p>}
+                              </td>
+
+                              {/* Subject */}
+                              <td className="px-3 py-2.5 max-w-[260px]" style={{ borderRight:`1px solid ${C.border}` }}>
+                                {log.action === "transfer" ? (
+                                  <TransferPill log={log} />
+                                ) : log.action === "update" && log.changes ? (
+                                  <div>
+                                    {(log.customerName||log.resourceName) && <p className="font-semibold truncate text-[11px]" style={{ color:C.text }}>{log.customerName||log.resourceName}</p>}
+                                    <p style={{ color:C.muted, fontSize:"10px" }}>{Object.keys(log.changes).join(", ")} changed</p>
+                                  </div>
+                                ) : log.source === "audit_trails" && (log.message||log.details) ? (
+                                  <div>
+                                    {log.message && <p className="truncate max-w-[240px] text-[11px]" style={{ color:C.text }}>{log.message}</p>}
+                                    {log.details && <p className="truncate max-w-[240px] text-[10px]" style={{ color:C.muted }}>{log.details}</p>}
+                                  </div>
+                                ) : log.customerName || log.resourceName ? (
+                                  <p className="font-semibold truncate max-w-[240px]" style={{ color:C.text }}>{log.customerName||log.resourceName}</p>
+                                ) : (
+                                  <span style={{ color:C.muted }}>—</span>
                                 )}
-                              >
-                                {/* Checkbox */}
-                                <td className="px-3 py-2.5">
-                                  <input type="checkbox"
-                                    checked={selectedLogs.has(`${log.source}-${log.id}`)}
-                                    onChange={() => toggleLogSelection(`${log.source}-${log.id}`)}
-                                    className="h-4 w-4 rounded border-slate-600" />
-                                </td>
-                                {/* Actor */}
-                                <td className="px-3 py-2.5">
-                                  <div className="flex items-center gap-2">
-                                    <div className={cn("w-7 h-7 rounded-full bg-gradient-to-br flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold", avatarColor(log.actor?.name || log.actor?.email))}>
-                                      {getInitials(log.actor?.name || log.actor?.email)}
+                              </td>
+
+                              {/* Time */}
+                              <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight:`1px solid ${C.border}` }}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="cursor-default">
+                                      <p className="font-semibold" style={{ color:C.text }}>{timeAgo(log.timestamp)}</p>
+                                      <p className="text-[10px]" style={{ color:C.muted }}>{formatTimestamp(log.timestamp)}</p>
                                     </div>
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-semibold truncate leading-tight text-slate-200">{actorDisplay}</p>
-                                      {log.actor?.email && log.actor.email !== actorDisplay && (
-                                        <p className="text-[10px] text-slate-500 truncate leading-tight">{log.actor.email}</p>
-                                      )}
-                                      <SourceBadge source={log.source} />
-                                    </div>
-                                  </div>
-                                </td>
-                                {/* Action */}
-                                <td className="px-3 py-2.5">
-                                  <div className="flex flex-col gap-1">
-                                    <Badge variant="outline" className={cn("gap-1 text-[11px] font-semibold border w-fit", cfg.bg, cfg.color)}>
-                                      {cfg.icon}{cfg.label}
-                                    </Badge>
-                                    {isBulk && <span className="text-[10px] text-slate-500 font-medium">Bulk · {log.affectedCount ?? "?"} records</span>}
-                                  </div>
-                                </td>
-                                {/* Subject */}
-                                <td className="px-3 py-2.5">
-                                  {log.action === "transfer" ? (
-                                    <TransferPill log={log} />
-                                  ) : log.action === "update" && log.changes ? (
-                                    <div className="min-w-0">
-                                      {(log.customerName || log.resourceName) && (
-                                        <p className="text-xs font-medium truncate uppercase mb-0.5 text-slate-200">{log.customerName || log.resourceName}</p>
-                                      )}
-                                      <p className="text-[10px] text-slate-500">{Object.keys(log.changes).join(", ")} changed</p>
-                                    </div>
-                                  ) : log.source === "system_audit" && log.resourceName ? (
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-medium truncate uppercase mb-0.5 text-slate-200">{log.resourceName}</p>
-                                      {log.module && <p className="text-[10px] text-slate-500">Module: {log.module}</p>}
-                                    </div>
-                                  ) : log.source === "audit_trails" && (log.message || log.details) ? (
-                                    <div className="min-w-0">
-                                      {log.message && <p className="text-xs truncate max-w-[250px] text-slate-300">{log.message}</p>}
-                                      {log.details && <p className="text-[10px] text-slate-500 truncate max-w-[250px]">{log.details}</p>}
-                                      {log.entityName && <p className="text-[10px] text-pink-400 truncate">{log.entityName}</p>}
-                                    </div>
-                                  ) : log.customerName ? (
-                                    <p className="text-xs font-medium uppercase truncate max-w-[200px] text-slate-200">{log.customerName}</p>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-600">—</span>
-                                  )}
-                                </td>
-                                {/* Time */}
-                                <td className="px-3 py-2.5">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="cursor-default">
-                                        <p className="text-xs font-medium text-slate-300">{timeAgo(log.timestamp)}</p>
-                                        <p className="text-[10px] text-slate-500">{formatTimestamp(log.timestamp)}</p>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p className="text-xs">{formatTimestamp(log.timestamp)}</p></TooltipContent>
-                                  </Tooltip>
-                                </td>
-                                {/* View */}
-                                <td className="px-3 py-2.5 text-center">
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-cyan-500/10" onClick={() => setSelectedLog(log)}>
-                                    <Eye className="h-3.5 w-3.5 text-slate-500" />
-                                  </Button>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
+                                  </TooltipTrigger>
+                                  <TooltipContent><p className="text-xs">{formatTimestamp(log.timestamp)}</p></TooltipContent>
+                                </Tooltip>
+                              </td>
+
+                              {/* View */}
+                              <td className="px-3 py-2.5 text-center">
+                                <button onClick={() => setSelectedLog(log)}
+                                  className="h-6 w-6 flex items-center justify-center border transition-all mx-auto"
+                                  style={{ borderColor:C.border, color:C.dim }}
+                                  onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
+                                  onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>
+                                  <Eye className="size-3" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
-                  </div>
-
-                  {/* Pagination */}
-                  {!loading && filtered.length > 0 && (
-                    <div className="shrink-0 flex items-center justify-between pt-2">
-                      <p className="text-xs text-slate-500">
-                        Showing <span className="font-medium text-slate-300">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)}</span>{" "}
-                        of <span className="font-medium text-slate-300">{filtered.length}</span> events
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon" className="h-7 w-7 bg-slate-800 border-slate-700 text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-none"
-                          disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>
-                          <ChevronLeft className="h-3.5 w-3.5" />
-                        </Button>
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let p: number;
-                          if (totalPages <= 5) p = i + 1;
-                          else if (currentPage <= 3) p = i + 1;
-                          else if (currentPage >= totalPages - 2) p = totalPages - 4 + i;
-                          else p = currentPage - 2 + i;
-                          return (
-                            <Button key={p}
-                              variant={currentPage === p ? "default" : "outline"}
-                              size="icon" className={cn("h-7 w-7 text-xs rounded-none",
-                                currentPage === p ? "bg-cyan-600 border-cyan-600 text-white" : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400")}
-                              onClick={() => setCurrentPage(p)}>{p}</Button>
-                          );
-                        })}
-                        <Button variant="outline" size="icon" className="h-7 w-7 bg-slate-800 border-slate-700 text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-none"
-                          disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
                   )}
-                  </>}
                 </>
               ) : (
-                /* Analytics Dashboard */
-                <div className="space-y-6">
-                  {/* Actions per Day Chart */}
-                  <Card>
-                    <CardContent className="p-6">
-                      <h3 className="text-lg font-semibold mb-4">Activity Timeline (Last 30 Days)</h3>
-                      <div className="h-[250px] w-full">
-                        {analyticsData.actionsPerDay.length > 0 ? (
-                          <div className="flex items-end justify-between h-full gap-1">
-                            {analyticsData.actionsPerDay.map((day, idx) => {
-                              const maxCount = Math.max(...analyticsData.actionsPerDay.map(d => d.count), 1);
-                              const height = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
-                              return (
-                                <div key={day.fullDate} className="flex-1 flex flex-col items-center gap-1">
-                                  <div
-                                    className="w-full bg-primary/80 rounded-t hover:bg-primary transition-colors relative group"
-                                    style={{ height: `${height}%`, minHeight: day.count > 0 ? '4px' : '0' }}
-                                  >
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-popover text-popover-foreground text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
-                                      {day.date}: {day.count} actions
-                                    </div>
-                                  </div>
-                                  {idx % 5 === 0 && (
-                                    <span className="text-[10px] text-muted-foreground rotate-45 origin-left translate-y-2">
-                                      {day.date}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center h-full text-muted-foreground">
-                            No data available
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Top Actors */}
-                    <Card>
-                      <CardContent className="p-6">
-                        <h3 className="text-lg font-semibold mb-4">Top 10 Most Active Users</h3>
-                        <div className="space-y-3">
-                          {analyticsData.topActors.length > 0 ? (
-                            analyticsData.topActors.map((actor, idx) => {
-                              const maxCount = analyticsData.topActors[0]?.count || 1;
-                              const width = (actor.count / maxCount) * 100;
-                              return (
-                                <div key={actor.name} className="flex items-center gap-3">
-                                  <span className="text-sm font-medium w-6 text-muted-foreground">{idx + 1}</span>
-                                  <div className="flex-1">
-                                    <div className="flex justify-between text-sm mb-1">
-                                      <span className="font-medium truncate">{actor.name}</span>
-                                      <span className="text-muted-foreground">{actor.count}</span>
-                                    </div>
-                                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full bg-primary rounded-full"
-                                        style={{ width: `${width}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <div className="text-center text-muted-foreground py-8">
-                              No data available
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Action Distribution */}
-                    <Card>
-                      <CardContent className="p-6">
-                        <h3 className="text-lg font-semibold mb-4">Action Distribution</h3>
-                        <div className="space-y-3">
-                          {analyticsData.actionDistribution.length > 0 ? (
-                            analyticsData.actionDistribution.map((item) => {
-                              const maxCount = analyticsData.actionDistribution[0]?.count || 1;
-                              const width = (item.count / maxCount) * 100;
-                              return (
-                                <div key={item.action} className="flex items-center gap-3">
-                                  <div className="flex-1">
-                                    <div className="flex justify-between text-sm mb-1">
-                                      <span className="font-medium flex items-center gap-2">
-                                        <span className={item.color}>●</span>
-                                        {item.label}
-                                      </span>
-                                      <span className="text-muted-foreground">{item.count}</span>
-                                    </div>
-                                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                      <div
-                                        className={cn("h-full rounded-full", item.color.replace("text-", "bg-").replace("700", "500").replace("400", "500"))}
-                                        style={{ width: `${width}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <div className="text-center text-muted-foreground py-8">
-                              No data available
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Hourly Activity Heatmap */}
-                  <Card>
-                    <CardContent className="p-6">
-                      <h3 className="text-lg font-semibold mb-4">Activity by Hour of Day</h3>
-                      <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-24 gap-1">
-                        {analyticsData.hourlyActivity.map((hour) => {
-                          const maxCount = Math.max(...analyticsData.hourlyActivity.map(h => h.count), 1);
-                          const intensity = maxCount > 0 ? hour.count / maxCount : 0;
-                          const bgOpacity = Math.max(0.1, intensity);
-                          return (
-                            <div
-                              key={hour.hour}
-                              className="aspect-square rounded flex items-center justify-center text-xs relative group cursor-pointer"
-                              style={{ backgroundColor: `rgba(59, 130, 246, ${bgOpacity})` }}
-                            >
-                              <span className={intensity > 0.5 ? "text-white" : "text-foreground"}>
-                                {hour.hour12}
-                              </span>
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-popover text-popover-foreground text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
-                                {hour.hour12}: {hour.count} actions
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
-                        <span>Less active</span>
-                        <div className="flex gap-1">
-                          {[0.1, 0.3, 0.5, 0.7, 0.9].map((opacity) => (
-                            <div
-                              key={opacity}
-                              className="w-4 h-4 rounded"
-                              style={{ backgroundColor: `rgba(59, 130, 246, ${opacity})` }}
-                            />
-                          ))}
-                        </div>
-                        <span>More active</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                /* ── Analytics placeholder ── */
+                <div className="flex flex-col items-center justify-center h-full gap-3">
+                  <Activity className="size-10 opacity-20" style={{ color:C.accent }} />
+                  <p className="text-[11px] uppercase tracking-widest" style={{ color:C.muted }}>Analytics view</p>
+                  <p className="text-[10px]" style={{ color:C.muted }}>{filtered.length} events in current filter</p>
                 </div>
               )}
-            </main>
             </div>
+
+            {/* ── Footer / Pagination ── */}
+            {activeView === "logs" && !error && (
+              <div className="relative z-10 shrink-0 flex items-center justify-between px-4 py-2 border-t"
+                style={{ borderColor:C.border, backgroundColor:C.panel }}>
+                <span className="text-[10px]" style={{ color:C.muted }}>
+                  Showing <span style={{ color:C.text }}>{startRow}–{endRow}</span> of <span style={{ color:C.text }}>{filtered.length}</span> events
+                  {selectedLogs.size > 0 && <span style={{ color:C.accent }}> · {selectedLogs.size} selected</span>}
+                </span>
+                <div className="flex items-center gap-1" style={{ fontSize:"11px" }}>
+                  <button onClick={() => setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1}
+                    className="flex items-center gap-1 h-7 px-2 border transition-colors disabled:opacity-30"
+                    style={{ backgroundColor:"transparent", borderColor:C.border, color:C.dim }}
+                    onMouseEnter={e=>{if(currentPage>1){e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>
+                    <ChevronLeft className="size-3" /> Prev
+                  </button>
+                  {Array.from({length:Math.min(totalPages,7)},(_,i)=>{
+                    let p: number;
+                    if(totalPages<=7) p=i+1;
+                    else if(currentPage<=4) p=i+1;
+                    else if(currentPage>=totalPages-3) p=totalPages-6+i;
+                    else p=currentPage-3+i;
+                    return (
+                      <button key={p} onClick={()=>setCurrentPage(p)}
+                        className="h-7 w-7 border text-[10px] font-bold transition-colors"
+                        style={{ backgroundColor:p===currentPage?C.accent:"transparent", borderColor:p===currentPage?C.accent:C.border, color:p===currentPage?"#080d12":C.dim }}>
+                        {p}
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages}
+                    className="flex items-center gap-1 h-7 px-2 border transition-colors disabled:opacity-30"
+                    style={{ backgroundColor:"transparent", borderColor:C.border, color:C.dim }}
+                    onMouseEnter={e=>{if(currentPage<totalPages){e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>
+                    Next <ChevronRight className="size-3" />
+                  </button>
+                </div>
+              </div>
+            )}
+
           </SidebarInset>
         </SidebarProvider>
 
-        {/* ── Detail dialog ────────────────────────────────────────────────── */}
+        {/* ── Detail dialog ── */}
         {selectedLog && (
-          <Dialog
-            open={!!selectedLog}
-            onOpenChange={() => setSelectedLog(null)}
-          >
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-sm">
-                  <DatabaseBackup className="h-4 w-4 text-primary" />
-                  Log Detail
-                  <SourceBadge source={selectedLog.source} />
+          <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+            <DialogContent className="max-w-lg rounded-none p-0 gap-0"
+              style={{ backgroundColor:C.panel, border:`1px solid ${C.border}`, fontFamily:C.font }}>
+              <DialogHeader className="px-5 py-4 border-b" style={{ borderColor:C.border, backgroundColor:C.bg }}>
+                <DialogTitle className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color:C.accent }}>
+                  <DatabaseBackup className="size-3" /> Log Detail
+                  <SourceTag source={selectedLog.source} />
                 </DialogTitle>
               </DialogHeader>
-
-              <div className="space-y-4">
-                {/* Action */}
-                {(() => {
-                  const cfg = getActionCfg(selectedLog.action);
-                  return (
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "gap-1 text-xs font-semibold border",
-                        cfg.bg,
-                        cfg.color,
-                      )}
-                    >
-                      {cfg.icon}
-                      {cfg.label}
-                      {selectedLog.context?.bulk && (
-                        <span className="ml-1 opacity-70">
-                          · Bulk ({selectedLog.affectedCount ?? "?"} records)
-                        </span>
-                      )}
-                    </Badge>
-                  );
-                })()}
+              <div className="p-5 space-y-4 overflow-y-auto max-h-[70vh]">
+                {/* Action badge */}
+                {(() => { const cfg=getActionCfg(selectedLog.action); return (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${cfg.badge}`}>
+                    {cfg.icon}{cfg.label}
+                    {selectedLog.context?.bulk && <span className="ml-1 opacity-70">· Bulk ({selectedLog.affectedCount??""} records)</span>}
+                  </span>
+                ); })()}
 
                 {/* Actor */}
-                <div className="p-3 rounded-lg bg-muted/40 border space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Actor
-                  </p>
+                <div className="p-3 border space-y-2" style={{ borderColor:C.border, backgroundColor:C.bg }}>
+                  <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color:C.muted }}>Actor</p>
                   <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-xs font-bold",
-                        avatarColor(
-                          selectedLog.actor?.name || selectedLog.actor?.email,
-                        ),
-                      )}
-                    >
-                      {getInitials(
-                        selectedLog.actor?.name || selectedLog.actor?.email,
-                      )}
+                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-xs font-bold ${avatarColor(selectedLog.actor?.name||selectedLog.actor?.email)}`}>
+                      {getInitials(selectedLog.actor?.name||selectedLog.actor?.email)}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">
-                        {selectedLog.actor?.name || "Unknown"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedLog.actor?.email || "No email"}
-                      </p>
-                      {selectedLog.actor?.referenceId && (
-                        <p className="text-[10px] text-muted-foreground font-mono">
-                          {selectedLog.actor.referenceId}
-                        </p>
-                      )}
+                      <p className="text-sm font-semibold" style={{ color:C.text }}>{selectedLog.actor?.name||"Unknown"}</p>
+                      <p className="text-[11px]" style={{ color:C.dim }}>{selectedLog.actor?.email||"No email"}</p>
+                      {selectedLog.actor?.referenceId && <p className="text-[10px] font-mono" style={{ color:C.muted }}>{selectedLog.actor.referenceId}</p>}
                     </div>
                   </div>
                 </div>
 
-                {/* Transfer detail — activity_logs source */}
-                {selectedLog.source === "activity_logs" &&
-                  selectedLog.action === "transfer" && (
-                    <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
-                        Transfer Detail
-                      </p>
-                      <div className="space-y-2 text-xs">
-                        {selectedLog.ReferenceID && (
-                          <div>
-                            <span className="text-muted-foreground">
-                              ReferenceID:{" "}
-                            </span>
-                            <span className="font-mono font-semibold">
-                              {selectedLog.ReferenceID}
-                            </span>
-                          </div>
-                        )}
-                        {selectedLog.TSM && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground w-16 shrink-0">
-                              TSM
-                            </span>
-                            {selectedLog.previousTSM && (
-                              <>
-                                <span className="font-mono text-muted-foreground">
-                                  {selectedLog.previousTSM}
-                                </span>
-                                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                              </>
-                            )}
-                            <span className="font-mono font-semibold">
-                              {selectedLog.TSM}
-                            </span>
-                          </div>
-                        )}
-                        {selectedLog.Manager && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground w-16 shrink-0">
-                              Manager
-                            </span>
-                            {selectedLog.previousManager && (
-                              <>
-                                <span className="font-mono text-muted-foreground">
-                                  {selectedLog.previousManager}
-                                </span>
-                                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                              </>
-                            )}
-                            <span className="font-mono font-semibold">
-                              {selectedLog.Manager}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                {/* Transfer detail — customer_audit source */}
-                {selectedLog.source === "customer_audit" &&
-                  selectedLog.action === "transfer" &&
-                  selectedLog.transfer && (
-                    <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
-                        Transfer Detail
-                      </p>
-                      <TransferPill log={selectedLog} />
-                    </div>
-                  )}
-
-                {/* Field changes for update */}
-                {selectedLog.action === "update" &&
-                  selectedLog.changes &&
-                  Object.keys(selectedLog.changes).length > 0 && (
-                    <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                        Changes
-                      </p>
-                      <div className="space-y-2">
-                        {Object.entries(selectedLog.changes).map(
-                          ([field, { before, after }]) => (
-                            <div
-                              key={field}
-                              className="grid grid-cols-[120px_1fr_1fr] gap-2 items-start text-xs"
-                            >
-                              <span className="font-medium text-muted-foreground capitalize">
-                                {field.replace(/_/g, " ")}
-                              </span>
-                              <span className="line-through text-muted-foreground truncate">
-                                {String(before ?? "—")}
-                              </span>
-                              <span className="font-semibold truncate">
-                                {String(after ?? "—")}
-                              </span>
-                            </div>
-                          ),
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                {/* System Audit Details */}
-                {selectedLog.source === "system_audit" && (
-                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                      System Audit Details
-                    </p>
-                    <div className="space-y-1 text-xs">
-                      {selectedLog.module && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Module:</span>
-                          <span className="font-medium">{selectedLog.module}</span>
-                        </div>
-                      )}
-                      {selectedLog.page && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Page:</span>
-                          <span className="font-medium">{selectedLog.page}</span>
-                        </div>
-                      )}
-                      {selectedLog.resourceType && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Resource Type:</span>
-                          <span className="font-medium">{selectedLog.resourceType}</span>
-                        </div>
-                      )}
-                      {selectedLog.resourceId && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Resource ID:</span>
-                          <span className="font-mono">{selectedLog.resourceId}</span>
-                        </div>
-                      )}
-                      {selectedLog.affectedCount && selectedLog.affectedCount > 1 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Affected Count:</span>
-                          <span className="font-medium">{selectedLog.affectedCount}</span>
-                        </div>
-                      )}
-                    </div>
+                {/* Transfer detail */}
+                {selectedLog.action === "transfer" && (
+                  <div className="p-3 border space-y-2" style={{ borderColor:"rgba(167,139,250,0.3)", backgroundColor:"rgba(167,139,250,0.05)" }}>
+                    <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color:"#a78bfa" }}>Transfer Detail</p>
+                    <TransferPill log={selectedLog} />
                   </div>
                 )}
 
-                {/* Audit Trails Details */}
-                {selectedLog.source === "audit_trails" && (
-                  <div className="p-3 rounded-lg bg-pink-50 dark:bg-pink-950/30 border border-pink-200 dark:border-pink-800 space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-pink-600 dark:text-pink-400">
-                      Audit Trail Details
-                    </p>
-                    <div className="space-y-1 text-xs">
-                      {selectedLog.department && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Department:</span>
-                          <span className="font-medium">{selectedLog.department}</span>
-                        </div>
-                      )}
-                      {selectedLog.entityName && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Entity Name:</span>
-                          <span className="font-medium">{selectedLog.entityName}</span>
-                        </div>
-                      )}
-                      {selectedLog.entityId && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Entity ID:</span>
-                          <span className="font-mono">{selectedLog.entityId}</span>
-                        </div>
-                      )}
-                      {selectedLog.entityType && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Entity Type:</span>
-                          <span className="font-medium">{selectedLog.entityType}</span>
-                        </div>
-                      )}
-                      {selectedLog.details && (
-                        <div className="pt-1 border-t border-pink-200 dark:border-pink-800">
-                          <span className="text-muted-foreground block mb-1">Details:</span>
-                          <span className="text-xs">{selectedLog.details}</span>
-                        </div>
-                      )}
-                      {selectedLog.message && (
-                        <div className="pt-1 border-t border-pink-200 dark:border-pink-800">
-                          <span className="text-muted-foreground block mb-1">Message:</span>
-                          <span className="text-xs">{selectedLog.message}</span>
-                        </div>
-                      )}
-                      {selectedLog.ipAddress && (
-                        <div className="flex justify-between pt-1 border-t border-pink-200 dark:border-pink-800">
-                          <span className="text-muted-foreground">IP Address:</span>
-                          <span className="font-mono text-[10px]">{selectedLog.ipAddress}</span>
-                        </div>
-                      )}
-                      {selectedLog.userAgent && (
-                        <div className="pt-1">
-                          <span className="text-muted-foreground block mb-1">User Agent:</span>
-                          <span className="text-[10px] text-muted-foreground break-all">{selectedLog.userAgent}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Metadata for system_audit */}
-                {selectedLog.source === "system_audit" && selectedLog.metadata && Object.keys(selectedLog.metadata).length > 0 && (
-                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-800 space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                      Metadata
-                    </p>
-                    <div className="space-y-1 text-xs">
-                      {Object.entries(selectedLog.metadata).map(([key, value]) => (
-                        <div key={key} className="flex justify-between">
-                          <span className="text-muted-foreground capitalize">{key}:</span>
-                          <span className="font-mono truncate max-w-[200px]">
-                            {typeof value === "object" ? JSON.stringify(value) : String(value)}
-                          </span>
+                {/* Changes */}
+                {selectedLog.action === "update" && selectedLog.changes && Object.keys(selectedLog.changes).length > 0 && (
+                  <div className="p-3 border space-y-2" style={{ borderColor:"rgba(96,165,250,0.3)", backgroundColor:"rgba(96,165,250,0.05)" }}>
+                    <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color:"#60a5fa" }}>Changes</p>
+                    <div className="space-y-1.5">
+                      {Object.entries(selectedLog.changes).map(([field,{before,after}]) => (
+                        <div key={field} className="grid grid-cols-[120px_1fr_1fr] gap-2 text-[11px]">
+                          <span className="font-bold capitalize" style={{ color:C.dim }}>{field.replace(/_/g," ")}</span>
+                          <span className="line-through truncate" style={{ color:C.muted }}>{String(before??"—")}</span>
+                          <span className="font-semibold truncate" style={{ color:C.text }}>{String(after??"—")}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
+                {/* Source-specific details */}
+                {selectedLog.source === "system_audit" && (
+                  <div className="p-3 border space-y-1.5" style={{ borderColor:"rgba(251,191,36,0.3)", backgroundColor:"rgba(251,191,36,0.05)" }}>
+                    <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color:"#fbbf24" }}>System Audit</p>
+                    {[["Module",selectedLog.module],["Page",selectedLog.page],["Resource Type",selectedLog.resourceType],["Resource ID",selectedLog.resourceId],["Affected",selectedLog.affectedCount]].filter(([,v])=>v).map(([k,v]) => (
+                      <div key={String(k)} className="flex justify-between text-[11px]">
+                        <span style={{ color:C.dim }}>{k}:</span>
+                        <span className="font-mono" style={{ color:C.text }}>{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {selectedLog.source === "audit_trails" && (
+                  <div className="p-3 border space-y-1.5" style={{ borderColor:"rgba(244,114,182,0.3)", backgroundColor:"rgba(244,114,182,0.05)" }}>
+                    <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color:"#f472b6" }}>Audit Trail</p>
+                    {[["Department",selectedLog.department],["Entity",selectedLog.entityName],["Entity ID",selectedLog.entityId],["Entity Type",selectedLog.entityType]].filter(([,v])=>v).map(([k,v]) => (
+                      <div key={String(k)} className="flex justify-between text-[11px]">
+                        <span style={{ color:C.dim }}>{k}:</span>
+                        <span style={{ color:C.text }}>{String(v)}</span>
+                      </div>
+                    ))}
+                    {selectedLog.message && <p className="text-[11px] pt-1 border-t" style={{ borderColor:"rgba(244,114,182,0.2)", color:C.text }}>{selectedLog.message}</p>}
+                    {selectedLog.details && <p className="text-[10px]" style={{ color:C.dim }}>{selectedLog.details}</p>}
+                    {selectedLog.ipAddress && <p className="text-[10px] font-mono" style={{ color:C.muted }}>IP: {selectedLog.ipAddress}</p>}
+                  </div>
+                )}
+
                 {/* Timestamp */}
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
+                <div className="flex items-center gap-2 text-[11px]" style={{ color:C.muted }}>
+                  <Clock className="size-3" />
                   <span>Logged at</span>
-                  <span className="font-semibold text-foreground">
-                    {formatTimestamp(selectedLog.timestamp)}
-                  </span>
+                  <span className="font-semibold" style={{ color:C.text }}>{formatTimestamp(selectedLog.timestamp)}</span>
                 </div>
               </div>
             </DialogContent>
