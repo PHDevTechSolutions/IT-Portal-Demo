@@ -1,874 +1,628 @@
 "use client";
-
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { toast } from "sonner";
 import {
-  Play,
-  Save,
-  Trash2,
-  Copy,
-  CheckCircle2,
-  Terminal,
-  Send,
-  Clock,
-  AlertCircle,
-  Database,
-  Code,
-  History,
-  Plus,
-  X,
-  Download,
-  FileJson,
-  LayoutGrid,
-  Globe,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  RefreshCw,
-
+  Play, Save, Trash2, Copy, CheckCircle2, Terminal, Send, Clock,
+  AlertCircle, Database, Code, History, Plus, X, Download, FileJson,
+  LayoutGrid, Globe, RefreshCw, ChevronDown, ChevronRight, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
-// Types
-interface ApiRequest {
-  id: string;
-  name: string;
-  method: string;
-  url: string;
-  headers: Record<string, string>;
-  body: string;
-  timestamp: string;
-}
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface ApiRequest  { id: string; name: string; method: string; url: string; headers: Record<string,string>; body: string; timestamp: string; }
+interface ApiResponse { status: number; statusText: string; headers: Record<string,string>; body: any; time: number; size: string; }
+interface SavedRequest{ id: string; name: string; method: string; url: string; headers: Record<string,string>; body: string; createdAt: string; }
 
-interface ApiResponse {
-  status: number;
-  statusText: string;
-  headers: Record<string, string>;
-  body: any;
-  time: number;
-  size: string;
-}
+const METHODS = ["GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"];
+const DEFAULT_TOKEN = "esp_feb14de9263c84b53a5293464ed277c4207c2e4e9678761d3abc4f12679f0714";
 
-interface SavedRequest {
-  id: string;
-  name: string;
-  method: string;
-  url: string;
-  headers: Record<string, string>;
-  body: string;
-  createdAt: string;
-}
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  text:   "#c8d8e8",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+};
 
-// Default API token
-const DEFAULT_API_TOKEN = "esp_feb14de9263c84b53a5293464ed277c4207c2e4e9678761d3abc4f12679f0714";
+const METHOD_COLOR: Record<string,string> = {
+  GET:     "text-sky-400 border-sky-500/40 bg-sky-500/10",
+  POST:    "text-emerald-400 border-emerald-500/40 bg-emerald-500/10",
+  PUT:     "text-amber-400 border-amber-500/40 bg-amber-500/10",
+  PATCH:   "text-orange-400 border-orange-500/40 bg-orange-500/10",
+  DELETE:  "text-red-400 border-red-500/40 bg-red-500/10",
+  HEAD:    "text-violet-400 border-violet-500/40 bg-violet-500/10",
+  OPTIONS: "text-pink-400 border-pink-500/40 bg-pink-500/10",
+};
+
+function statusColor(s: number) {
+  if (s >= 200 && s < 300) return "text-emerald-400 border-emerald-500/30 bg-emerald-500/10";
+  if (s >= 300 && s < 400) return "text-amber-400 border-amber-500/30 bg-amber-500/10";
+  if (s >= 400)            return "text-red-400 border-red-500/30 bg-red-500/10";
+  return "text-slate-400 border-slate-500/30 bg-slate-500/10";
+}
 
 export default function ApiTesterPage() {
   const router = useRouter();
-  
-  // Request State
-  const [method, setMethod] = useState("POST");
-  const [url, setUrl] = useState("/api/Data/Applications/Acculog/DataManagement");
-  const [headers, setHeaders] = useState<Record<string, string>>({
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${DEFAULT_API_TOKEN}`
-  });
-  const [body, setBody] = useState(JSON.stringify({
-    action: "stats"
-  }, null, 2));
-  
-  // Response State
-  const [response, setResponse] = useState<ApiResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("body");
-  const [useProxy, setUseProxy] = useState(false);
-  
-  // History State
-  const [history, setHistory] = useState<ApiRequest[]>([]);
-  const [savedRequests, setSavedRequests] = useState<SavedRequest[]>([]);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [requestName, setRequestName] = useState("");
-  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
 
-  // Load history and saved requests from localStorage
+  // ── Request state ─────────────────────────────────────────────────────────
+  const [method,   setMethod]   = useState("POST");
+  const [url,      setUrl]      = useState("/api/Data/Applications/Acculog/DataManagement");
+  const [headers,  setHeaders]  = useState<Record<string,string>>({
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${DEFAULT_TOKEN}`,
+  });
+  const [body,     setBody]     = useState(JSON.stringify({ action: "stats" }, null, 2));
+  const [useProxy, setUseProxy] = useState(false);
+
+  // ── Response state ────────────────────────────────────────────────────────
+  const [response,   setResponse]   = useState<ApiResponse | null>(null);
+  const [isLoading,  setIsLoading]  = useState(false);
+  const [activeTab,  setActiveTab]  = useState<"body"|"headers"|"table">("body");
+
+  // ── Sidebar state ─────────────────────────────────────────────────────────
+  const [history,       setHistory]       = useState<ApiRequest[]>([]);
+  const [savedRequests, setSavedRequests] = useState<SavedRequest[]>([]);
+  const [showSaveDialog,setShowSaveDialog]= useState(false);
+  const [requestName,   setRequestName]   = useState("");
+  const [selectedHistId,setSelectedHistId]= useState<string|null>(null);
+  const [histOpen,      setHistOpen]      = useState(true);
+  const [savedOpen,     setSavedOpen]     = useState(true);
+
+  // ── Load from localStorage ────────────────────────────────────────────────
   useEffect(() => {
-    const saved = localStorage.getItem("apiTester_savedRequests");
-    if (saved) {
-      setSavedRequests(JSON.parse(saved));
-    }
-    const hist = localStorage.getItem("apiTester_history");
-    if (hist) {
-      setHistory(JSON.parse(hist));
-    }
+    try {
+      const s = localStorage.getItem("apiTester_savedRequests");
+      if (s) setSavedRequests(JSON.parse(s));
+      const h = localStorage.getItem("apiTester_history");
+      if (h) setHistory(JSON.parse(h));
+    } catch {}
   }, []);
 
-  // Save to localStorage
-  const saveToStorage = (requests: SavedRequest[]) => {
-    localStorage.setItem("apiTester_savedRequests", JSON.stringify(requests));
-    setSavedRequests(requests);
+  const persistSaved = (reqs: SavedRequest[]) => {
+    localStorage.setItem("apiTester_savedRequests", JSON.stringify(reqs));
+    setSavedRequests(reqs);
   };
-
-  const saveHistory = (hist: ApiRequest[]) => {
+  const persistHistory = (hist: ApiRequest[]) => {
     localStorage.setItem("apiTester_history", JSON.stringify(hist.slice(0, 50)));
-    setHistory(hist);
+    setHistory(hist.slice(0, 50));
   };
 
-  // Send API Request
+  // ── Send request ──────────────────────────────────────────────────────────
   const sendRequest = async () => {
     setIsLoading(true);
     setResponse(null);
-    const startTime = performance.now();
-    
+    const t0 = performance.now();
     try {
-      let res;
-      
+      let res: Response;
       if (useProxy) {
-        // Use proxy to bypass CORS
-        const proxyRes = await fetch("/api/proxy", {
+        const pr = await fetch("/api/proxy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            targetUrl: url,
-            method,
-            headers,
-            payload: method !== "GET" && method !== "HEAD" ? JSON.parse(body || "{}") : undefined
-          })
+            targetUrl: url, method, headers,
+            payload: method !== "GET" && method !== "HEAD" ? JSON.parse(body || "{}") : undefined,
+          }),
         });
-        
-        const proxyData = await proxyRes.json();
-        
-        if (!proxyData.success) {
-          throw new Error(proxyData.message || "Proxy request failed");
-        }
-        
-        // Create a mock Response object for consistent handling
-        res = {
-          status: proxyData.status,
-          statusText: proxyData.statusText,
-          headers: new Headers(proxyData.headers),
-          json: async () => proxyData.data,
-          text: async () => typeof proxyData.data === "string" ? proxyData.data : JSON.stringify(proxyData.data)
-        } as Response;
+        const pd = await pr.json();
+        if (!pd.success) throw new Error(pd.message || "Proxy failed");
+        res = { status: pd.status, statusText: pd.statusText,
+          headers: new Headers(pd.headers),
+          json: async () => pd.data,
+          text: async () => typeof pd.data === "string" ? pd.data : JSON.stringify(pd.data),
+        } as unknown as Response;
       } else {
-        // Direct request (may have CORS issues)
-        const options: RequestInit = {
-          method,
-          headers: headers
-        };
-        
-        if (method !== "GET" && method !== "HEAD" && body) {
-          options.body = body;
-        }
-        
-        res = await fetch(url, options);
+        const opts: RequestInit = { method, headers };
+        if (method !== "GET" && method !== "HEAD" && body) opts.body = body;
+        res = await fetch(url, opts);
       }
-      
-      const endTime = performance.now();
-      
-      // Get response headers
-      const responseHeaders: Record<string, string> = {};
-      res.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-      
-      // Get response body
-      let responseBody;
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        responseBody = await res.json();
-      } else {
-        responseBody = await res.text();
-      }
-      
-      // Calculate size
-      const responseSize = JSON.stringify(responseBody).length;
-      const sizeFormatted = responseSize > 1024 
-        ? `${(responseSize / 1024).toFixed(2)} KB` 
-        : `${responseSize} B`;
-      
-      const apiResponse: ApiResponse = {
-        status: res.status,
-        statusText: res.statusText,
-        headers: responseHeaders,
-        body: responseBody,
-        time: Math.round(endTime - startTime),
-        size: sizeFormatted
-      };
-      
-      setResponse(apiResponse);
+      const elapsed = Math.round(performance.now() - t0);
+      const resHeaders: Record<string,string> = {};
+      res.headers.forEach((v, k) => { resHeaders[k] = v; });
+      const ct = res.headers.get("content-type") ?? "";
+      const resBody = ct.includes("application/json") ? await res.json() : await res.text();
+      const bytes = JSON.stringify(resBody).length;
+      const size  = bytes > 1024 ? `${(bytes/1024).toFixed(1)} KB` : `${bytes} B`;
+      setResponse({ status: res.status, statusText: res.statusText, headers: resHeaders, body: resBody, time: elapsed, size });
       setActiveTab("body");
-      
-      // Add to history
-      const newRequest: ApiRequest = {
-        id: Date.now().toString(),
-        name: `${method} ${url}`,
-        method,
-        url,
-        headers,
-        body,
-        timestamp: new Date().toLocaleString()
-      };
-      saveHistory([newRequest, ...history]);
-      
-      toast.success(`Request completed in ${apiResponse.time}ms`);
-    } catch (error: any) {
-      toast.error("Request failed: " + error.message);
-      setResponse({
-        status: 0,
-        statusText: "Error",
-        headers: {},
-        body: { error: error.message },
-        time: 0,
-        size: "0 B"
-      });
+      persistHistory([{ id: Date.now().toString(), name: `${method} ${url}`, method, url, headers, body, timestamp: new Date().toLocaleString() }, ...history]);
+      toast.success(`${res.status} · ${elapsed}ms`);
+    } catch (err: any) {
+      toast.error("Request failed: " + err.message);
+      setResponse({ status: 0, statusText: "Error", headers: {}, body: { error: err.message }, time: 0, size: "0 B" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Save Request
-  const saveCurrentRequest = () => {
-    if (!requestName.trim()) {
-      toast.error("Please enter a request name");
-      return;
-    }
-    
-    const newSaved: SavedRequest = {
-      id: Date.now().toString(),
-      name: requestName,
-      method,
-      url,
-      headers,
-      body,
-      createdAt: new Date().toLocaleString()
-    };
-    
-    saveToStorage([newSaved, ...savedRequests]);
-    setShowSaveDialog(false);
-    setRequestName("");
-    toast.success("Request saved!");
-  };
+  // ── Header helpers ────────────────────────────────────────────────────────
+  const addHeader    = () => setHeaders(h => ({ ...h, "": "" }));
+  const removeHeader = (k: string) => setHeaders(h => { const n = { ...h }; delete n[k]; return n; });
+  const updateHeader = (old: string, nk: string, nv: string) =>
+    setHeaders(h => { const n = { ...h }; delete n[old]; if (nk) n[nk] = nv; return n; });
 
-  // Load saved request
-  const loadSavedRequest = (req: SavedRequest) => {
-    setMethod(req.method);
-    setUrl(req.url);
-    setHeaders(req.headers);
-    setBody(req.body);
-    toast.success(`Loaded: ${req.name}`);
-  };
-
-  // Load history request
-  const loadHistoryRequest = (req: ApiRequest) => {
-    setMethod(req.method);
-    setUrl(req.url);
-    setHeaders(req.headers);
-    setBody(req.body);
-    setSelectedHistoryId(req.id);
-  };
-
-  // Delete saved request
-  const deleteSavedRequest = (id: string) => {
-    const filtered = savedRequests.filter(r => r.id !== id);
-    saveToStorage(filtered);
-    toast.success("Request deleted");
-  };
-
-  // Add header
-  const addHeader = () => {
-    setHeaders({ ...headers, "": "" });
-  };
-
-  // Update header
-  const updateHeader = (oldKey: string, newKey: string, value: string) => {
-    const newHeaders = { ...headers };
-    delete newHeaders[oldKey];
-    if (newKey) {
-      newHeaders[newKey] = value;
-    }
-    setHeaders(newHeaders);
-  };
-
-  // Remove header
-  const removeHeader = (key: string) => {
-    const newHeaders = { ...headers };
-    delete newHeaders[key];
-    setHeaders(newHeaders);
-  };
-
-  // Format JSON
+  // ── Misc helpers ──────────────────────────────────────────────────────────
   const formatJson = () => {
-    try {
-      const parsed = JSON.parse(body);
-      setBody(JSON.stringify(parsed, null, 2));
-      toast.success("JSON formatted");
-    } catch {
-      toast.error("Invalid JSON");
-    }
+    try { setBody(JSON.stringify(JSON.parse(body), null, 2)); toast.success("Formatted"); }
+    catch { toast.error("Invalid JSON"); }
   };
-
-  // Copy response
   const copyResponse = () => {
     navigator.clipboard.writeText(JSON.stringify(response?.body, null, 2));
-    toast.success("Response copied to clipboard");
+    toast.success("Copied to clipboard");
+  };
+  const downloadResponse = () => {
+    const blob = new Blob([JSON.stringify(response?.body, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `response_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast.success("Downloaded");
+  };
+  const saveCurrentRequest = () => {
+    if (!requestName.trim()) { toast.error("Enter a name"); return; }
+    const r: SavedRequest = { id: Date.now().toString(), name: requestName, method, url, headers, body, createdAt: new Date().toLocaleString() };
+    persistSaved([r, ...savedRequests]);
+    setShowSaveDialog(false); setRequestName("");
+    toast.success("Saved");
+  };
+  const loadRequest = (r: SavedRequest | ApiRequest) => {
+    setMethod(r.method); setUrl(r.url); setHeaders(r.headers); setBody(r.body);
+    if ("id" in r) setSelectedHistId(r.id);
+    toast.success("Loaded");
   };
 
-  // Get status color
-  const getStatusColor = (status: number) => {
-    if (status >= 200 && status < 300) return "bg-emerald-500/20 text-emerald-400 border-emerald-500/50";
-    if (status >= 300 && status < 400) return "bg-amber-500/20 text-amber-400 border-amber-500/50";
-    if (status >= 400) return "bg-red-500/20 text-red-400 border-red-500/50";
-    return "bg-slate-500/20 text-slate-400 border-slate-500/50";
-  };
+  // ── Table view helpers ────────────────────────────────────────────────────
+  const tableData: any[] | null = (() => {
+    if (!response) return null;
+    if (Array.isArray(response.body)) return response.body;
+    if (Array.isArray(response.body?.data)) return response.body.data;
+    return null;
+  })();
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <TooltipProvider delayDuration={0}>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          {/* Dark Tech Background */}
-          <div className="min-h-screen w-full bg-[#050a14] relative overflow-hidden">
-            {/* Animated background grid */}
-            <div className="absolute inset-0 h-full w-full">
-              <div 
-                className="absolute inset-0 opacity-[0.03]"
-                style={{
-                  backgroundImage: `
-                    linear-gradient(rgba(6,182,212,0.5) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(6,182,212,0.5) 1px, transparent 1px)
-                  `,
-                  backgroundSize: '50px 50px',
-                }}
-              />
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset className="flex flex-col h-svh overflow-hidden"
+        style={{ backgroundColor: C.bg, fontFamily: C.font, color: C.text }}>
+
+        {/* Dot-grid */}
+        <div className="fixed inset-0 pointer-events-none" style={{
+          backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+          backgroundSize: "24px 24px", opacity: 0.15, zIndex: 0,
+        }} />
+
+        {/* ── Header ── */}
+        <header className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b"
+          style={{ backgroundColor: C.bg, borderColor: C.border }}>
+          <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: C.dim }} />
+          <div className="w-px h-4" style={{ backgroundColor: C.border }} />
+          <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}
+            className="hidden sm:flex h-7 px-2 text-[10px] uppercase tracking-widest rounded-none hover:bg-transparent"
+            style={{ color: C.dim }}>Home</Button>
+          <div className="w-px h-4 hidden sm:block" style={{ backgroundColor: C.border }} />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>Settings</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
+              <BreadcrumbItem>
+                <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: C.accent }}>API Tester</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <div className="ml-auto flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Ready</span>
+          </div>
+        </header>
+
+        {/* ── Title bar ── */}
+        <div className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b"
+          style={{ borderColor: C.border, backgroundColor: C.panel }}>
+          <div className="flex h-8 w-8 items-center justify-center border"
+            style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+            <Terminal className="size-4" style={{ color: C.accent }} />
+          </div>
+          <div>
+            <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>API Tester</h1>
+            <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>Test and debug API endpoints</p>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-[10px]" style={{ color: C.muted }}>$ curl --request {method}</span>
+          </div>
+        </div>
+
+        {/* ── Body: 3-column layout ── */}
+        <div className="relative z-10 flex flex-1 overflow-hidden">
+
+          {/* ── LEFT: Saved + History ── */}
+          <div className="w-56 shrink-0 flex flex-col border-r overflow-y-auto"
+            style={{ borderColor: C.border, backgroundColor: C.panel }}>
+
+            {/* Saved */}
+            <div className="border-b" style={{ borderColor: C.border }}>
+              <button onClick={() => setSavedOpen(o => !o)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: C.accent }}>
+                <span className="flex items-center gap-1.5"><Save className="size-3" /> Saved ({savedRequests.length})</span>
+                {savedOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+              </button>
+              {savedOpen && (
+                <div className="pb-1">
+                  {savedRequests.length === 0 ? (
+                    <p className="px-3 py-2 text-[10px]" style={{ color: C.muted }}>No saved requests</p>
+                  ) : savedRequests.map(r => (
+                    <div key={r.id} className="group flex items-center gap-1.5 px-3 py-1.5 cursor-pointer transition-colors"
+                      style={{ borderBottom: `1px solid ${C.muted}20` }}
+                      onClick={() => loadRequest(r)}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.06)")}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+                      <span className={`text-[8px] font-bold px-1 py-0.5 border ${METHOD_COLOR[r.method] ?? ""}`}>{r.method}</span>
+                      <span className="flex-1 text-[10px] truncate" style={{ color: C.text }}>{r.name}</span>
+                      <button onClick={e => { e.stopPropagation(); persistSaved(savedRequests.filter(x => x.id !== r.id)); toast.success("Deleted"); }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="size-3" style={{ color: "#f87171" }} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Main Content */}
-            <div className="relative z-10 w-full">
-              {/* Header */}
-              <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
-                <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
-                <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-                <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-                <div className="flex items-center gap-2 px-4 relative z-10">
-                <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
-                <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
-                <Breadcrumb>
-                  <BreadcrumbList>
-                    <BreadcrumbItem>
-                      <BreadcrumbLink href="/dashboard" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Dashboard</BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator className="text-slate-700" />
-                    <BreadcrumbItem>
-                      <BreadcrumbLink href="/settings/general" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Settings</BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator className="text-slate-700" />
-                    <BreadcrumbItem>
-                      <BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">API Tester</BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </BreadcrumbList>
-                </Breadcrumb>
+            {/* History */}
+            <div>
+              <button onClick={() => setHistOpen(o => !o)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: C.accent }}>
+                <span className="flex items-center gap-1.5"><History className="size-3" /> History ({history.length})</span>
+                {histOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+              </button>
+              {histOpen && (
+                <div className="pb-1">
+                  {history.length > 0 && (
+                    <button onClick={() => { persistHistory([]); toast.success("Cleared"); }}
+                      className="w-full text-left px-3 py-1 text-[9px] uppercase tracking-wider transition-colors"
+                      style={{ color: C.dim }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#f87171")}
+                      onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+                      Clear all
+                    </button>
+                  )}
+                  {history.length === 0 ? (
+                    <p className="px-3 py-2 text-[10px]" style={{ color: C.muted }}>No history yet</p>
+                  ) : history.map(r => (
+                    <div key={r.id}
+                      className="flex items-start gap-1.5 px-3 py-1.5 cursor-pointer transition-colors"
+                      style={{
+                        borderBottom: `1px solid ${C.muted}20`,
+                        backgroundColor: selectedHistId === r.id ? "rgba(232,99,10,0.08)" : "transparent",
+                      }}
+                      onClick={() => { loadRequest(r); setSelectedHistId(r.id); }}
+                      onMouseEnter={e => { if (selectedHistId !== r.id) e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)"; }}
+                      onMouseLeave={e => { if (selectedHistId !== r.id) e.currentTarget.style.backgroundColor = "transparent"; }}>
+                      <span className={`text-[8px] font-bold px-1 py-0.5 border mt-0.5 shrink-0 ${METHOD_COLOR[r.method] ?? ""}`}>{r.method}</span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] truncate" style={{ color: C.text }}>{r.url}</p>
+                        <p className="text-[9px]" style={{ color: C.muted }}>{r.timestamp}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </header>
-
-              {/* Page Title */}
-              <div className="px-4 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-orange-500/10 border border-orange-500/30">
-                    <Terminal className="h-5 w-5 text-orange-400" />
-                  </div>
-                  <div>
-                    <h1 className="text-sm font-bold text-orange-400 tracking-widest uppercase font-mono">API TESTER</h1>
-                    <p className="text-[11px] text-slate-600 font-mono mt-0.5">Test and debug API endpoints with your token</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Main Content */}
-              <div className="px-4 pb-4">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  {/* Left Panel - Request */}
-                  <div className="lg:col-span-2 space-y-4">
-                    {/* Request Card */}
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardHeader className="relative">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Send className="h-5 w-5 text-cyan-400" />
-                            <CardTitle className="text-white tracking-wider">REQUEST</CardTitle>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowSaveDialog(true)}
-                              className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-                            >
-                              <Save className="h-4 w-4 mr-2" />
-                              Save
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={formatJson}
-                              className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-                            >
-                              <Code className="h-4 w-4 mr-2" />
-                              Format JSON
-                            </Button>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="relative space-y-4">
-                        {/* URL Row */}
-                        <div className="flex gap-2">
-                          <Select value={method} onValueChange={setMethod}>
-                            <SelectTrigger className="w-28 bg-slate-900/50 border-cyan-500/30 text-cyan-100">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-cyan-500/30">
-                              {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map(m => (
-                                <SelectItem key={m} value={m} className="text-cyan-100">{m}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            value={url}
-                            onChange={(e) => setUrl(e.target.value)}
-                            placeholder="Enter API URL..."
-                            className="flex-1 bg-slate-900/50 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-300/40"
-                          />
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setUseProxy(!useProxy)}
-                                className={`border-cyan-500/30 ${useProxy ? 'bg-cyan-500/20 text-cyan-300' : 'text-cyan-400'} hover:bg-cyan-500/20`}
-                              >
-                                {useProxy ? <Globe className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{useProxy ? 'Using Proxy (CORS bypass)' : 'Direct Request (CORS restrictions apply)'}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <Button
-                            onClick={sendRequest}
-                            disabled={isLoading}
-                            className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0"
-                          >
-                            {isLoading ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-                            Send
-                          </Button>
-                        </div>
-                        {useProxy && (
-                          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                            <Globe className="h-4 w-4 text-cyan-400" />
-                            <span className="text-sm text-cyan-300">Proxy Mode: CORS bypass enabled. Requests go through your server.</span>
-                          </div>
-                        )}
-
-                        {/* Tabs for Body/Headers */}
-                        <Tabs defaultValue="body" className="w-full">
-                          <TabsList className="bg-slate-900/50 border border-cyan-500/30">
-                            <TabsTrigger value="body" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300 text-cyan-400">
-                              <FileJson className="h-4 w-4 mr-2" />
-                              Body
-                            </TabsTrigger>
-                            <TabsTrigger value="headers" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300 text-cyan-400">
-                              <LayoutGrid className="h-4 w-4 mr-2" />
-                              Headers ({Object.keys(headers).length})
-                            </TabsTrigger>
-                          </TabsList>
-
-                          <TabsContent value="body" className="mt-2">
-                            <Textarea
-                              value={body}
-                              onChange={(e) => setBody(e.target.value)}
-                              placeholder="Request body (JSON)..."
-                              className="min-h-[200px] bg-slate-900/50 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-300/40 font-mono text-sm"
-                            />
-                          </TabsContent>
-
-                          <TabsContent value="headers" className="mt-2 space-y-2">
-                            {Object.entries(headers).map(([key, value], index) => (
-                              <div key={index} className="flex gap-2">
-                                <Input
-                                  value={key}
-                                  onChange={(e) => updateHeader(key, e.target.value, value)}
-                                  placeholder="Header name"
-                                  className="flex-1 bg-slate-900/50 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-300/40"
-                                />
-                                <Input
-                                  value={value}
-                                  onChange={(e) => updateHeader(key, key, e.target.value)}
-                                  placeholder="Header value"
-                                  className="flex-1 bg-slate-900/50 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-300/40"
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeHeader(key)}
-                                  className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ))}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={addHeader}
-                              className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-                            >
-                              <Plus className="h-4 w-4 mr-2" />
-                              Add Header
-                            </Button>
-                          </TabsContent>
-                        </Tabs>
-                      </CardContent>
-                    </Card>
-
-                    {/* Response Card */}
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardHeader className="relative">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Database className="h-5 w-5 text-cyan-400" />
-                            <CardTitle className="text-white tracking-wider">RESPONSE</CardTitle>
-                          </div>
-                          {response && (
-                            <div className="flex items-center gap-2">
-                              <Badge className={getStatusColor(response.status)}>
-                                {response.status} {response.statusText}
-                              </Badge>
-                              <Badge variant="outline" className="border-cyan-500/30 text-cyan-400">
-                                <Clock className="h-3 w-3 mr-1" />
-                                {response.time}ms
-                              </Badge>
-                              <Badge variant="outline" className="border-cyan-500/30 text-cyan-400">
-                                {response.size}
-                              </Badge>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={copyResponse}
-                                className="text-cyan-400 hover:text-cyan-300"
-                              >
-                                <Copy className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </CardHeader>
-                      <CardContent className="relative">
-                        {!response ? (
-                          <div className="flex flex-col items-center justify-center py-12 text-cyan-300/40">
-                            <Terminal className="h-12 w-12 mb-4 opacity-50" />
-                            <p>Send a request to see the response</p>
-                          </div>
-                        ) : (
-                          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                            <TabsList className="bg-slate-900/50 border border-cyan-500/30">
-                              <TabsTrigger value="body" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300 text-cyan-400">
-                                Body
-                              </TabsTrigger>
-                              <TabsTrigger value="headers" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300 text-cyan-400">
-                                Headers
-                              </TabsTrigger>
-                              <TabsTrigger value="table" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300 text-cyan-400">
-                                Table
-                              </TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent value="body" className="mt-2">
-                              <pre className="bg-slate-950/50 border border-cyan-500/20 rounded-lg p-4 overflow-auto max-h-[400px] text-sm font-mono text-cyan-100">
-                                {JSON.stringify(response.body, null, 2)}
-                              </pre>
-                            </TabsContent>
-
-                            <TabsContent value="headers" className="mt-2">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow className="border-b border-cyan-500/20">
-                                    <TableHead className="text-cyan-300">Header</TableHead>
-                                    <TableHead className="text-cyan-300">Value</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {Object.entries(response.headers).map(([key, value]) => (
-                                    <TableRow key={key} className="border-b border-cyan-500/10">
-                                      <TableCell className="text-cyan-100 font-medium">{key}</TableCell>
-                                      <TableCell className="text-cyan-300/70">{value}</TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </TabsContent>
-
-                            <TabsContent value="table" className="mt-2">
-                              {Array.isArray(response.body) ? (
-                                <div className="overflow-auto max-h-[400px]">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow className="border-b border-cyan-500/20">
-                                        {Object.keys(response.body[0] || {}).map(key => (
-                                          <TableHead key={key} className="text-cyan-300">{key}</TableHead>
-                                        ))}
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {response.body.map((row: any, idx: number) => (
-                                        <TableRow key={idx} className="border-b border-cyan-500/10">
-                                          {Object.values(row).map((val: any, i) => (
-                                            <TableCell key={i} className="text-cyan-300/70">
-                                              {typeof val === "object" ? JSON.stringify(val) : String(val)}
-                                            </TableCell>
-                                          ))}
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              ) : response.body?.data && Array.isArray(response.body.data) ? (
-                                <div className="overflow-auto max-h-[400px]">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow className="border-b border-cyan-500/20">
-                                        {Object.keys(response.body.data[0] || {}).map(key => (
-                                          <TableHead key={key} className="text-cyan-300">{key}</TableHead>
-                                        ))}
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {response.body.data.map((row: any, idx: number) => (
-                                        <TableRow key={idx} className="border-b border-cyan-500/10">
-                                          {Object.values(row).map((val: any, i) => (
-                                            <TableCell key={i} className="text-cyan-300/70">
-                                              {typeof val === "object" ? JSON.stringify(val) : String(val)}
-                                            </TableCell>
-                                          ))}
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              ) : (
-                                <div className="text-center py-8 text-cyan-300/60">
-                                  <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-                                  <p>Response is not an array. Switch to Body tab to view.</p>
-                                </div>
-                              )}
-                            </TabsContent>
-                          </Tabs>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Right Panel - History & Saved */}
-                  <div className="space-y-4">
-                    {/* Saved Requests */}
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardHeader className="relative">
-                        <div className="flex items-center gap-2">
-                          <Save className="h-5 w-5 text-cyan-400" />
-                          <CardTitle className="text-white tracking-wider text-sm">SAVED REQUESTS</CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="relative">
-                        <div className="space-y-2 max-h-[200px] overflow-auto">
-                          {savedRequests.length === 0 ? (
-                            <p className="text-cyan-300/40 text-sm text-center py-4">No saved requests</p>
-                          ) : (
-                            savedRequests.map((req) => (
-                              <div
-                                key={req.id}
-                                className="flex items-center justify-between p-2 rounded-lg bg-slate-800/50 border border-cyan-500/20 hover:border-cyan-500/40 cursor-pointer group"
-                                onClick={() => loadSavedRequest(req)}
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <Badge className={
-                                    req.method === "GET" ? "bg-blue-500/20 text-blue-400" :
-                                    req.method === "POST" ? "bg-emerald-500/20 text-emerald-400" :
-                                    req.method === "PUT" ? "bg-amber-500/20 text-amber-400" :
-                                    "bg-red-500/20 text-red-400"
-                                  }>
-                                    {req.method}
-                                  </Badge>
-                                  <span className="text-cyan-100 text-sm truncate">{req.name}</span>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteSavedRequest(req.id);
-                                  }}
-                                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 hover:bg-red-500/20 h-6 w-6"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* History */}
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardHeader className="relative">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <History className="h-5 w-5 text-cyan-400" />
-                            <CardTitle className="text-white tracking-wider text-sm">HISTORY</CardTitle>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              localStorage.removeItem("apiTester_history");
-                              setHistory([]);
-                              toast.success("History cleared");
-                            }}
-                            className="text-cyan-400 hover:text-cyan-300"
-                          >
-                            Clear
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="relative">
-                        <div className="space-y-2 max-h-[300px] overflow-auto">
-                          {history.length === 0 ? (
-                            <p className="text-cyan-300/40 text-sm text-center py-4">No history yet</p>
-                          ) : (
-                            history.map((req) => (
-                              <div
-                                key={req.id}
-                                className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                                  selectedHistoryId === req.id
-                                    ? "bg-cyan-500/20 border-cyan-500/50"
-                                    : "bg-slate-800/50 border-cyan-500/20 hover:border-cyan-500/40"
-                                }`}
-                                onClick={() => loadHistoryRequest(req)}
-                              >
-                                <Badge className={
-                                  req.method === "GET" ? "bg-blue-500/20 text-blue-400" :
-                                  req.method === "POST" ? "bg-emerald-500/20 text-emerald-400" :
-                                  req.method === "PUT" ? "bg-amber-500/20 text-amber-400" :
-                                  "bg-red-500/20 text-red-400"
-                                }>
-                                  {req.method}
-                                </Badge>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-cyan-100 text-sm truncate">{req.url}</p>
-                                  <p className="text-cyan-300/40 text-xs">{req.timestamp}</p>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Quick Tips */}
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardHeader className="relative">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="h-5 w-5 text-cyan-400" />
-                          <CardTitle className="text-white tracking-wider text-sm">QUICK TIPS</CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="relative">
-                        <ul className="text-sm text-cyan-300/60 space-y-2">
-                          <li className="flex items-start gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
-                            <span>Token is automatically included in headers</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
-                            <span>Use Format JSON to prettify request body</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
-                            <span>Table view works best for array responses</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
-                            <span>Saved requests are stored locally</span>
-                          </li>
-                        </ul>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Save Request Dialog */}
-          <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-            <DialogContent className="bg-[#0a0f1c] border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold text-white tracking-wider flex items-center gap-2">
-                  <Save className="h-5 w-5 text-cyan-400" />
-                  SAVE REQUEST
-                </DialogTitle>
-                <DialogDescription className="text-cyan-300/60">
-                  Give your request a name to save it for later
-                </DialogDescription>
-              </DialogHeader>
-              <div className="py-4">
-                <Input
-                  value={requestName}
-                  onChange={(e) => setRequestName(e.target.value)}
-                  placeholder="e.g., Get Data Management Stats"
-                  className="bg-slate-900/50 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-300/40"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveCurrentRequest();
-                  }}
+          {/* ── CENTER: Request builder ── */}
+          <div className="flex-1 flex flex-col overflow-hidden border-r" style={{ borderColor: C.border }}>
+
+            {/* URL bar */}
+            <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+              {/* Method selector */}
+              <div className="relative">
+                <select value={method} onChange={e => setMethod(e.target.value)}
+                  className={`h-8 px-2 pr-6 text-[11px] font-bold uppercase focus:outline-none border appearance-none ${METHOD_COLOR[method] ?? ""}`}
+                  style={{ backgroundColor: "transparent", fontFamily: C.font }}>
+                  {METHODS.map(m => <option key={m} value={m} style={{ backgroundColor: C.panel, color: C.text }}>{m}</option>)}
+                </select>
+                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 size-3 pointer-events-none" style={{ color: C.dim }} />
+              </div>
+
+              {/* URL input */}
+              <input value={url} onChange={e => setUrl(e.target.value)}
+                placeholder="Enter API URL…"
+                onKeyDown={e => { if (e.key === "Enter") sendRequest(); }}
+                className="flex-1 h-8 px-3 text-[11px] focus:outline-none"
+                style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+              />
+
+              {/* Proxy toggle */}
+              <button onClick={() => setUseProxy(p => !p)} title={useProxy ? "Proxy ON" : "Proxy OFF"}
+                className="flex items-center gap-1.5 h-8 px-2 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                style={{
+                  borderColor: useProxy ? "#60a5fa" : C.border,
+                  color:       useProxy ? "#60a5fa" : C.dim,
+                  backgroundColor: useProxy ? "rgba(96,165,250,0.1)" : "transparent",
+                }}>
+                <Globe className="size-3" />
+                <span className="hidden sm:inline">Proxy</span>
+              </button>
+
+              {/* Send */}
+              <button onClick={sendRequest} disabled={isLoading}
+                className="flex items-center gap-1.5 h-8 px-4 text-[11px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-50"
+                style={{ backgroundColor: "rgba(232,99,10,0.15)", borderColor: C.accent, color: C.accent }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.25)"; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.15)"; }}>
+                {isLoading
+                  ? <><RefreshCw className="size-3 animate-spin" /> Sending…</>
+                  : <><Play className="size-3" /> Send</>}
+              </button>
+            </div>
+
+            {/* Tab bar */}
+            <div className="shrink-0 flex items-center border-b" style={{ borderColor: C.border, backgroundColor: C.panel }}>
+              {(["body","headers"] as const).map(t => (
+                <button key={t} onClick={() => setActiveTab(t as any)}
+                  className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors"
+                  style={{
+                    borderBottomColor: activeTab === t ? C.accent : "transparent",
+                    color: activeTab === t ? C.accent : C.dim,
+                  }}>
+                  {t === "body" ? <><FileJson className="size-3 inline mr-1" />Body</> : <><LayoutGrid className="size-3 inline mr-1" />Headers ({Object.keys(headers).length})</>}
+                </button>
+              ))}
+              <div className="ml-auto flex items-center gap-1 px-3">
+                <button onClick={formatJson}
+                  className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-colors"
+                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                  <Code className="size-3" /> Format
+                </button>
+                <button onClick={() => setShowSaveDialog(true)}
+                  className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-colors"
+                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                  <Save className="size-3" /> Save
+                </button>
+              </div>
+            </div>
+
+            {/* Body / Headers editor */}
+            <div className="flex-1 overflow-auto">
+              {activeTab === "body" ? (
+                <textarea value={body} onChange={e => setBody(e.target.value)}
+                  placeholder="Request body (JSON)…"
+                  spellCheck={false}
+                  className="w-full h-full p-4 text-[12px] resize-none focus:outline-none"
+                  style={{ backgroundColor: C.bg, color: C.text, fontFamily: C.font, border: "none" }}
                 />
+              ) : (
+                <div className="p-4 space-y-2">
+                  {Object.entries(headers).map(([k, v], i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input value={k} onChange={e => updateHeader(k, e.target.value, v)}
+                        placeholder="Header name"
+                        className="flex-1 h-8 px-3 text-[11px] focus:outline-none"
+                        style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                        onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                        onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                      />
+                      <input value={v} onChange={e => updateHeader(k, k, e.target.value)}
+                        placeholder="Value"
+                        className="flex-1 h-8 px-3 text-[11px] focus:outline-none"
+                        style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                        onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                        onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                      />
+                      <button onClick={() => removeHeader(k)}
+                        className="h-8 w-8 flex items-center justify-center border transition-colors"
+                        style={{ borderColor: C.border, color: C.dim }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#f87171"; e.currentTarget.style.color = "#f87171"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <button onClick={addHeader}
+                    className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors mt-2"
+                    style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                    <Plus className="size-3" /> Add Header
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── RIGHT: Response ── */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+
+            {/* Response status bar */}
+            <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b"
+              style={{ borderColor: C.border, backgroundColor: C.panel }}>
+              {response ? (
+                <>
+                  <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${statusColor(response.status)}`}>
+                    {response.status} {response.statusText}
+                  </span>
+                  <span className="flex items-center gap-1 text-[10px]" style={{ color: C.dim }}>
+                    <Clock className="size-3" />{response.time}ms
+                  </span>
+                  <span className="text-[10px]" style={{ color: C.dim }}>{response.size}</span>
+                  <div className="ml-auto flex items-center gap-1">
+                    <button onClick={copyResponse}
+                      className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-colors"
+                      style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                      <Copy className="size-3" /> Copy
+                    </button>
+                    <button onClick={downloadResponse}
+                      className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-colors"
+                      style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                      <Download className="size-3" /> JSON
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <span className="text-[10px] uppercase tracking-widest" style={{ color: C.muted }}>
+                  {isLoading ? "Waiting for response…" : "No response yet"}
+                </span>
+              )}
+            </div>
+
+            {/* Response tab bar */}
+            {response && (
+              <div className="shrink-0 flex items-center border-b" style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                {(["body","headers","table"] as const).map(t => (
+                  <button key={t} onClick={() => setActiveTab(t)}
+                    className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors"
+                    style={{
+                      borderBottomColor: activeTab === t ? C.accent : "transparent",
+                      color: activeTab === t ? C.accent : C.dim,
+                    }}>
+                    {t}
+                    {t === "table" && tableData && <span className="ml-1 text-[9px]" style={{ color: C.muted }}>({tableData.length})</span>}
+                  </button>
+                ))}
               </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  onClick={() => setShowSaveDialog(false)}
-                  variant="outline"
-                  className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={saveCurrentRequest}
-                  className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  Save
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </SidebarInset>
-      </SidebarProvider>
-    </TooltipProvider>
+            )}
+
+            {/* Response content */}
+            <div className="flex-1 overflow-auto">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-full gap-3">
+                  <RefreshCw className="size-4 animate-spin" style={{ color: C.accent }} />
+                  <span className="text-xs uppercase tracking-widest" style={{ color: C.muted }}>Sending request…</span>
+                </div>
+              ) : !response ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3">
+                  <Terminal className="size-10 opacity-20" style={{ color: C.accent }} />
+                  <p className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>Send a request to see the response</p>
+                  <p className="text-[10px]" style={{ color: C.muted }}>Press Enter in the URL bar or click Send</p>
+                </div>
+              ) : activeTab === "body" ? (
+                <pre className="p-4 text-[12px] leading-relaxed whitespace-pre-wrap break-all"
+                  style={{ color: C.text, fontFamily: C.font }}>
+                  {JSON.stringify(response.body, null, 2)}
+                </pre>
+              ) : activeTab === "headers" ? (
+                <table className="w-full border-collapse" style={{ fontSize: "11px", fontFamily: C.font }}>
+                  <thead className="sticky top-0">
+                    <tr style={{ backgroundColor: C.panel, borderBottom: `1px solid ${C.border}` }}>
+                      <th className="text-left px-4 py-2 font-bold uppercase tracking-widest text-[9px]" style={{ color: C.accent, borderRight: `1px solid ${C.border}` }}>Header</th>
+                      <th className="text-left px-4 py-2 font-bold uppercase tracking-widest text-[9px]" style={{ color: C.accent }}>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(response.headers).map(([k, v], i) => (
+                      <tr key={k} style={{ backgroundColor: i % 2 === 0 ? C.bg : C.panel, borderBottom: `1px solid ${C.border}` }}>
+                        <td className="px-4 py-2 font-bold" style={{ color: C.accent, borderRight: `1px solid ${C.border}` }}>{k}</td>
+                        <td className="px-4 py-2 break-all" style={{ color: C.dim }}>{v}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : tableData ? (
+                <table className="w-full border-collapse" style={{ fontSize: "11px", fontFamily: C.font }}>
+                  <thead className="sticky top-0">
+                    <tr style={{ backgroundColor: C.panel, borderBottom: `1px solid ${C.border}` }}>
+                      {Object.keys(tableData[0] ?? {}).map(k => (
+                        <th key={k} className="text-left px-3 py-2.5 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
+                          style={{ color: C.accent, borderRight: `1px solid ${C.border}` }}>{k}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableData.map((row: any, i: number) => (
+                      <tr key={i} style={{ backgroundColor: i % 2 === 0 ? C.bg : C.panel, borderBottom: `1px solid ${C.border}` }}>
+                        {Object.values(row).map((val: any, j: number) => (
+                          <td key={j} className="px-3 py-2 whitespace-nowrap max-w-[200px] truncate"
+                            style={{ borderRight: `1px solid ${C.border}`, color: C.dim }}>
+                            {typeof val === "object" ? JSON.stringify(val) : String(val ?? "—")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-2">
+                  <AlertCircle className="size-8 opacity-30" style={{ color: C.dim }} />
+                  <p className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>Response is not an array</p>
+                  <p className="text-[10px]" style={{ color: C.muted }}>Switch to Body tab to view</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>{/* end 3-col */}
+
+        {/* ── Save dialog ── */}
+        <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+          <DialogContent className="rounded-none p-0 gap-0 max-w-sm"
+            style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}>
+            <DialogHeader className="px-5 py-4 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+              <DialogTitle className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: C.accent }}>
+                <Save className="size-3" /> Save Request
+              </DialogTitle>
+              <DialogDescription className="text-[10px] uppercase tracking-wider mt-1" style={{ color: C.muted }}>
+                Give this request a name
+              </DialogDescription>
+            </DialogHeader>
+            <div className="px-5 py-4">
+              <input value={requestName} onChange={e => setRequestName(e.target.value)}
+                placeholder="e.g., Get Data Stats"
+                onKeyDown={e => { if (e.key === "Enter") saveCurrentRequest(); }}
+                className="w-full h-8 px-3 text-[11px] focus:outline-none"
+                style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                autoFocus
+              />
+            </div>
+            <div className="px-5 pb-4 flex justify-end gap-2">
+              <button onClick={() => setShowSaveDialog(false)}
+                className="h-8 px-4 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                Cancel
+              </button>
+              <button onClick={saveCurrentRequest}
+                className="h-8 px-4 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                style={{ backgroundColor: "rgba(232,99,10,0.15)", borderColor: C.accent, color: C.accent }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.25)"; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.15)"; }}>
+                <Save className="size-3 inline mr-1" /> Save
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

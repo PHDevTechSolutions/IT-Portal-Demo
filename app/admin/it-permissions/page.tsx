@@ -92,9 +92,15 @@ export default function ITPermissionsPage() {
       try {
         const res  = await fetch("/api/me", { cache: "no-store" });
         const data = await res.json();
-        if (data.role !== "SuperAdmin") { toast.error("Access Denied"); router.push("/dashboard"); }
-      } catch { router.push("/dashboard"); }
-      finally { setIsLoadingRole(false); }
+        if (data.role !== "SuperAdmin") {
+          toast.error("Access Denied: Super Admin only");
+          router.push("/dashboard");
+        }
+      } catch {
+        router.push("/dashboard");
+      } finally {
+        setIsLoadingRole(false);
+      }
     };
     check();
   }, [router]);
@@ -104,12 +110,25 @@ export default function ITPermissionsPage() {
       setIsFetching(true);
       const tid = toast.loading("Loading IT users…");
       try {
-        const res  = await fetch("/api/ITPermissions/FetchUsers");
+        // Fetch all users and filter to IT dept / IT roles client-side
+        // (avoids the requireSuperAdmin session check on FetchUsers which can
+        //  fail if the cookie isn't propagated yet in the same render cycle)
+        const res  = await fetch("/api/UserManagement/Fetch");
         const data = await res.json();
-        if (data.success) { setUsers(data.users || []); toast.success("Loaded", { id: tid }); }
-        else throw new Error(data.message);
-      } catch { toast.error("Failed to load users", { id: tid }); }
-      finally { setIsFetching(false); }
+        const all: UserAccount[] = Array.isArray(data) ? data : (data.users ?? []);
+        const itRoleSet = new Set(IT_ROLES);
+        const itUsers = all.filter(u =>
+          u.Department === "IT" ||
+          u.Department === "Dev-Team" ||
+          itRoleSet.has(u.Role)
+        );
+        setUsers(itUsers);
+        toast.success(`Loaded ${itUsers.length} IT users`, { id: tid });
+      } catch (err: any) {
+        toast.error("Failed to load users: " + (err.message ?? "Unknown error"), { id: tid });
+      } finally {
+        setIsFetching(false);
+      }
     };
     load();
   }, []);
@@ -203,14 +222,6 @@ export default function ITPermissionsPage() {
     modules: sidebarModules.length,
     roles:   IT_ROLES.length,
   }), [users, sidebarModules]);
-
-  if (isLoadingRole) {
-    return (
-      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.bg }}>
-        <Loader2 className="size-5 animate-spin" style={{ color: C.accent }} />
-      </div>
-    );
-  }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
