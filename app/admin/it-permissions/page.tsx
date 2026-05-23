@@ -1,1577 +1,494 @@
 "use client";
-
-import React, { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import {
-  SidebarProvider,
-  SidebarInset,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { toast } from "sonner";
 import {
-  Loader2,
-  Search,
-  Shield,
-  ShieldCheck,
-  Users,
-  LayoutGrid,
-  X,
-  Save,
-  ChevronDown,
-  ChevronRight,
-  UserCog,
-  Lock,
-  Unlock,
-  ScanLine,
-  Fingerprint,
-  Eye,
-  EyeOff,
-  Key,
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  FileSearch,
-  History,
-  Download,
-  RefreshCw,
-  Filter,
-  Zap,
-  Terminal,
-  Copy,
-  Layers,
-  FileText,
-  Calendar,
-  AlertCircle,
-  Clock,
-  Trash2,
-  Plus,
-  MoreHorizontal,
-  CheckSquare
+  Loader2, Search, Shield, ShieldCheck, Users, LayoutGrid,
+  X, Save, UserCog, Lock, Unlock, RefreshCw, Download, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Switch } from "@/components/ui/switch";
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { UserProvider } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface UserAccount {
-  _id: string;
-  ReferenceID: string;
-  Firstname: string;
-  Lastname: string;
-  Email: string;
-  Department: string;
-  Company: string;
-  Position: string;
-  Role: string;
-  Status: string;
-  Directories?: string[];
+  _id: string; ReferenceID: string; Firstname: string; Lastname: string;
+  Email: string; Department: string; Company: string; Position: string;
+  Role: string; Status: string; Directories?: string[];
 }
-
 interface SidebarModule {
-  key: string;
-  title: string;
-  icon: string;
-  description: string;
+  key: string; title: string; icon: string; description: string;
   items: { title: string; url: string }[];
 }
-
-interface RolePermission {
-  role: string;
-  department: string;
-  modules: string[];
-  submodules: string[];
-}
-
-interface PermissionTemplate {
-  id: string;
-  name: string;
-  description: string;
-  permissions: string[];
-  role: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface AuditLogEntry {
-  id: string;
-  userId: string;
-  userName: string;
-  action: "grant" | "revoke" | "template_apply" | "copy" | "bulk_update";
-  targetUserId: string;
-  targetUserName: string;
-  changes: {
-    module?: string;
-    submodule?: string;
-    oldValue: boolean;
-    newValue: boolean;
-  }[];
-  timestamp: string;
-  performedBy: string;
-  reason?: string;
-}
-
-interface TimeBasedPermission {
-  id: string;
-  userId: string;
-  permission: string;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-  createdBy: string;
-}
-
-interface ConflictWarning {
-  type: "dependency" | "exclusive" | "risk";
-  message: string;
-  modules: string[];
-  severity: "low" | "medium" | "high";
-}
+interface RolePermission { role: string; department: string; modules: string[]; submodules: string[]; }
 
 const IT_ROLES = ["IT Staff", "IT Admin", "IT Manager", "IT Support", "Developer"];
 
-// ─── Helper Functions ─────────────────────────────────────────────────────────
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  text:   "#c8d8e8",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+};
 
-function getBadgeColor(role: string): string {
-  const map: Record<string, string> = {
-    "IT Staff": "bg-cyan-500/20 text-cyan-300 border-cyan-500/50",
-    "IT Admin": "bg-purple-500/20 text-purple-300 border-purple-500/50",
-    "IT Manager": "bg-emerald-500/20 text-emerald-300 border-emerald-500/50",
-    "IT Support": "bg-amber-500/20 text-amber-300 border-amber-500/50",
-    Developer: "bg-pink-500/20 text-pink-300 border-pink-500/50",
-    Admin: "bg-red-500/20 text-red-300 border-red-500/50",
-    SuperAdmin: "bg-gradient-to-r from-red-500/30 to-orange-500/30 text-orange-200 border-orange-500/50",
-  };
-  return map[role] || "bg-slate-500/20 text-slate-300 border-slate-500/50";
-}
+const ROLE_BADGE: Record<string, string> = {
+  "IT Staff":   "bg-sky-500/15 text-sky-400 border-sky-500/30",
+  "IT Admin":   "bg-violet-500/15 text-violet-400 border-violet-500/30",
+  "IT Manager": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  "IT Support": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  Developer:    "bg-pink-500/15 text-pink-400 border-pink-500/30",
+  SuperAdmin:   "bg-orange-500/15 text-orange-400 border-orange-500/30",
+};
+const STATUS_BADGE: Record<string, string> = {
+  active:     "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  terminated: "bg-red-500/15 text-red-400 border-red-500/30",
+  resigned:   "bg-red-500/15 text-red-400 border-red-500/30",
+  inactive:   "bg-slate-500/15 text-slate-400 border-slate-500/30",
+  locked:     "bg-amber-500/15 text-amber-400 border-amber-500/30",
+};
+const rb = (r: string) => ROLE_BADGE[r]   ?? "bg-slate-500/15 text-slate-400 border-slate-500/30";
+const sb = (s: string) => STATUS_BADGE[s?.toLowerCase()] ?? "bg-slate-500/15 text-slate-400 border-slate-500/30";
 
-function getStatusColor(status: string): string {
-  const map: Record<string, string> = {
-    active: "bg-emerald-500/20 text-emerald-300 border-emerald-500/50",
-    terminated: "bg-red-500/20 text-red-300 border-red-500/50",
-    resigned: "bg-orange-500/20 text-orange-300 border-orange-500/50",
-    inactive: "bg-slate-500/20 text-slate-300 border-slate-500/50",
-    locked: "bg-yellow-500/20 text-yellow-300 border-yellow-500/50",
-  };
-  return map[status.toLowerCase()] || "bg-slate-500/20 text-slate-300 border-slate-500/50";
-}
-
-// ─── Main Page Component ─────────────────────────────────────────────────────
-
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ITPermissionsPage() {
   const router = useRouter();
 
-  // ── State ────────────────────────────────────────────────────────────────────
-  const [users, setUsers] = useState<UserAccount[]>([]);
-  const [isFetching, setIsFetching] = useState(false);
-  const [search, setSearch] = useState("");
-  const [filterRole, setFilterRole] = useState("all");
-  const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null);
-  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
-  const [expandedModules, setExpandedModules] = useState<string[]>([]);
-  const [userPermissions, setUserPermissions] = useState<string[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);
-  const [currentUserRole, setCurrentUserRole] = useState<string>("");
-  const [isLoadingRole, setIsLoadingRole] = useState(true);
+  const [users,          setUsers]          = useState<UserAccount[]>([]);
+  const [isFetching,     setIsFetching]     = useState(false);
+  const [search,         setSearch]         = useState("");
+  const [filterRole,     setFilterRole]     = useState("all");
   const [sidebarModules, setSidebarModules] = useState<SidebarModule[]>([]);
-  const [isLoadingModules, setIsLoadingModules] = useState(true);
+  const [rolePermissions,setRolePermissions]= useState<RolePermission[]>([]);
+  const [isLoadingRole,  setIsLoadingRole]  = useState(true);
 
-  // ── Bulk Actions State ─────────────────────────────────────────────────────
-  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-  const [showBulkActionDialog, setShowBulkActionDialog] = useState(false);
-  const [bulkActionType, setBulkActionType] = useState<"grant" | "revoke" | "template">("grant");
-  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  // Per-user dirty permission state: userId → Set<permKey>
+  const [dirtyPerms, setDirtyPerms] = useState<Record<string, Set<string>>>({});
+  // Which users have unsaved changes
+  const [savingIds,  setSavingIds]  = useState<Set<string>>(new Set());
 
-  // ── Templates State ──────────────────────────────────────────────────────────
-  const [templates, setTemplates] = useState<PermissionTemplate[]>([]);
-  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [templateDescription, setTemplateDescription] = useState("");
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [isTemplateSaving, setIsTemplateSaving] = useState(false);
-
-  // ── Copy Permissions State ─────────────────────────────────────────────────
-  const [showCopyDialog, setShowCopyDialog] = useState(false);
-  const [sourceUserId, setSourceUserId] = useState<string | null>(null);
-  const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
-  const [isCopying, setIsCopying] = useState(false);
-
-  // ── Preview State ───────────────────────────────────────────────────────────
-  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
-  const [previewUser, setPreviewUser] = useState<UserAccount | null>(null);
-  const [previewAccessibleScreens, setPreviewAccessibleScreens] = useState<string[]>([]);
-
-  // ── Audit Log State ──────────────────────────────────────────────────────────
-  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
-  const [showAuditLogDialog, setShowAuditLogDialog] = useState(false);
-  const [isLoadingAuditLog, setIsLoadingAuditLog] = useState(false);
-  const [auditLogFilter, setAuditLogFilter] = useState("all");
-
-  // ── Conflict Warnings State ─────────────────────────────────────────────────
-  const [conflictWarnings, setConflictWarnings] = useState<ConflictWarning[]>([]);
-  const [showConflictDialog, setShowConflictDialog] = useState(false);
-
-  // ── Time-based Permissions State ────────────────────────────────────────────
-  const [timeBasedPermissions, setTimeBasedPermissions] = useState<TimeBasedPermission[]>([]);
-  const [showTimeDialog, setShowTimeDialog] = useState(false);
-  const [tempPermission, setTempPermission] = useState<string>("");
-  const [tempStartDate, setTempStartDate] = useState("");
-  const [tempEndDate, setTempEndDate] = useState("");
-  const [isTimeSaving, setIsTimeSaving] = useState(false);
-
-  // ── Fetch Sidebar Modules ─────────────────────────────────────────────────
+  // ── Effects ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchSidebarModules = async () => {
-      setIsLoadingModules(true);
-      try {
-        const res = await fetch("/api/SidebarModules");
-        const data = await res.json();
-        if (data.success) {
-          setSidebarModules(data.modules);
-        } else {
-          toast.error("Failed to fetch sidebar modules");
-        }
-      } catch (err) {
-        console.error("Error fetching sidebar modules:", err);
-        toast.error("Failed to fetch sidebar modules");
-      } finally {
-        setIsLoadingModules(false);
-      }
-    };
-    fetchSidebarModules();
+    fetch("/api/SidebarModules")
+      .then(r => r.json())
+      .then(d => { if (d.success) setSidebarModules(d.modules); })
+      .catch(() => toast.error("Failed to fetch modules"));
   }, []);
 
-  // ── Check Super Admin Access ────────────────────────────────────────────────
   useEffect(() => {
-    const checkAccess = async () => {
+    const check = async () => {
       try {
-        const res = await fetch("/api/me", { cache: "no-store" });
-        if (!res.ok) {
-          router.push("/dashboard");
-          return;
-        }
+        const res  = await fetch("/api/me", { cache: "no-store" });
         const data = await res.json();
-        if (data.role !== "SuperAdmin") {
-          toast.error("Access Denied: Super Admin only");
-          router.push("/dashboard");
-          return;
-        }
-        setCurrentUserRole(data.role);
-      } catch (err) {
-        router.push("/dashboard");
-      } finally {
-        setIsLoadingRole(false);
-      }
+        if (data.role !== "SuperAdmin") { toast.error("Access Denied"); router.push("/dashboard"); }
+      } catch { router.push("/dashboard"); }
+      finally { setIsLoadingRole(false); }
     };
-    checkAccess();
+    check();
   }, [router]);
 
-  // ── Fetch IT Users ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchUsers = async () => {
+    const load = async () => {
       setIsFetching(true);
-      const toastId = toast.loading("Fetching IT users...");
+      const tid = toast.loading("Loading IT users…");
       try {
-        const res = await fetch("/api/ITPermissions/FetchUsers");
+        const res  = await fetch("/api/ITPermissions/FetchUsers");
         const data = await res.json();
-        if (data.success) {
-          setUsers(data.users || []);
-          toast.success("IT users loaded successfully!", { id: toastId });
-        } else {
-          throw new Error(data.message || "Failed to fetch users");
-        }
-      } catch (err) {
-        toast.error("Failed to fetch IT users", { id: toastId });
-        console.error(err);
-      } finally {
-        setIsFetching(false);
-      }
+        if (data.success) { setUsers(data.users || []); toast.success("Loaded", { id: tid }); }
+        else throw new Error(data.message);
+      } catch { toast.error("Failed to load users", { id: tid }); }
+      finally { setIsFetching(false); }
     };
-    fetchUsers();
+    load();
   }, []);
 
-  // ── Fetch Role Permissions ─────────────────────────────────────────────────
   useEffect(() => {
-    const fetchRolePermissions = async () => {
-      try {
-        const res = await fetch("/api/ITPermissions/FetchRolePermissions");
-        const data = await res.json();
-        if (data.success) {
-          setRolePermissions(data.permissions || []);
-        }
-      } catch (err) {
-        console.error("Failed to fetch role permissions:", err);
-      }
-    };
-    fetchRolePermissions();
+    fetch("/api/ITPermissions/FetchRolePermissions")
+      .then(r => r.json())
+      .then(d => { if (d.success) setRolePermissions(d.permissions || []); })
+      .catch(() => {});
   }, []);
 
-  // ── Filtered Users ──────────────────────────────────────────────────────────
-  const filteredUsers = useMemo(() => {
-    return users
-      .filter((u) =>
-        [u.Firstname, u.Lastname, u.Email, u.Role, u.Position]
-          .some((f) => f?.toLowerCase().includes(search.toLowerCase()))
-      )
-      .filter((u) =>
-        filterRole === "all" ? true : u.Role === filterRole
-      )
-      .sort((a, b) => {
-        const nameA = `${a.Firstname} ${a.Lastname}`.toLowerCase();
-        const nameB = `${b.Firstname} ${b.Lastname}`.toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
-  }, [users, search, filterRole]);
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  // Get effective permissions for a user (dirty overrides saved)
+  const getPerms = useCallback((user: UserAccount): Set<string> => {
+    if (dirtyPerms[user._id]) return dirtyPerms[user._id];
+    return new Set(user.Directories ?? []);
+  }, [dirtyPerms]);
 
-  // ── Permission Management ──────────────────────────────────────────────────
-  const openPermissionDialog = (user: UserAccount) => {
-    setSelectedUser(user);
-    // Initialize permissions from user's Directories or role defaults
-    const existingPerms = user.Directories || [];
-    setUserPermissions(existingPerms);
-    setShowPermissionDialog(true);
-  };
+  const isDirty = (userId: string) => !!dirtyPerms[userId];
 
-  const toggleModule = (moduleKey: string) => {
-    setUserPermissions((prev) => {
-      const hasModule = prev.includes(moduleKey);
-      if (hasModule) {
-        // Remove module and all its submodules
-        const module = sidebarModules.find((m) => m.key === moduleKey);
-        const submodules = module?.items.map((item) => `${moduleKey}:${item.title}`) || [];
-        return prev.filter((p) => p !== moduleKey && !submodules.includes(p));
+  const togglePerm = (user: UserAccount, key: string, isModule: boolean) => {
+    setDirtyPerms(prev => {
+      const base = new Set(prev[user._id] ?? (user.Directories ?? []));
+      if (isModule) {
+        const mod = sidebarModules.find(m => m.key === key);
+        const subs = mod?.items.map(i => `${key}:${i.title}`) ?? [];
+        if (base.has(key)) { base.delete(key); subs.forEach(s => base.delete(s)); }
+        else               { base.add(key);    subs.forEach(s => base.add(s)); }
       } else {
-        return [...prev, moduleKey];
+        // submodule: auto-enable parent
+        const [modKey] = key.split(":");
+        if (base.has(key)) { base.delete(key); }
+        else               { base.add(key); base.add(modKey); }
       }
+      return { ...prev, [user._id]: base };
     });
   };
 
-  const toggleSubmodule = (moduleKey: string, submoduleTitle: string) => {
-    const key = `${moduleKey}:${submoduleTitle}`;
-    setUserPermissions((prev) => {
-      const hasSubmodule = prev.includes(key);
-      if (hasSubmodule) {
-        return prev.filter((p) => p !== key);
-      } else {
-        // Auto-enable parent module if not already enabled
-        const newPerms = prev.includes(moduleKey) ? prev : [...prev, moduleKey];
-        return [...newPerms, key];
-      }
-    });
+  const grantAll = (user: UserAccount) => {
+    const all = new Set(sidebarModules.flatMap(m => [m.key, ...m.items.map(i => `${m.key}:${i.title}`)]));
+    setDirtyPerms(prev => ({ ...prev, [user._id]: all }));
   };
 
-  const isModuleGranted = (moduleKey: string) => userPermissions.includes(moduleKey);
-  const isSubmoduleGranted = (moduleKey: string, submoduleTitle: string) =>
-    userPermissions.includes(`${moduleKey}:${submoduleTitle}`);
-
-  const getModuleGrantCount = (moduleKey: string) => {
-    const module = sidebarModules.find((m) => m.key === moduleKey);
-    if (!module) return "0/0";
-    const granted = module.items.filter((item) =>
-      userPermissions.includes(`${moduleKey}:${item.title}`)
-    ).length;
-    return `${granted}/${module.items.length}`;
+  const revokeAll = (user: UserAccount) => {
+    setDirtyPerms(prev => ({ ...prev, [user._id]: new Set() }));
   };
 
-  const savePermissions = async () => {
-    if (!selectedUser) return;
-    setIsSaving(true);
-    const toastId = toast.loading("Saving permissions...");
+  const applyRoleDefault = (user: UserAccount) => {
+    const rp = rolePermissions.find(r => r.role === user.Role && r.department === "IT");
+    if (rp) {
+      setDirtyPerms(prev => ({ ...prev, [user._id]: new Set([...rp.modules, ...rp.submodules]) }));
+      toast.info(`Applied defaults for ${user.Role}`);
+    } else toast.warning(`No defaults for ${user.Role}`);
+  };
+
+  const discardChanges = (userId: string) => {
+    setDirtyPerms(prev => { const n = { ...prev }; delete n[userId]; return n; });
+  };
+
+  const saveUser = async (user: UserAccount) => {
+    const perms = Array.from(getPerms(user));
+    setSavingIds(prev => new Set(prev).add(user._id));
+    const tid = toast.loading(`Saving ${user.Firstname}…`);
     try {
-      const res = await fetch("/api/ITPermissions/UpdatePermissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: selectedUser._id,
-          permissions: userPermissions,
-        }),
+      const res  = await fetch("/api/ITPermissions/UpdatePermissions", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user._id, permissions: perms }),
       });
       const data = await res.json();
-      if (data.success) {
-        // Update local state
-        setUsers((prev) =>
-          prev.map((u) =>
-            u._id === selectedUser._id ? { ...u, Directories: userPermissions } : u
-          )
-        );
-        toast.success("Permissions updated successfully!", { id: toastId });
-        setShowPermissionDialog(false);
-      } else {
-        throw new Error(data.message || "Failed to update permissions");
-      }
-    } catch (err) {
-      toast.error("Failed to save permissions", { id: toastId });
-      console.error(err);
-    } finally {
-      setIsSaving(false);
-    }
+      if (!data.success) throw new Error(data.message);
+      setUsers(prev => prev.map(u => u._id === user._id ? { ...u, Directories: perms } : u));
+      setDirtyPerms(prev => { const n = { ...prev }; delete n[user._id]; return n; });
+      toast.success("Saved!", { id: tid });
+    } catch (err: any) { toast.error(err.message ?? "Save failed", { id: tid }); }
+    finally { setSavingIds(prev => { const n = new Set(prev); n.delete(user._id); return n; }); }
   };
 
-  const toggleExpandModule = (moduleKey: string) => {
-    setExpandedModules((prev) =>
-      prev.includes(moduleKey)
-        ? prev.filter((k) => k !== moduleKey)
-        : [...prev, moduleKey]
+  // ── Filtered ──────────────────────────────────────────────────────────────
+  const filteredUsers = useMemo(() =>
+    users
+      .filter(u => [u.Firstname, u.Lastname, u.Email, u.Role, u.Position]
+        .some(f => f?.toLowerCase().includes(search.toLowerCase())))
+      .filter(u => filterRole === "all" || u.Role === filterRole)
+      .sort((a, b) => `${a.Firstname} ${a.Lastname}`.localeCompare(`${b.Firstname} ${b.Lastname}`)),
+    [users, search, filterRole]);
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    total:   users.length,
+    active:  users.filter(u => u.Status?.toLowerCase() === "active").length,
+    modules: sidebarModules.length,
+    roles:   IT_ROLES.length,
+  }), [users, sidebarModules]);
+
+  if (isLoadingRole) {
+    return (
+      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: C.bg }}>
+        <Loader2 className="size-5 animate-spin" style={{ color: C.accent }} />
+      </div>
     );
-  };
+  }
 
-  const grantAllModules = () => {
-    const allPerms = sidebarModules.flatMap((m) => [
-      m.key,
-      ...m.items.map((item) => `${m.key}:${item.title}`),
-    ]);
-    setUserPermissions(allPerms);
-  };
-
-  const revokeAllModules = () => {
-    setUserPermissions([]);
-  };
-
-  const applyRoleDefaults = () => {
-    if (!selectedUser) return;
-    const rolePerm = rolePermissions.find(
-      (rp) => rp.role === selectedUser.Role && rp.department === "IT"
-    );
-    if (rolePerm) {
-      setUserPermissions([...rolePerm.modules, ...rolePerm.submodules]);
-      toast.info(`Applied default permissions for ${selectedUser.Role}`);
-    } else {
-      toast.warning(`No default permissions found for ${selectedUser.Role}`);
-    }
-  };
-
-  // ── Bulk Actions Functions ───────────────────────────────────────────────
-  const toggleSelectUser = (userId: string) => {
-    setSelectedUsers((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(userId)) {
-        newSet.delete(userId);
-      } else {
-        newSet.add(userId);
-      }
-      return newSet;
-    });
-  };
-
-  const selectAllUsers = () => {
-    setSelectedUsers(new Set(filteredUsers.map(u => u._id)));
-  };
-
-  const deselectAllUsers = () => {
-    setSelectedUsers(new Set());
-  };
-
-  const executeBulkAction = async () => {
-    if (selectedUsers.size === 0) {
-      toast.error("No users selected");
-      return;
-    }
-    
-    setIsBulkProcessing(true);
-    const toastId = toast.loading(`Processing ${bulkActionType} for ${selectedUsers.size} users...`);
-    
-    try {
-      const res = await fetch("/api/ITPermissions/BulkUpdate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userIds: Array.from(selectedUsers),
-          action: bulkActionType,
-          permissions: bulkActionType === "template" && selectedTemplateId 
-            ? templates.find(t => t.id === selectedTemplateId)?.permissions 
-            : undefined
-        }),
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        toast.success(`Bulk ${bulkActionType} completed for ${selectedUsers.size} users!`, { id: toastId });
-        setShowBulkActionDialog(false);
-        setSelectedUsers(new Set());
-        // Refresh users
-        const refreshRes = await fetch("/api/ITPermissions/FetchUsers");
-        const refreshData = await refreshRes.json();
-        if (refreshData.success) {
-          setUsers(refreshData.users || []);
-        }
-      } else {
-        throw new Error(data.message || "Bulk update failed");
-      }
-    } catch (err: any) {
-      toast.error("Bulk update failed: " + err.message, { id: toastId });
-      console.error(err);
-    } finally {
-      setIsBulkProcessing(false);
-    }
-  };
-
-  // ── Template Functions ─────────────────────────────────────────────────────
-  const saveAsTemplate = async () => {
-    if (!templateName.trim()) {
-      toast.error("Please enter a template name");
-      return;
-    }
-    if (!selectedUser) {
-      toast.error("No user selected");
-      return;
-    }
-    
-    setIsTemplateSaving(true);
-    const toastId = toast.loading("Saving template...");
-    
-    try {
-      const res = await fetch("/api/ITPermissions/SaveTemplate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: templateName,
-          description: templateDescription,
-          permissions: userPermissions,
-          role: selectedUser.Role,
-        }),
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Template saved successfully!", { id: toastId });
-        setShowTemplateDialog(false);
-        setTemplateName("");
-        setTemplateDescription("");
-        // Refresh templates
-        const refreshRes = await fetch("/api/ITPermissions/FetchTemplates");
-        const refreshData = await refreshRes.json();
-        if (refreshData.success) {
-          setTemplates(refreshData.templates || []);
-        }
-      } else {
-        throw new Error(data.message || "Failed to save template");
-      }
-    } catch (err: any) {
-      toast.error("Failed to save template: " + err.message, { id: toastId });
-    } finally {
-      setIsTemplateSaving(false);
-    }
-  };
-
-  const applyTemplate = async (templateId: string) => {
-    const template = templates.find(t => t.id === templateId);
-    if (!template) {
-      toast.error("Template not found");
-      return;
-    }
-    
-    setUserPermissions(template.permissions);
-    toast.success(`Applied template: ${template.name}`);
-  };
-
-  const deleteTemplate = async (templateId: string) => {
-    try {
-      const res = await fetch(`/api/ITPermissions/DeleteTemplate?id=${templateId}`, {
-        method: "DELETE",
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        setTemplates(prev => prev.filter(t => t.id !== templateId));
-        toast.success("Template deleted");
-      } else {
-        throw new Error(data.message || "Failed to delete template");
-      }
-    } catch (err: any) {
-      toast.error("Failed to delete template: " + err.message);
-    }
-  };
-
-  // ── Copy Permissions Functions ─────────────────────────────────────────────
-  const openCopyDialog = (sourceUser: UserAccount) => {
-    setSourceUserId(sourceUser._id);
-    setTargetUserIds([]);
-    setShowCopyDialog(true);
-  };
-
-  const executeCopyPermissions = async () => {
-    if (!sourceUserId || targetUserIds.length === 0) {
-      toast.error("Please select source and target users");
-      return;
-    }
-    
-    setIsCopying(true);
-    const toastId = toast.loading("Copying permissions...");
-    
-    try {
-      const sourceUser = users.find(u => u._id === sourceUserId);
-      const res = await fetch("/api/ITPermissions/CopyPermissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceUserId,
-          targetUserIds,
-          permissions: sourceUser?.Directories || [],
-        }),
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        toast.success(`Permissions copied to ${targetUserIds.length} users!`, { id: toastId });
-        setShowCopyDialog(false);
-        // Refresh users
-        const refreshRes = await fetch("/api/ITPermissions/FetchUsers");
-        const refreshData = await refreshRes.json();
-        if (refreshData.success) {
-          setUsers(refreshData.users || []);
-        }
-      } else {
-        throw new Error(data.message || "Copy failed");
-      }
-    } catch (err: any) {
-      toast.error("Copy failed: " + err.message, { id: toastId });
-    } finally {
-      setIsCopying(false);
-    }
-  };
-
-  // ── Preview Functions ────────────────────────────────────────────────────
-  const previewUserPermissions = (user: UserAccount) => {
-    setPreviewUser(user);
-    const accessibleScreens: string[] = [];
-    
-    sidebarModules.forEach(module => {
-      if ((user.Directories || []).includes(module.key)) {
-        accessibleScreens.push(module.title);
-      }
-      module.items.forEach(item => {
-        if ((user.Directories || []).includes(`${module.key}:${item.title}`)) {
-          accessibleScreens.push(`${module.title} > ${item.title}`);
-        }
-      });
-    });
-    
-    setPreviewAccessibleScreens(accessibleScreens);
-    setShowPreviewDialog(true);
-  };
-
-  // ── Audit Log Functions ──────────────────────────────────────────────────
-  const fetchAuditLog = async () => {
-    setIsLoadingAuditLog(true);
-    try {
-      const res = await fetch("/api/ITPermissions/FetchAuditLog");
-      const data = await res.json();
-      if (data.success) {
-        setAuditLog(data.logs || []);
-      } else {
-        toast.error("Failed to fetch audit log");
-      }
-    } catch (err) {
-      console.error("Error fetching audit log:", err);
-      toast.error("Failed to fetch audit log");
-    } finally {
-      setIsLoadingAuditLog(false);
-    }
-  };
-
-  const exportAuditLog = () => {
-    const csv = [
-      ["Timestamp", "Action", "Performed By", "Target User", "Changes"].join(","),
-      ...auditLog.map(log => [
-        log.timestamp,
-        log.action,
-        log.performedBy,
-        log.targetUserName,
-        log.changes.map(c => `${c.module}: ${c.oldValue} → ${c.newValue}`).join("; ")
-      ].join(","))
-    ].join("\n");
-    
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `audit-log-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Audit log exported");
-  };
-
-  // ── Conflict Detection Functions ─────────────────────────────────────────
-  const checkConflicts = (permissions: string[]): ConflictWarning[] => {
-    const warnings: ConflictWarning[] = [];
-    
-    // Check for high-risk combinations
-    const hasAdmin = permissions.includes("admin");
-    const hasSuperAdmin = permissions.includes("SuperAdmin");
-    
-    if (hasSuperAdmin && !permissions.includes("security:2fa-required")) {
-      warnings.push({
-        type: "risk",
-        message: "SuperAdmin access without 2FA is high risk",
-        modules: ["SuperAdmin", "security"],
-        severity: "high"
-      });
-    }
-    
-    // Check for exclusive permissions
-    if (permissions.includes("finance:readonly") && permissions.includes("finance:admin")) {
-      warnings.push({
-        type: "exclusive",
-        message: "Finance read-only and admin permissions may conflict",
-        modules: ["finance:readonly", "finance:admin"],
-        severity: "medium"
-      });
-    }
-    
-    // Check for missing dependencies
-    sidebarModules.forEach(module => {
-      const hasModule = permissions.includes(module.key);
-      const hasSubmodules = module.items.some(item => 
-        permissions.includes(`${module.key}:${item.title}`)
-      );
-      
-      if (hasSubmodules && !hasModule) {
-        warnings.push({
-          type: "dependency",
-          message: `${module.title} submodules require parent module access`,
-          modules: [module.key],
-          severity: "low"
-        });
-      }
-    });
-    
-    return warnings;
-  };
-
-  // ── Time-based Permission Functions ────────────────────────────────────────
-  const addTimeBasedPermission = async () => {
-    if (!selectedUser || !tempPermission || !tempStartDate || !tempEndDate) {
-      toast.error("Please fill all fields");
-      return;
-    }
-    
-    setIsTimeSaving(true);
-    const toastId = toast.loading("Adding time-based permission...");
-    
-    try {
-      const res = await fetch("/api/ITPermissions/AddTimeBasedPermission", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: selectedUser._id,
-          permission: tempPermission,
-          startDate: tempStartDate,
-          endDate: tempEndDate,
-        }),
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Time-based permission added!", { id: toastId });
-        setShowTimeDialog(false);
-        setTempPermission("");
-        setTempStartDate("");
-        setTempEndDate("");
-        // Refresh
-        const refreshRes = await fetch(`/api/ITPermissions/FetchTimeBasedPermissions?userId=${selectedUser._id}`);
-        const refreshData = await refreshRes.json();
-        if (refreshData.success) {
-          setTimeBasedPermissions(refreshData.permissions || []);
-        }
-      } else {
-        throw new Error(data.message || "Failed to add");
-      }
-    } catch (err: any) {
-      toast.error("Failed: " + err.message, { id: toastId });
-    } finally {
-      setIsTimeSaving(false);
-    }
-  };
-
-  const removeTimeBasedPermission = async (permissionId: string) => {
-    try {
-      const res = await fetch(`/api/ITPermissions/RemoveTimeBasedPermission?id=${permissionId}`, {
-        method: "DELETE",
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        setTimeBasedPermissions(prev => prev.filter(p => p.id !== permissionId));
-        toast.success("Permission removed");
-      } else {
-        throw new Error(data.message || "Failed to remove");
-      }
-    } catch (err: any) {
-      toast.error("Failed: " + err.message);
-    }
-  };
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <UserProvider>
       <FormatProvider>
         <ProtectedPageWrapper>
           <SidebarProvider>
             <AppSidebar />
-            <SidebarInset>
-              {/* Dark Tech Background */}
-              <div className="min-h-screen w-full bg-[#050a14] relative overflow-hidden">
-                {/* Animated background grid */}
-                <div className="absolute inset-0 h-full w-full">
-                  <div 
-                    className="absolute inset-0 opacity-[0.03]"
-                    style={{
-                      backgroundImage: `
-                        linear-gradient(rgba(6,182,212,0.5) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(6,182,212,0.5) 1px, transparent 1px)
-                      `,
-                      backgroundSize: '50px 50px',
-                    }}
-                  />
+            <SidebarInset className="flex flex-col h-svh overflow-hidden"
+              style={{ backgroundColor: C.bg, fontFamily: C.font, color: C.text }}>
+
+              {/* Dot-grid */}
+              <div className="fixed inset-0 pointer-events-none" style={{
+                backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+                backgroundSize: "24px 24px", opacity: 0.15, zIndex: 0,
+              }} />
+
+              {/* ── Header ── */}
+              <header className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b"
+                style={{ backgroundColor: C.bg, borderColor: C.border }}>
+                <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: C.dim }} />
+                <div className="w-px h-4" style={{ backgroundColor: C.border }} />
+                <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}
+                  className="hidden sm:flex h-7 px-2 text-[10px] uppercase tracking-widest rounded-none hover:bg-transparent"
+                  style={{ color: C.dim }}>Home</Button>
+                <div className="w-px h-4 hidden sm:block" style={{ backgroundColor: C.border }} />
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>Admin</BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
+                    <BreadcrumbItem>
+                      <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: C.accent }}>IT Permissions</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
+                <div className="ml-auto flex items-center gap-1.5">
+                  {isFetching && <Loader2 className="size-3 animate-spin" style={{ color: C.accent }} />}
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Live</span>
                 </div>
+              </header>
 
-                {/* Main Content */}
-                <div className="relative z-10 w-full">
-                  {/* Header */}
-                  <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
-                    <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
-                    <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-                    <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-                    <div className="flex items-center gap-2 px-4 relative z-10">
-                    <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
-                    <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
-                    <Breadcrumb>
-                      <BreadcrumbList>
-                        <BreadcrumbItem>
-                          <BreadcrumbLink href="/dashboard" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Dashboard</BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator className="text-slate-700" />
-                        <BreadcrumbItem>
-                          <BreadcrumbLink href="#" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Admin</BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator className="text-slate-700" />
-                        <BreadcrumbItem>
-                          <BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">IT Permissions</BreadcrumbPage>
-                        </BreadcrumbItem>
-                      </BreadcrumbList>
-                    </Breadcrumb>
-                    </div>
-                  </header>
-
-                  {/* Page Title */}
-                  <div className="px-4 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-orange-500/10 border border-orange-500/30">
-                        <ShieldCheck className="h-5 w-5 text-orange-400" />
-                      </div>
-                      <div>
-                        <h1 className="text-sm font-bold text-orange-400 tracking-widest uppercase font-mono">IT PERMISSIONS</h1>
-                        <p className="text-[11px] text-slate-600 font-mono mt-0.5">Manage access permissions for IT users based on their roles</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stats Cards */}
-                  <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardContent className="relative p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-cyan-300/60">Total IT Users</p>
-                            <p className="text-2xl font-bold text-white">{users.length}</p>
-                          </div>
-                          <Users className="w-8 h-8 text-cyan-400" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardContent className="relative p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-cyan-300/60">Active Users</p>
-                            <p className="text-2xl font-bold text-white">
-                              {users.filter((u) => u.Status.toLowerCase() === "active").length}
-                            </p>
-                          </div>
-                          <ShieldCheck className="w-8 h-8 text-emerald-400" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardContent className="relative p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-cyan-300/60">Modules</p>
-                            <p className="text-2xl font-bold text-white">{isLoadingModules ? "..." : sidebarModules.length}</p>
-                          </div>
-                          <LayoutGrid className="w-8 h-8 text-purple-400" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-cyan-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardContent className="relative p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-cyan-300/60">IT Roles</p>
-                            <p className="text-2xl font-bold text-white">{IT_ROLES.length}</p>
-                          </div>
-                          <UserCog className="w-8 h-8 text-orange-400" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Filters & Bulk Actions */}
-                  <div className="px-4 pb-4 flex flex-wrap gap-4">
-                    <div className="relative flex-1 min-w-[200px]">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-300/40" />
-                      <Input
-                        placeholder="Search users..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-9 bg-slate-900/50 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-300/40"
-                      />
-                    </div>
-                    <Select value={filterRole} onValueChange={setFilterRole}>
-                      <SelectTrigger className="w-[180px] bg-slate-900/50 border-cyan-500/30 text-cyan-100">
-                        <SelectValue placeholder="Filter by role" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-900 border-cyan-500/30">
-                        <SelectItem value="all" className="text-cyan-100">All Roles</SelectItem>
-                        {IT_ROLES.map((role) => (
-                          <SelectItem key={role} value={role} className="text-cyan-100">
-                            {role}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Bulk Actions Bar */}
-                  {selectedUsers.size > 0 && (
-                    <div className="px-4 pb-4">
-                      <div className="flex items-center gap-4 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
-                        <span className="text-cyan-300">
-                          <CheckSquare className="w-5 h-5 inline mr-2" />
-                          {selectedUsers.size} users selected
-                        </span>
-                        <div className="flex gap-2 ml-auto">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowBulkActionDialog(true)}
-                            className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-                          >
-                            <Zap className="w-4 h-4 mr-2" />
-                            Bulk Actions
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openCopyDialog(users.find(u => u._id === Array.from(selectedUsers)[0])!)}
-                            disabled={selectedUsers.size !== 1}
-                            className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-                          >
-                            <Copy className="w-4 h-4 mr-2" />
-                            Copy From
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={deselectAllUsers}
-                            className="text-cyan-400 hover:text-cyan-300"
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            Clear
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Users Table */}
-                  <div className="px-4 pb-8">
-                    <Card className="relative group bg-slate-900/90 border-cyan-500/30">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />
-                      <CardHeader className="relative">
-                        <CardTitle className="text-lg flex items-center gap-2 text-white">
-                          <Users className="w-5 h-5 text-cyan-400" />
-                          IT Department Users
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="relative">
-                        {isFetching ? (
-                          <div className="flex items-center justify-center py-12">
-                            <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-                          </div>
-                        ) : (
-                          <div className="border border-cyan-500/20 rounded-lg">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="border-b border-cyan-500/20">
-                                  <TableHead className="w-12">
-                                    <Checkbox
-                                      checked={filteredUsers.length > 0 && filteredUsers.every(u => selectedUsers.has(u._id))}
-                                      onCheckedChange={() => {
-                                        if (filteredUsers.every(u => selectedUsers.has(u._id))) {
-                                          deselectAllUsers();
-                                        } else {
-                                          selectAllUsers();
-                                        }
-                                      }}
-                                      className="border-cyan-500/50"
-                                    />
-                                  </TableHead>
-                                  <TableHead className="text-cyan-300">User</TableHead>
-                                  <TableHead className="text-cyan-300">Role</TableHead>
-                                  <TableHead className="text-cyan-300">Position</TableHead>
-                                  <TableHead className="text-cyan-300">Status</TableHead>
-                                  <TableHead className="text-cyan-300">Access</TableHead>
-                                  <TableHead className="text-right text-cyan-300">Actions</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {filteredUsers.length === 0 ? (
-                                  <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-8 text-cyan-300/40">
-                                      No IT users found
-                                    </TableCell>
-                                  </TableRow>
-                                ) : (
-                                  filteredUsers.map((user) => (
-                                    <TableRow key={user._id} className="border-b border-cyan-500/10 hover:bg-cyan-500/5">
-                                      <TableCell>
-                                        <Checkbox
-                                          checked={selectedUsers.has(user._id)}
-                                          onCheckedChange={() => toggleSelectUser(user._id)}
-                                          className="border-cyan-500/50"
-                                        />
-                                      </TableCell>
-                                      <TableCell>
-                                        <div>
-                                          <p className="font-medium text-cyan-100">
-                                            {user.Firstname} {user.Lastname}
-                                          </p>
-                                          <p className="text-sm text-cyan-300/60">{user.Email}</p>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Badge className={`${getBadgeColor(user.Role)} border`}>
-                                          {user.Role}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell className="text-cyan-300">{user.Position}</TableCell>
-                                      <TableCell>
-                                        <Badge className={`${getStatusColor(user.Status)} border`}>
-                                          {user.Status}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell>
-                                        <div className="flex items-center gap-2">
-                                          <Shield className="w-4 h-4 text-cyan-400" />
-                                          <span className="text-sm text-cyan-300">
-                                            {(user.Directories || []).length} modules
-                                          </span>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className="text-right">
-                                        <div className="flex gap-2 justify-end">
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => previewUserPermissions(user)}
-                                            className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
-                                          >
-                                            <Eye className="w-4 h-4" />
-                                          </Button>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => openPermissionDialog(user)}
-                                            className="gap-2 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300"
-                                          >
-                                            <Shield className="w-4 h-4" />
-                                            Manage
-                                          </Button>
-                                        </div>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))
-                                )}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Permission Dialog */}
-                  <Dialog open={showPermissionDialog} onOpenChange={setShowPermissionDialog}>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-[#0a0f1c] border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-white">
-                          <Shield className="w-5 h-5 text-cyan-400" />
-                          Manage Permissions
-                        </DialogTitle>
-                        <DialogDescription className="text-cyan-300/60">
-                          {selectedUser && (
-                            <>
-                              Grant or revoke access for{" "}
-                              <span className="font-semibold text-cyan-200">
-                                {selectedUser.Firstname} {selectedUser.Lastname}
-                              </span>
-                            </>
-                          )}
-                        </DialogDescription>
-                        {selectedUser && (
-                          <div className="mt-2">
-                            <Badge className={`${getBadgeColor(selectedUser.Role)} border`}>
-                              {selectedUser.Role}
-                            </Badge>
-                          </div>
-                        )}
-                      </DialogHeader>
-
-                      <div className="py-4">
-                        {/* Quick Actions */}
-                        <div className="flex flex-wrap gap-2 mb-6">
-                          <Button variant="outline" size="sm" onClick={grantAllModules} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
-                            <Unlock className="w-4 h-4 mr-2" />
-                            Grant All
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={revokeAllModules} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
-                            <Lock className="w-4 h-4 mr-2" />
-                            Revoke All
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={applyRoleDefaults} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
-                            <UserCog className="w-4 h-4 mr-2" />
-                            Apply Role Defaults
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => setShowTemplateDialog(true)} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
-                            <Layers className="w-4 h-4 mr-2" />
-                            Save as Template
-                          </Button>
-                          {templates.length > 0 && (
-                            <Select value={selectedTemplateId || ""} onValueChange={(id) => { setSelectedTemplateId(id); applyTemplate(id); }}>
-                              <SelectTrigger className="w-[180px] bg-slate-900/50 border-cyan-500/30 text-cyan-100">
-                                <SelectValue placeholder="Apply Template..." />
-                              </SelectTrigger>
-                              <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                {templates.map((t) => (
-                                  <SelectItem key={t.id} value={t.id} className="text-cyan-100">
-                                    {t.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                        </div>
-
-                        {/* Modules List */}
-                        <div className="space-y-2">
-                          {sidebarModules.map((module) => {
-                            const isExpanded = expandedModules.includes(module.key);
-                            const isGranted = isModuleGranted(module.key);
-                            const grantCount = getModuleGrantCount(module.key);
-
-                            return (
-                              <Collapsible
-                                key={module.key}
-                                open={isExpanded}
-                                onOpenChange={() => toggleExpandModule(module.key)}
-                              >
-                                <div className="border border-cyan-500/20 rounded-lg overflow-hidden">
-                                  <div
-                                    className={`flex items-center gap-3 p-3 ${
-                                      isGranted ? "bg-cyan-500/10" : "bg-slate-800/50"
-                                    }`}
-                                  >
-                                    <Checkbox
-                                      checked={isGranted}
-                                      onCheckedChange={() => toggleModule(module.key)}
-                                      id={`module-${module.key}`}
-                                      className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
-                                    />
-                                    <label
-                                      htmlFor={`module-${module.key}`}
-                                      className="flex-1 font-medium cursor-pointer text-cyan-100"
-                                    >
-                                      {module.title}
-                                    </label>
-                                    <span className="text-xs text-cyan-300/60">
-                                      {grantCount} granted
-                                    </span>
-                                    <CollapsibleTrigger asChild>
-                                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20">
-                                        {isExpanded ? (
-                                          <ChevronDown className="w-4 h-4" />
-                                        ) : (
-                                          <ChevronRight className="w-4 h-4" />
-                                        )}
-                                      </Button>
-                                    </CollapsibleTrigger>
-                                  </div>
-                                  <CollapsibleContent>
-                                    <div className="p-3 bg-slate-900/50 space-y-2">
-                                      <p className="text-xs text-cyan-300/60 mb-2">
-                                        {module.description}
-                                      </p>
-                                      {module.items.map((item) => (
-                                        <div
-                                          key={item.title}
-                                          className="flex items-center gap-2 pl-6"
-                                        >
-                                          <Checkbox
-                                            checked={isSubmoduleGranted(module.key, item.title)}
-                                            onCheckedChange={() =>
-                                              toggleSubmodule(module.key, item.title)
-                                            }
-                                            id={`submodule-${module.key}-${item.title}`}
-                                            className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
-                                          />
-                                          <label
-                                            htmlFor={`submodule-${module.key}-${item.title}`}
-                                            className="text-sm cursor-pointer text-cyan-300"
-                                          >
-                                            {item.title}
-                                          </label>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </CollapsibleContent>
-                                </div>
-                              </Collapsible>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <DialogFooter>
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowPermissionDialog(false)}
-                          className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-                        >
-                          <X className="w-4 h-4 mr-2" />
-                          Cancel
-                        </Button>
-                        <Button 
-                          onClick={savePermissions} 
-                          disabled={isSaving}
-                          className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white"
-                        >
-                          {isSaving ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4 mr-2" />
-                          )}
-                          Save Permissions
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* Save Template Dialog */}
-                  <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-                    <DialogContent className="bg-[#0a0f1c] border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
-                      <DialogHeader>
-                        <DialogTitle className="text-white flex items-center gap-2">
-                          <Layers className="w-5 h-5 text-cyan-400" />
-                          Save as Template
-                        </DialogTitle>
-                        <DialogDescription className="text-cyan-300/60">
-                          Save current permission set as a reusable template
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="py-4 space-y-4">
-                        <div>
-                          <label className="text-sm text-cyan-300/60 mb-2 block">Template Name</label>
-                          <Input
-                            value={templateName}
-                            onChange={(e) => setTemplateName(e.target.value)}
-                            placeholder="e.g., Standard Developer Access"
-                            className="bg-slate-900/50 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-300/40"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm text-cyan-300/60 mb-2 block">Description (optional)</label>
-                          <Input
-                            value={templateDescription}
-                            onChange={(e) => setTemplateDescription(e.target.value)}
-                            placeholder="e.g., Full access to development modules"
-                            className="bg-slate-900/50 border-cyan-500/30 text-cyan-100 placeholder:text-cyan-300/40"
-                          />
-                        </div>
-                        <div className="p-3 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
-                          <p className="text-sm text-cyan-300">
-                            <span className="font-semibold">{userPermissions.length}</span> permissions will be saved
-                          </p>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowTemplateDialog(false)} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
-                          Cancel
-                        </Button>
-                        <Button 
-                          onClick={saveAsTemplate} 
-                          disabled={isTemplateSaving || !templateName.trim()}
-                          className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white"
-                        >
-                          {isTemplateSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                          Save Template
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* Bulk Actions Dialog */}
-                  <Dialog open={showBulkActionDialog} onOpenChange={setShowBulkActionDialog}>
-                    <DialogContent className="bg-[#0a0f1c] border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
-                      <DialogHeader>
-                        <DialogTitle className="text-white flex items-center gap-2">
-                          <Zap className="w-5 h-5 text-cyan-400" />
-                          Bulk Actions
-                        </DialogTitle>
-                        <DialogDescription className="text-cyan-300/60">
-                          Apply permissions to {selectedUsers.size} selected users
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="py-4 space-y-4">
-                        <Select value={bulkActionType} onValueChange={(v) => setBulkActionType(v as any)}>
-                          <SelectTrigger className="bg-slate-900/50 border-cyan-500/30 text-cyan-100">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-slate-900 border-cyan-500/30">
-                            <SelectItem value="grant" className="text-cyan-100">Grant All Modules</SelectItem>
-                            <SelectItem value="revoke" className="text-cyan-100">Revoke All Modules</SelectItem>
-                            <SelectItem value="template" className="text-cyan-100">Apply Template</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {bulkActionType === "template" && (
-                          <Select value={selectedTemplateId || ""} onValueChange={setSelectedTemplateId}>
-                            <SelectTrigger className="bg-slate-900/50 border-cyan-500/30 text-cyan-100">
-                              <SelectValue placeholder="Select template" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-cyan-500/30">
-                              {templates.map((t) => (
-                                <SelectItem key={t.id} value={t.id} className="text-cyan-100">
-                                  {t.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowBulkActionDialog(false)} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
-                          Cancel
-                        </Button>
-                        <Button onClick={executeBulkAction} disabled={isBulkProcessing || (bulkActionType === "template" && !selectedTemplateId)} className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
-                          {isBulkProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
-                          Execute
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* Copy Permissions Dialog */}
-                  <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
-                    <DialogContent className="bg-[#0a0f1c] border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
-                      <DialogHeader>
-                        <DialogTitle className="text-white flex items-center gap-2">
-                          <Copy className="w-5 h-5 text-cyan-400" />
-                          Copy Permissions
-                        </DialogTitle>
-                        <DialogDescription className="text-cyan-300/60">
-                          Copy permissions from {users.find(u => u._id === sourceUserId)?.Firstname} {users.find(u => u._id === sourceUserId)?.Lastname}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="py-4">
-                        <p className="text-sm text-cyan-300/60 mb-2">Select target users:</p>
-                        <div className="max-h-[200px] overflow-auto space-y-2 border border-cyan-500/20 rounded-lg p-2">
-                          {users.filter(u => u._id !== sourceUserId).map((user) => (
-                            <div key={user._id} className="flex items-center gap-2 p-2 hover:bg-cyan-500/10 rounded">
-                              <Checkbox
-                                checked={targetUserIds.includes(user._id)}
-                                onCheckedChange={() => {
-                                  setTargetUserIds(prev => 
-                                    prev.includes(user._id) 
-                                      ? prev.filter(id => id !== user._id)
-                                      : [...prev, user._id]
-                                  );
-                                }}
-                                className="border-cyan-500/50"
-                              />
-                              <span className="text-cyan-100">{user.Firstname} {user.Lastname}</span>
-                              <Badge className={`${getBadgeColor(user.Role)} border ml-auto`}>{user.Role}</Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowCopyDialog(false)} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
-                          Cancel
-                        </Button>
-                        <Button onClick={executeCopyPermissions} disabled={isCopying || targetUserIds.length === 0} className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
-                          {isCopying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Copy className="w-4 h-4 mr-2" />}
-                          Copy to {targetUserIds.length} Users
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* Preview Dialog */}
-                  <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
-                    <DialogContent className="bg-[#0a0f1c] border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)] max-w-lg">
-                      <DialogHeader>
-                        <DialogTitle className="text-white flex items-center gap-2">
-                          <Eye className="w-5 h-5 text-cyan-400" />
-                          Permission Preview
-                        </DialogTitle>
-                        <DialogDescription className="text-cyan-300/60">
-                          {previewUser?.Firstname} {previewUser?.Lastname} can access:
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="py-4">
-                        {previewAccessibleScreens.length === 0 ? (
-                          <p className="text-cyan-300/40 text-center py-4">No permissions granted</p>
-                        ) : (
-                          <div className="space-y-2 max-h-[300px] overflow-auto">
-                            {previewAccessibleScreens.map((screen, idx) => (
-                              <div key={idx} className="flex items-center gap-2 p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                                <span className="text-cyan-100">{screen}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={() => setShowPreviewDialog(false)} className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white">
-                          Close
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* Audit Log Button & Dialog Trigger */}
-                  <div className="fixed bottom-6 right-6">
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => { setShowAuditLogDialog(true); fetchAuditLog(); }}
-                      className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 shadow-[0_0_20px_rgba(6,182,212,0.3)]"
-                    >
-                      <History className="w-5 h-5 mr-2" />
-                      Audit Log
-                    </Button>
-                  </div>
-
-                  {/* Audit Log Dialog */}
-                  <Dialog open={showAuditLogDialog} onOpenChange={setShowAuditLogDialog}>
-                    <DialogContent className="bg-[#0a0f1c] border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)] max-w-3xl max-h-[80vh]">
-                      <DialogHeader>
-                        <DialogTitle className="text-white flex items-center gap-2">
-                          <History className="w-5 h-5 text-cyan-400" />
-                          Audit Log
-                        </DialogTitle>
-                        <DialogDescription className="text-cyan-300/60">
-                          Track all permission changes
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="py-4">
-                        <div className="flex justify-between items-center mb-4">
-                          <Select value={auditLogFilter} onValueChange={setAuditLogFilter}>
-                            <SelectTrigger className="w-[150px] bg-slate-900/50 border-cyan-500/30 text-cyan-100">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-cyan-500/30">
-                              <SelectItem value="all" className="text-cyan-100">All Actions</SelectItem>
-                              <SelectItem value="grant" className="text-cyan-100">Grants</SelectItem>
-                              <SelectItem value="revoke" className="text-cyan-100">Revokes</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button variant="outline" size="sm" onClick={exportAuditLog} className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
-                            <Download className="w-4 h-4 mr-2" />
-                            Export CSV
-                          </Button>
-                        </div>
-                        {isLoadingAuditLog ? (
-                          <div className="flex justify-center py-8">
-                            <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-                          </div>
-                        ) : auditLog.length === 0 ? (
-                          <p className="text-cyan-300/40 text-center py-8">No audit log entries</p>
-                        ) : (
-                          <div className="space-y-2 max-h-[400px] overflow-auto">
-                            {auditLog.map((entry) => (
-                              <div key={entry.id} className="p-3 bg-slate-900/50 rounded-lg border border-cyan-500/20">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge className={
-                                    entry.action === "grant" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50" :
-                                    entry.action === "revoke" ? "bg-red-500/20 text-red-300 border-red-500/50" :
-                                    "bg-cyan-500/20 text-cyan-300 border-cyan-500/50"
-                                  }>
-                                    {entry.action}
-                                  </Badge>
-                                  <span className="text-xs text-cyan-300/60">{entry.timestamp}</span>
-                                </div>
-                                <p className="text-sm text-cyan-100">
-                                  <span className="text-cyan-400">{entry.performedBy}</span> {entry.action}d permissions for <span className="text-cyan-400">{entry.targetUserName}</span>
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+              {/* ── Title bar ── */}
+              <div className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b"
+                style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                <div className="flex h-8 w-8 items-center justify-center border"
+                  style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+                  <ShieldCheck className="size-4" style={{ color: C.accent }} />
+                </div>
+                <div>
+                  <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>IT Permissions</h1>
+                  <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>Manage module access for IT users</p>
+                </div>
+                <div className="ml-auto hidden md:flex items-center gap-3 text-[10px] uppercase tracking-widest">
+                  <span style={{ color: C.muted }}>{users.length} users</span>
+                  <div className="w-px h-3" style={{ backgroundColor: C.border }} />
+                  <span style={{ color: C.dim }}>{sidebarModules.length} modules</span>
                 </div>
               </div>
+
+              {/* ── Stats bar ── */}
+              <div className="relative z-10 shrink-0 grid grid-cols-4 border-b" style={{ borderColor: C.border }}>
+                {[
+                  { label: "Total Users", value: stats.total,   color: C.text,    icon: Users },
+                  { label: "Active",      value: stats.active,  color: "#34d399", icon: ShieldCheck },
+                  { label: "Modules",     value: stats.modules, color: "#60a5fa", icon: LayoutGrid },
+                  { label: "IT Roles",    value: stats.roles,   color: "#a78bfa", icon: UserCog },
+                ].map(({ label, value, color, icon: Icon }, i) => (
+                  <div key={i} className="flex flex-col items-center justify-center py-3 border-r last:border-r-0"
+                    style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                    <span className="text-lg font-bold leading-none" style={{ color }}>{value}</span>
+                    <span className="text-[9px] uppercase tracking-widest mt-1" style={{ color: C.muted }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Toolbar ── */}
+              <div className="relative z-10 shrink-0 flex items-center gap-2 px-4 py-2 border-b flex-wrap"
+                style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                <div className="relative flex-1 min-w-[180px] max-w-xs">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3" style={{ color: C.dim }} />
+                  <input placeholder="Search users…" value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full pl-8 pr-8 h-8 text-[11px] focus:outline-none"
+                    style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                    onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                    onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                  />
+                  {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="size-3" style={{ color: C.dim }} /></button>}
+                </div>
+                <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
+                  className="h-8 text-[11px] px-2 focus:outline-none"
+                  style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+                  <option value="all">All Roles</option>
+                  {IT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <div className="flex-1" />
+                <span className="text-[10px]" style={{ color: C.muted }}>
+                  Click checkboxes inline · Save per row
+                </span>
+              </div>
+
+              {/* ── Table ── */}
+              <div className="relative z-10 flex-1 overflow-auto">
+                {isFetching ? (
+                  <div className="flex items-center justify-center h-full gap-3">
+                    <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
+                    <span className="text-xs uppercase tracking-widest" style={{ color: C.muted }}>Loading…</span>
+                  </div>
+                ) : (
+                  <table className="w-full border-collapse" style={{ fontSize: "11px", fontFamily: C.font }}>
+                    <thead className="sticky top-0 z-10">
+                      {/* ── Row 1: module group headers ── */}
+                      <tr style={{ backgroundColor: C.panel, borderBottom: `1px solid ${C.border}` }}>
+                        {/* Fixed identity columns */}
+                        <th className="text-left px-3 py-2 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
+                          style={{ color: C.accent, borderRight: `1px solid ${C.border}`, minWidth: 180 }}>User</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
+                          style={{ color: C.accent, borderRight: `1px solid ${C.border}`, minWidth: 90 }}>Role</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
+                          style={{ color: C.accent, borderRight: `1px solid ${C.border}`, minWidth: 80 }}>Status</th>
+                        {/* Module group headers — span all submodule cols + 1 for the module checkbox */}
+                        {sidebarModules.map(m => (
+                          <th key={m.key}
+                            colSpan={1 + m.items.length}
+                            className="text-center px-2 py-2 font-bold uppercase tracking-widest text-[9px] border-l"
+                            style={{ color: C.accent, borderColor: C.border, backgroundColor: "rgba(232,99,10,0.06)" }}>
+                            {m.title}
+                          </th>
+                        ))}
+                        {/* Actions */}
+                        <th className="text-center px-3 py-2 whitespace-nowrap font-bold uppercase tracking-widest text-[9px] border-l"
+                          style={{ color: C.accent, borderColor: C.border, minWidth: 160 }}>Actions</th>
+                      </tr>
+                      {/* ── Row 2: sub-column labels ── */}
+                      <tr style={{ backgroundColor: "#0a0f18", borderBottom: `1px solid ${C.border}` }}>
+                        <th style={{ borderRight: `1px solid ${C.border}` }} />
+                        <th style={{ borderRight: `1px solid ${C.border}` }} />
+                        <th style={{ borderRight: `1px solid ${C.border}` }} />
+                        {sidebarModules.map(m => (
+                          <>
+                            {/* Module-level checkbox header */}
+                            <th key={`${m.key}-all`}
+                              className="text-center px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider border-l"
+                              style={{ color: C.dim, borderColor: C.border, minWidth: 52, backgroundColor: "rgba(232,99,10,0.04)" }}>
+                              All
+                            </th>
+                            {m.items.map(item => (
+                              <th key={`${m.key}:${item.title}`}
+                                className="text-center px-1 py-1.5 text-[9px] uppercase tracking-wide"
+                                style={{ color: C.dim, borderLeft: `1px solid ${C.muted}20`, minWidth: 64, maxWidth: 80 }}>
+                                <span className="block truncate max-w-[72px] mx-auto" title={item.title}>{item.title}</span>
+                              </th>
+                            ))}
+                          </>
+                        ))}
+                        <th style={{ borderLeft: `1px solid ${C.border}` }} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={3 + sidebarModules.reduce((a, m) => a + 1 + m.items.length, 0) + 1}
+                            className="text-center py-16" style={{ color: C.muted }}>
+                            No IT users found.
+                          </td>
+                        </tr>
+                      ) : filteredUsers.map((user, i) => {
+                        const perms   = getPerms(user);
+                        const dirty   = isDirty(user._id);
+                        const saving  = savingIds.has(user._id);
+                        const rowBg   = i % 2 === 0 ? C.bg : C.panel;
+                        return (
+                          <tr key={user._id}
+                            style={{ backgroundColor: dirty ? "rgba(232,99,10,0.04)" : rowBg, borderBottom: `1px solid ${C.border}` }}>
+
+                            {/* Identity */}
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <p className="font-semibold" style={{ color: C.text }}>{user.Firstname} {user.Lastname}</p>
+                              <p className="text-[10px] mt-0.5 truncate max-w-[160px]" style={{ color: C.dim }}>{user.Email}</p>
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${rb(user.Role)}`}>{user.Role}</span>
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${sb(user.Status)}`}>{user.Status}</span>
+                            </td>
+
+                            {/* Module + submodule checkboxes */}
+                            {sidebarModules.map(m => (
+                              <>
+                                {/* Module-level "All" checkbox */}
+                                <td key={`${user._id}-${m.key}`}
+                                  className="text-center px-2 py-2 border-l"
+                                  style={{ borderColor: C.border, backgroundColor: "rgba(232,99,10,0.03)" }}>
+                                  <Checkbox
+                                    checked={perms.has(m.key)}
+                                    onCheckedChange={() => togglePerm(user, m.key, true)}
+                                    className="h-3.5 w-3.5 rounded-none border-orange-500/40 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                                  />
+                                </td>
+                                {/* Submodule checkboxes */}
+                                {m.items.map(item => {
+                                  const key = `${m.key}:${item.title}`;
+                                  return (
+                                    <td key={`${user._id}-${key}`}
+                                      className="text-center px-1 py-2"
+                                      style={{ borderLeft: `1px solid ${C.muted}20` }}>
+                                      <Checkbox
+                                        checked={perms.has(key)}
+                                        onCheckedChange={() => togglePerm(user, key, false)}
+                                        className="h-3.5 w-3.5 rounded-none border-slate-600 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                                      />
+                                    </td>
+                                  );
+                                })}
+                              </>
+                            ))}
+
+                            {/* Actions */}
+                            <td className="px-3 py-2 border-l" style={{ borderColor: C.border }}>
+                              <div className="flex items-center gap-1.5 justify-center flex-wrap">
+                                <button onClick={() => grantAll(user)} title="Grant all"
+                                  className="h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-colors"
+                                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#34d399"; e.currentTarget.style.color = "#34d399"; }}
+                                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                                  All
+                                </button>
+                                <button onClick={() => revokeAll(user)} title="Revoke all"
+                                  className="h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-colors"
+                                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#f87171"; e.currentTarget.style.color = "#f87171"; }}
+                                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                                  None
+                                </button>
+                                {dirty && !saving && (
+                                  <button onClick={() => discardChanges(user._id)} title="Discard"
+                                    className="h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-colors"
+                                    style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                                    <X className="size-3" />
+                                  </button>
+                                )}
+                                <button onClick={() => saveUser(user)} disabled={!dirty || saving}
+                                  className="h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-30"
+                                  style={{
+                                    borderColor: dirty ? C.accent : C.border,
+                                    color: dirty ? C.accent : C.dim,
+                                    backgroundColor: dirty ? "rgba(232,99,10,0.1)" : "transparent",
+                                  }}>
+                                  {saving ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* ── Footer ── */}
+              <div className="relative z-10 shrink-0 flex items-center justify-between px-4 py-2 border-t"
+                style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                <span className="text-[10px]" style={{ color: C.muted }}>
+                  <span style={{ color: C.text }}>{filteredUsers.length}</span> users shown ·{" "}
+                  <span style={{ color: C.accent }}>{Object.keys(dirtyPerms).length}</span> unsaved
+                </span>
+                <span className="text-[10px]" style={{ color: C.muted }}>
+                  Orange highlight = unsaved changes · Save icon activates on change
+                </span>
+              </div>
+
             </SidebarInset>
           </SidebarProvider>
         </ProtectedPageWrapper>

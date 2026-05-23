@@ -3,9 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  SidebarProvider,
-  SidebarInset,
-  SidebarTrigger,
+  SidebarProvider, SidebarInset, SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Pagination } from "@/components/app-pagination";
@@ -14,151 +12,483 @@ import {
   Loader2, Search, ArrowUpDown, Trash2, Pencil, Repeat2, ArrowRight,
   Download, Eye, EyeOff, RotateCcw, UserPlus, SlidersHorizontal, Save,
   X as XIcon, ShieldOff, Zap, Fingerprint, LayoutGrid, Server, Database,
-  Activity, Wifi, AlertTriangle
+  Activity, AlertTriangle, Users, Lock, UserCheck, Building2, ChevronRight,
+  Plus, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import {
+  Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
+} from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import {
+  Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
+} from "@/components/ui/select";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ButtonGroup } from "@/components/ui/button-group";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteDialog } from "@/components/admin/roles/delete";
 import { TransferDialog } from "@/components/admin/roles/transfer";
 import { ConvertEmailDialog } from "@/components/admin/roles/convert";
-import { SpinnerItem } from "@/components/admin/roles/download";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { cn } from "@/lib/utils";
 
-const THEME = {
-  bg: "bg-[#050a14]",
-  border: "border-cyan-500/30",
-  text: "text-cyan-100",
-  textMuted: "text-cyan-300/60",
-  cardBg: "bg-slate-900/90",
-  inputBg: "bg-slate-900/50",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/50",
-  terminated: "bg-red-500/20 text-red-400 border-red-500/50",
-  resigned: "bg-red-500/20 text-red-400 border-red-500/50",
-  "do not disturb": "bg-amber-500/20 text-amber-400 border-amber-500/50",
-  locked: "bg-rose-500/20 text-rose-400 border-rose-500/50",
-  inactive: "bg-slate-500/20 text-slate-400 border-slate-500/50",
-  suspended: "bg-orange-500/20 text-orange-400 border-orange-500/50",
-};
+/* ─── Types ─────────────────────────────────────────────────────── */
 
 interface UserAccount {
-  _id: string;
-  ReferenceID: string;
-  TSM: string;
-  TSMName?: string;
-  Manager: string;
-  ManagerName?: string;
-  Location: string;
-  Firstname: string;
-  Lastname: string;
-  Email: string;
-  Department: string;
-  Company: string;
-  Position: string;
-  Role: string;
-  Password?: string;
-  Status: string;
-  TargetQuota: string;
-  profilePicture?: string;
-  Directories?: string[];
-  LoginAttempts?: number;
-  LockUntil?: Date | null;
+  _id: string; ReferenceID: string; TSM: string; TSMName?: string;
+  Manager: string; ManagerName?: string; Location: string;
+  Firstname: string; Lastname: string; Email: string;
+  Department: string; Company: string; Position: string;
+  Role: string; Password?: string; Status: string; TargetQuota: string;
+  profilePicture?: string; Directories?: string[];
+  LoginAttempts?: number; LockUntil?: Date | null;
 }
 
-type SortKey = keyof Pick<UserAccount, "Firstname" | "Lastname" | "Email" | "Department" | "Company" | "Position">;
+type SortKey = keyof Pick<UserAccount, "Firstname"|"Lastname"|"Email"|"Department"|"Company"|"Position">;
+
+/* ─── Config ─────────────────────────────────────────────────────── */
 
 const DIRECTORIES = [
-  { key: "Ecodesk", label: "Ecodesk", description: "CSR ticketing system", submodules: ["Dashboard", "Inquiries", "Customer Database", "Reports", "Taskflow"] },
-  { key: "Taskflow", label: "Taskflow", description: "Sales tracking, activity, time & motion", submodules: ["Dashboard", "Sales Performance", "National Call Ranking", "Customer Database", "Work Management", "Reports", "Conversion Rates"] },
-  { key: "Acculog", label: "Acculog", description: "HRIS module", submodules: ["Dashboard", "Time Attendance", "Button - Site Visit", "Button - Client Visit", "Recruitment"] },
-  { key: "Help-Desk", label: "Help Desk", description: "IT ticketing system", submodules: [] },
-  { key: "Stash", label: "Stash", description: "IT inventory management", submodules: [] },
+  { key: "Ecodesk",   label: "Ecodesk",   description: "CSR ticketing system",             submodules: ["Dashboard","Inquiries","Customer Database","Reports","Taskflow"] },
+  { key: "Taskflow",  label: "Taskflow",  description: "Sales tracking, activity, time & motion", submodules: ["Dashboard","Sales Performance","National Call Ranking","Customer Database","Work Management","Reports","Conversion Rates"] },
+  { key: "Acculog",   label: "Acculog",   description: "HRIS module",                      submodules: ["Dashboard","Time Attendance","Button - Site Visit","Button - Client Visit","Recruitment"] },
+  { key: "Help-Desk", label: "Help Desk", description: "IT ticketing system",              submodules: [] },
+  { key: "Stash",     label: "Stash",     description: "IT inventory management",          submodules: [] },
 ];
 
-const DEFAULT_ROLES = ["User", "Manager", "Admin", "SuperAdmin", "Developer"];
+const DEFAULT_ROLES = ["User","Manager","Admin","SuperAdmin","Developer"];
 
 const ROLES_BY_DEPARTMENT: Record<string, string[]> = {
-  Sales: ["Territory Sales Associate", "Territory Sales Manager", "Manager"],
+  Sales: ["Territory Sales Associate","Territory Sales Manager","Manager"],
   "Sales Project": ["Office Sales"],
-  IT: ["IT Staff", "IT Admin", "IT Manager", "IT Support", "Developer", "SuperAdmin"],
-  CSR: ["Staff", "Admin", "Manager"],
-  HR: ["Staff", "Manager", "Admin"],
-  Ecommerce: ["Staff", "Manager", "Admin"],
-  Marketing: ["Staff", "Manager", "Admin"],
-  Engineering: ["Engineer", "Senior Engineer", "Manager"],
-  Admin: ["Staff", "Manager", "Admin"],
-  "Warehouse Operations": ["Staff", "Manager", "Supervisor"],
-  Accounting: ["Staff", "Manager", "Admin"],
+  IT: ["IT Staff","IT Admin","IT Manager","IT Support","Developer","SuperAdmin"],
+  CSR: ["Staff","Admin","Manager"],
+  HR: ["Staff","Manager","Admin"],
+  Ecommerce: ["Staff","Manager","Admin"],
+  Marketing: ["Staff","Manager","Admin"],
+  Engineering: ["Engineer","Senior Engineer","Manager"],
+  Admin: ["Staff","Manager","Admin"],
+  "Warehouse Operations": ["Staff","Manager","Supervisor"],
+  Accounting: ["Staff","Manager","Admin"],
   Owner: ["Owner"],
-  Procurement: ["Staff", "Manager", "Admin"],
+  Procurement: ["Staff","Manager","Admin"],
+};
+
+const STATUS_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  active:           { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/30" },
+  terminated:       { bg: "bg-red-500/10",     text: "text-red-400",     border: "border-red-500/30"     },
+  resigned:         { bg: "bg-red-500/10",     text: "text-red-400",     border: "border-red-500/30"     },
+  "do not disturb": { bg: "bg-amber-500/10",   text: "text-amber-400",   border: "border-amber-500/30"   },
+  locked:           { bg: "bg-rose-500/10",    text: "text-rose-400",    border: "border-rose-500/30"    },
+  inactive:         { bg: "bg-slate-500/10",   text: "text-slate-400",   border: "border-slate-500/30"   },
+  suspended:        { bg: "bg-orange-500/10",  text: "text-orange-400",  border: "border-orange-500/30"  },
+};
+
+const DEPT_STYLES: Record<string, string> = {
+  IT:          "text-sky-400    border-sky-500/30    bg-sky-500/10",
+  HR:          "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
+  Sales:       "text-orange-400 border-orange-500/30 bg-orange-500/10",
+  Marketing:   "text-pink-400   border-pink-500/30   bg-pink-500/10",
+  CSR:         "text-violet-400 border-violet-500/30 bg-violet-500/10",
+  "Dev-Team":  "text-amber-400  border-amber-500/30  bg-amber-500/10",
 };
 
 function getRolesForDepartment(dept: string): string[] {
   return ROLES_BY_DEPARTMENT[dept] ?? DEFAULT_ROLES;
 }
 
-function generateReferenceID(firstname: string, lastname: string, location: string): string {
-  if (!firstname || !lastname || !location) return "";
-  const initials = firstname[0].toUpperCase() + lastname[0].toUpperCase();
-  const randomNum = Math.floor(100000 + Math.random() * 900000);
-  return initials + "-" + location + "-" + randomNum;
+function generateReferenceID(f: string, l: string, loc: string): string {
+  if (!f || !l || !loc) return "";
+  return f[0].toUpperCase() + l[0].toUpperCase() + "-" + loc + "-" + Math.floor(100000 + Math.random() * 900000);
 }
 
-function getBadgeColor(dept: string): string {
-  const map: Record<string, string> = {
-    IT: "bg-blue-500/20 text-blue-400 border-blue-500/50",
-    HR: "bg-green-500/20 text-green-400 border-green-500/50",
-    Finance: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50",
-    Marketing: "bg-pink-500/20 text-pink-400 border-pink-500/50",
-    Sales: "bg-purple-500/20 text-purple-400 border-purple-500/50",
-    "Dev-Team": "bg-yellow-400/20 text-yellow-300 border-yellow-400/50",
-  };
-  return map[dept] || "bg-slate-500/20 text-slate-400 border-slate-500/50";
+function getDeptStyle(dept: string, position: string): string {
+  if (["Guest","Senior Fullstack Developer","IT - OJT"].includes(position)) return DEPT_STYLES["Dev-Team"];
+  return DEPT_STYLES[dept] || "text-slate-400 border-slate-600/40 bg-slate-500/10";
 }
 
-function SciFiCard({ children, className = "", glow = true }: { children: React.ReactNode; className?: string; glow?: boolean }) {
+function getStatusStyle(status: string) {
+  return STATUS_STYLES[(status || "").toLowerCase()] ?? { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-500/30" };
+}
+
+/* ─── Small helpers ──────────────────────────────────────────────── */
+
+const OpsLabel = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-600 mb-1">{children}</p>
+);
+
+const OpsInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, ...props }, ref) => (
+    <input ref={ref}
+      className={cn("w-full bg-[#0a0d14] border border-orange-500/20 text-slate-300 font-mono text-xs px-3 py-2 focus:outline-none focus:border-orange-500/50 rounded-none placeholder:text-slate-700 transition-colors", className)}
+      {...props} />
+  )
+);
+OpsInput.displayName = "OpsInput";
+
+function OpsSelect({ value, onValueChange, placeholder, disabled, children }: {
+  value: string; onValueChange: (v: string) => void; placeholder?: string;
+  disabled?: boolean; children: React.ReactNode;
+}) {
   return (
-    <Card className={`relative group ${THEME.cardBg} ${THEME.border} ${className}`}>
-      {glow && <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg blur opacity-10 group-hover:opacity-20 transition-opacity" />}
-      <div className="relative">{children}</div>
-    </Card>
+    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+      <SelectTrigger className="h-8 rounded-none bg-[#0a0d14] border border-orange-500/20 text-slate-300 text-[11px] font-mono focus:ring-0 focus:border-orange-500/40 hover:border-orange-500/30 [&>span]:truncate">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent className="rounded-none bg-[#0d1117] border border-orange-500/20">
+        {children}
+      </SelectContent>
+    </Select>
   );
 }
 
-function SciFiInput({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <Input className={`${THEME.inputBg} ${THEME.border} ${THEME.text} placeholder:text-cyan-300/40 rounded-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 ${className}`} {...props} />;
+const OpsSelectItem = ({ value, children }: { value: string; children: React.ReactNode }) => (
+  <SelectItem value={value} className="text-[11px] font-mono text-slate-300 hover:bg-orange-500/10 hover:text-orange-400 focus:bg-orange-500/10 focus:text-orange-400 rounded-none cursor-pointer">{children}</SelectItem>
+);
+
+function StatTile({ icon: Icon, label, value, accent = "#f97316", sub }: {
+  icon: any; label: string; value: number | string; accent?: string; sub?: string;
+}) {
+  return (
+    <div className="relative bg-[#0d1117]/60 border border-orange-500/10 px-5 py-4 flex items-center gap-4 group hover:border-orange-500/25 transition-colors">
+      <div className="absolute top-0 left-0 w-3 h-3 border-l border-t border-orange-500/30" />
+      <div className="absolute bottom-0 right-0 w-3 h-3 border-r border-b border-orange-500/30" />
+      <div className="w-8 h-8 flex items-center justify-center border border-orange-500/15 bg-orange-500/5 shrink-0">
+        <Icon size={14} style={{ color: accent }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[9px] font-mono uppercase tracking-widest text-slate-600">{label}</p>
+        <p className="text-2xl font-bold tabular-nums text-slate-100 leading-none mt-0.5">{value}</p>
+        {sub && <p className="text-[9px] font-mono text-slate-700 mt-0.5">{sub}</p>}
+      </div>
+      <div className="ml-auto w-px self-stretch opacity-15" style={{ background: accent }} />
+    </div>
+  );
 }
 
-function SciFiButton({ children, variant = "default", className = "", ...props }: React.ComponentProps<typeof Button>) {
-  const baseClasses = "rounded-none tracking-wider text-xs font-bold uppercase transition-all";
-  const variants = {
-    default: "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-0",
-    outline: "border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300",
-    ghost: "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10",
-    destructive: "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30",
-  };
-  return <Button className={`${baseClasses} ${variants[variant as keyof typeof variants]} ${className}`} {...props}>{children}</Button>;
+function StatusBadge({ status }: { status: string }) {
+  const s = getStatusStyle(status);
+  return (
+    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border", s.bg, s.text, s.border)}>
+      {status || "—"}
+    </span>
+  );
 }
+
+function DeptBadge({ dept, position }: { dept: string; position: string }) {
+  const cls = getDeptStyle(dept, position);
+  const label = ["Guest","Senior Fullstack Developer","IT - OJT"].includes(position) ? "Dev Team" : dept || "—";
+  return (
+    <span className={cn("inline-flex items-center px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border", cls)}>
+      {label}
+    </span>
+  );
+}
+
+/* ─── Form Panel ─────────────────────────────────────────────────── */
+
+interface FormPanelProps {
+  open: boolean; onClose: () => void;
+  mode: "create" | "edit";
+  newUser: Partial<UserAccount> & { Password?: string };
+  setNewUser: React.Dispatch<React.SetStateAction<Partial<UserAccount> & { Password?: string }>>;
+  isLoading: boolean; isResetting: boolean;
+  showPassword: boolean; setShowPassword: (v: boolean) => void;
+  formManagers: { label: string; value: string }[];
+  formTsms: { label: string; value: string }[];
+  accounts: UserAccount[];
+  onSubmit: (e: React.FormEvent) => void;
+  onReset: () => void;
+  onResetAccess: () => void;
+}
+
+function FormPanel({
+  open, onClose, mode, newUser, setNewUser, isLoading, isResetting,
+  showPassword, setShowPassword, formManagers, formTsms, accounts,
+  onSubmit, onReset, onResetAccess,
+}: FormPanelProps) {
+  const hasDir = (key: string) => newUser.Directories?.includes(key);
+
+  const toggleDir = (key: string, checked: boolean) => {
+    setNewUser(prev => {
+      const current = prev.Directories || [];
+      if (key === "Ecodesk") {
+        if (!checked) return { ...prev, Directories: current.filter(d => !d.startsWith("Ecodesk")) };
+        if (!current.includes("Ecodesk")) return { ...prev, Directories: [...current, "Ecodesk"] };
+      }
+      if (checked) {
+        if (!current.includes(key)) return { ...prev, Directories: [...current, key] };
+      } else {
+        return { ...prev, Directories: current.filter(d => d !== key) };
+      }
+      return prev;
+    });
+  };
+
+  const handleCompanyChange = (value: string) => {
+    const domain = value === "Ecoshift Corporation" ? "@ecoshiftcorp.com"
+      : value === "Disruptive Solutions Inc" ? "@disruptivesolutionsinc.com"
+      : value === "Buildchem Solutions" ? "@buildchemsolutions.com" : "";
+    setNewUser(prev => {
+      const fi = prev.Firstname ? prev.Firstname.charAt(0).toLowerCase() : "";
+      const ln = prev.Lastname ? prev.Lastname.toLowerCase() : "";
+      const email = fi && ln && domain ? `${fi}.${ln}${domain}` : prev.Email || "";
+      return { ...prev, Company: value, Email: email };
+    });
+  };
+
+  const isEditingLocked = mode === "edit" && (
+    (newUser.Status || "").trim().toLowerCase() === "locked" || (newUser.LoginAttempts ?? 0) >= 5
+  );
+
+  const inputCls = "w-full bg-[#0a0d14] border border-orange-500/20 text-slate-300 font-mono text-xs px-3 py-2 focus:outline-none focus:border-orange-500/50 rounded-none placeholder:text-slate-700 transition-colors";
+
+  return (
+    <Sheet open={open} onOpenChange={v => !v && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md bg-[#0d1117] border-l border-orange-500/20 p-0 flex flex-col">
+        {/* Sheet header */}
+        <SheetHeader className="px-5 py-3.5 border-b border-orange-500/15 bg-[#0a0d14] shrink-0">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="text-[11px] font-mono font-bold uppercase tracking-widest text-orange-400 flex items-center gap-2">
+              <div className="w-1 h-4 bg-orange-500" />
+              {mode === "edit" ? "Edit Profile" : "New Identity"}
+            </SheetTitle>
+            <div className="flex items-center gap-2">
+              {(mode === "edit" || newUser.Firstname || newUser.Email) && (
+                <button onClick={() => { onReset(); onClose(); }}
+                  className="text-[10px] font-mono text-slate-600 hover:text-slate-400 border border-slate-800 px-2 py-1 transition-colors">
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+          {mode === "edit" && newUser.Firstname && (
+            <p className="text-[10px] font-mono text-slate-600 mt-0.5 ml-3">
+              Target: <span className="text-orange-400/70">{newUser.Firstname} {newUser.Lastname}</span>
+            </p>
+          )}
+        </SheetHeader>
+
+        {/* Scrollable form */}
+        <div className="flex-1 overflow-y-auto">
+          <form onSubmit={onSubmit} className="p-5 space-y-4">
+
+            {/* Name row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <OpsLabel>Firstname <span className="text-red-500">*</span></OpsLabel>
+                <OpsInput placeholder="Firstname" value={newUser.Firstname || ""} disabled={isLoading}
+                  onChange={e => { const Firstname = e.target.value; setNewUser(prev => ({ ...prev, Firstname, ReferenceID: generateReferenceID(Firstname, prev.Lastname || "", prev.Location || "") })); }} />
+              </div>
+              <div>
+                <OpsLabel>Lastname <span className="text-red-500">*</span></OpsLabel>
+                <OpsInput placeholder="Lastname" value={newUser.Lastname || ""} disabled={isLoading}
+                  onChange={e => { const Lastname = e.target.value; setNewUser(prev => ({ ...prev, Lastname, ReferenceID: generateReferenceID(prev.Firstname || "", Lastname, prev.Location || "") })); }} />
+              </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <OpsLabel>Location <span className="text-red-500">*</span></OpsLabel>
+              <select className={inputCls} value={newUser.Location || ""} disabled={isLoading}
+                onChange={e => { const Location = e.target.value; setNewUser(prev => ({ ...prev, Location, ReferenceID: generateReferenceID(prev.Firstname || "", prev.Lastname || "", Location) })); }}>
+                <option value="" className="bg-slate-900">Select Location</option>
+                {["NCR","CDO","Davao","Cebu","North-Luzon","Philippines"].map(loc => <option key={loc} value={loc} className="bg-slate-900">{loc}</option>)}
+              </select>
+            </div>
+
+            {/* Reference ID */}
+            <div>
+              <OpsLabel>Reference ID</OpsLabel>
+              <div className="relative">
+                <OpsInput value={newUser.ReferenceID || ""} readOnly className="bg-orange-500/5 text-orange-400/80 pr-8 cursor-default" />
+                <Fingerprint size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-500/30" />
+              </div>
+            </div>
+
+            {/* Company */}
+            <div>
+              <OpsLabel>Organization</OpsLabel>
+              <OpsSelect value={newUser.Company || ""} onValueChange={handleCompanyChange} placeholder="Select company" disabled={isLoading}>
+                <OpsSelectItem value="Ecoshift Corporation">Ecoshift Corporation</OpsSelectItem>
+                <OpsSelectItem value="Disruptive Solutions Inc">Disruptive Solutions Inc</OpsSelectItem>
+                <OpsSelectItem value="Buildchem Solutions">Buildchem Solutions</OpsSelectItem>
+              </OpsSelect>
+            </div>
+
+            {/* Email */}
+            <div>
+              <OpsLabel>Email <span className="text-red-500">*</span></OpsLabel>
+              <OpsInput type="email" placeholder="Auto-generated from company" value={newUser.Email || ""} disabled={isLoading}
+                onChange={e => setNewUser(prev => ({ ...prev, Email: e.target.value }))} />
+            </div>
+
+            {/* Department */}
+            <div>
+              <OpsLabel>Department</OpsLabel>
+              <OpsSelect value={newUser.Department || ""} onValueChange={v => setNewUser(prev => ({ ...prev, Department: v, Role: "" }))} placeholder="Select department" disabled={isLoading}>
+                {["Sales","IT","CSR","HR","Ecommerce","Marketing","Engineering","Admin","Warehouse Operations","Accounting","Owner","Procurement"].map(d => <OpsSelectItem key={d} value={d}>{d}</OpsSelectItem>)}
+              </OpsSelect>
+            </div>
+
+            {/* Sales: Manager + TSM */}
+            {newUser.Department === "Sales" && (
+              <>
+                <div>
+                  <OpsLabel>Manager</OpsLabel>
+                  <OpsSelect value={newUser.Manager || ""} onValueChange={v => { const m = formManagers.find(x => x.value === v); setNewUser(prev => ({ ...prev, Manager: v, ManagerName: m?.label || "", TSM: "", TSMName: "" })); }} placeholder="Select manager" disabled={isLoading}>
+                    {formManagers.map(m => <OpsSelectItem key={m.value} value={m.value}>{m.label}</OpsSelectItem>)}
+                  </OpsSelect>
+                </div>
+                <div>
+                  <OpsLabel>TSM</OpsLabel>
+                  <OpsSelect value={newUser.TSM || ""} onValueChange={v => { const t = formTsms.find(x => x.value === v); const tsmUser = accounts.find(a => a.ReferenceID === v && a.Role === "Territory Sales Manager"); const mgr = tsmUser?.Manager ? formManagers.find(m => m.value === tsmUser.Manager) : null; setNewUser(prev => ({ ...prev, TSM: v, TSMName: t?.label || "", ...(tsmUser?.Manager ? { Manager: tsmUser.Manager, ManagerName: mgr?.label || "" } : {}) })); }} placeholder="Select TSM" disabled={isLoading}>
+                    {formTsms.map(t => <OpsSelectItem key={t.value} value={t.value}>{t.label}</OpsSelectItem>)}
+                  </OpsSelect>
+                </div>
+              </>
+            )}
+
+            {/* Role */}
+            <div>
+              <OpsLabel>Role</OpsLabel>
+              <OpsSelect value={newUser.Role || ""} onValueChange={v => setNewUser(prev => ({ ...prev, Role: v }))} placeholder={newUser.Department ? "Select role" : "Select department first"} disabled={isLoading || !newUser.Department}>
+                {getRolesForDepartment(newUser.Department || "").map(r => <OpsSelectItem key={r} value={r}>{r}</OpsSelectItem>)}
+              </OpsSelect>
+            </div>
+
+            {/* Position */}
+            <div>
+              <OpsLabel>Position</OpsLabel>
+              <OpsInput placeholder="Position title" value={newUser.Position || ""} disabled={isLoading}
+                onChange={e => setNewUser(prev => ({ ...prev, Position: e.target.value }))} />
+            </div>
+
+            {/* Status */}
+            <div>
+              <OpsLabel>Status</OpsLabel>
+              <select className={inputCls} value={newUser.Status || "Active"} disabled={isLoading}
+                onChange={e => setNewUser(prev => ({ ...prev, Status: e.target.value }))}>
+                {["Active","Inactive","Suspended","Terminated","Resigned","Locked"].map(s => <option key={s} value={s} className="bg-slate-900">{s}</option>)}
+              </select>
+              {(newUser.Status || "").toLowerCase() === "locked" && (
+                <p className="text-[10px] font-mono text-amber-400 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> Account locked — reset required</p>
+              )}
+            </div>
+
+            {/* Locked user reset block */}
+            {isEditingLocked && (
+              <div className="border border-amber-500/25 bg-amber-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldOff size={12} className="text-amber-400" />
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-amber-300">Security Lock Active</span>
+                  </div>
+                  {(newUser.LoginAttempts ?? 0) > 0 && (
+                    <span className="text-[10px] font-mono text-amber-400">{newUser.LoginAttempts}/5 attempts</span>
+                  )}
+                </div>
+                <button type="button" disabled={isResetting || isLoading} onClick={onResetAccess}
+                  className="w-full flex items-center justify-center gap-2 py-2 text-[10px] font-mono font-bold uppercase tracking-wide text-amber-400 border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-40">
+                  {isResetting ? <><Loader2 size={11} className="animate-spin" /> Resetting…</> : <><RotateCcw size={11} /> Reset Access</>}
+                </button>
+              </div>
+            )}
+
+            {/* Password */}
+            <div>
+              <OpsLabel>Password <span className="text-red-500">*</span></OpsLabel>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <OpsInput type={showPassword ? "text" : "password"} placeholder="Min. 8 characters"
+                    value={newUser.Password || ""} disabled={isLoading}
+                    className="pr-9"
+                    onChange={e => setNewUser(prev => ({ ...prev, Password: e.target.value }))} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-400 transition-colors" disabled={isLoading}>
+                    {showPassword ? <EyeOff size={12} /> : <Eye size={12} />}
+                  </button>
+                </div>
+                <button type="button" disabled={isLoading}
+                  onClick={() => { const g = Math.random().toString(36).slice(-10); setNewUser(prev => ({ ...prev, Password: g })); toast.info("Password generated"); }}
+                  className="shrink-0 px-3 border border-orange-500/25 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors">
+                  <Zap size={12} />
+                </button>
+              </div>
+            </div>
+
+            {/* Directories */}
+            <div>
+              <OpsLabel>Access Permissions</OpsLabel>
+              <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                {DIRECTORIES.map(dir => (
+                  <div key={dir.key} className={cn("border p-3 transition-colors", hasDir(dir.key) ? "border-orange-500/30 bg-orange-500/5" : "border-orange-500/10 bg-[#0a0d14]/40")}>
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input type="checkbox" checked={!!hasDir(dir.key)} onChange={e => toggleDir(dir.key, e.target.checked)}
+                        className="mt-0.5 h-3.5 w-3.5 accent-orange-500 bg-slate-900" />
+                      <div>
+                        <span className="text-[11px] font-mono font-semibold text-slate-300">{dir.label}</span>
+                        <span className="text-[9px] font-mono text-slate-700 ml-2">{dir.description}</span>
+                      </div>
+                    </label>
+                    {dir.submodules.length > 0 && hasDir(dir.key) && (
+                      <div className="mt-2.5 ml-6 pl-3 border-l border-orange-500/15 space-y-1.5">
+                        {dir.submodules.map(sub => {
+                          const key = `${dir.key}:${sub}`;
+                          return (
+                            <label key={key} className="flex items-center gap-2 cursor-pointer">
+                              <input type="checkbox" checked={!!hasDir(key)} onChange={e => toggleDir(key, e.target.checked)}
+                                className="h-3 w-3 accent-orange-500 bg-slate-900" />
+                              <span className="text-[10px] font-mono text-slate-600 hover:text-slate-400 transition-colors">{sub}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Submit */}
+            <button type="submit" disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-[11px] font-mono font-bold uppercase tracking-widest text-orange-400 border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors disabled:opacity-40">
+              {isLoading
+                ? <><Loader2 size={12} className="animate-spin" />{mode === "edit" ? "Saving…" : "Creating…"}</>
+                : mode === "edit"
+                  ? <><Save size={12} /> Save Profile</>
+                  : <><UserPlus size={12} /> Create Identity</>
+              }
+            </button>
+          </form>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ─── Main Page ──────────────────────────────────────────────────── */
 
 export default function AccountPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
   const { userId: currentUserId, email, role, name } = useUser();
 
   const getAuditHeaders = () => ({
@@ -169,6 +499,7 @@ export default function AccountPage() {
     "x-user-name": name || "",
   });
 
+  /* ── State ── */
   const [accounts, setAccounts] = useState<UserAccount[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isFetching, setIsFetching] = useState(false);
@@ -176,346 +507,259 @@ export default function AccountPage() {
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterCompany, setFilterCompany] = useState("all");
   const [filterRole, setFilterRole] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
   const [sortKey, setSortKey] = useState<SortKey>("Firstname");
   const [sortAsc, setSortAsc] = useState(true);
-  const [activeView, setActiveView] = useState("grid");
+  const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [viewingUser, setViewingUser] = useState<UserAccount | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
-  const [viewingUser, setViewingUser] = useState<UserAccount | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [managers, setManagers] = useState<{ label: string; value: string }[]>([]);
   const [tsms, setTsms] = useState<{ label: string; value: string }[]>([]);
+  const [formManagers, setFormManagers] = useState<{ label: string; value: string }[]>([]);
+  const [formTsms, setFormTsms] = useState<{ label: string; value: string }[]>([]);
+  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [newUser, setNewUser] = useState<Partial<UserAccount> & { Password?: string }>({
     ReferenceID: "", TSM: "", Manager: "", Location: "", Firstname: "", Lastname: "",
     Email: "", Department: "", Company: "", Position: "", Role: "", Password: "",
     Status: "Active", TargetQuota: "", Directories: [],
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [isFormLoading, setIsFormLoading] = useState(false);
-  const [formManagers, setFormManagers] = useState<{ label: string; value: string }[]>([]);
-  const [formTsms, setFormTsms] = useState<{ label: string; value: string }[]>([]);
-  const [isResetting, setIsResetting] = useState(false);
 
+  /* ── Fetch accounts ── */
   useEffect(() => {
-    const fetchAccounts = async () => {
+    const load = async () => {
       setIsFetching(true);
-      const toastId = toast.loading("Initializing data stream...");
+      const tid = toast.loading("Syncing user database…");
       try {
         const res = await fetch("/api/UserManagement/Fetch");
-        const data = await res.json();
-        setAccounts(data || []);
-        toast.success("User database synchronized", { id: toastId });
-      } catch (err) {
-        toast.error("Connection failed - check network", { id: toastId });
-      } finally {
-        setIsFetching(false);
-      }
+        setAccounts(await res.json() || []);
+        toast.success("Database synchronized", { id: tid });
+      } catch { toast.error("Connection failed", { id: tid }); }
+      finally { setIsFetching(false); }
     };
-    fetchAccounts();
+    load();
   }, []);
 
-  const selectedAreSales = useMemo(() => accounts.some((a) => selectedIds.has(a._id) && a.Department === "Sales"), [accounts, selectedIds]);
+  const selectedAreSales = useMemo(() =>
+    accounts.some(a => selectedIds.has(a._id) && a.Department === "Sales"),
+    [accounts, selectedIds]);
 
+  /* ── Transfer dialog managers/tsms ── */
   useEffect(() => {
     if (!showTransferDialog || !selectedAreSales) return;
-    const fetchDropdowns = async () => {
+    const load = async () => {
       try {
         const [mr, tr] = await Promise.all([
           fetch("/api/UserManagement/FetchManager?Role=Manager"),
           fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager"),
         ]);
-        const md = await mr.json();
-        const td = await tr.json();
-        setManagers(md.map((m: any) => ({ label: m.Firstname + " " + m.Lastname, value: m.ReferenceID })));
-        setTsms(td.map((t: any) => ({ label: t.Firstname + " " + t.Lastname, value: t.ReferenceID })));
-      } catch {
-        toast.error("Failed to fetch supervisor data");
-      }
+        const [md, td] = await Promise.all([mr.json(), tr.json()]);
+        setManagers(md.map((m: any) => ({ label: `${m.Firstname} ${m.Lastname}`, value: m.ReferenceID })));
+        setTsms(td.map((t: any) => ({ label: `${t.Firstname} ${t.Lastname}`, value: t.ReferenceID })));
+      } catch { toast.error("Failed to fetch supervisor data"); }
     };
-    fetchDropdowns();
+    load();
   }, [showTransferDialog, selectedAreSales]);
 
+  /* ── Form managers/tsms ── */
   useEffect(() => {
     if (newUser.Department !== "Sales") return;
-    const fetchFormDropdowns = async () => {
+    const load = async () => {
       try {
         const [mr, tr] = await Promise.all([
           fetch("/api/UserManagement/FetchManager?Role=Manager"),
           fetch("/api/UserManagement/FetchTSM?Role=Territory Sales Manager"),
         ]);
-        const md = await mr.json();
-        const td = await tr.json();
-        setFormManagers(md.map((m: any) => ({ label: m.Firstname + " " + m.Lastname, value: m.ReferenceID })));
-        setFormTsms(td.map((t: any) => ({ label: t.Firstname + " " + t.Lastname, value: t.ReferenceID })));
-      } catch {
-        toast.error("Failed to fetch supervisor data");
-      }
+        const [md, td] = await Promise.all([mr.json(), tr.json()]);
+        setFormManagers(md.map((m: any) => ({ label: `${m.Firstname} ${m.Lastname}`, value: m.ReferenceID })));
+        setFormTsms(td.map((t: any) => ({ label: `${t.Firstname} ${t.Lastname}`, value: t.ReferenceID })));
+      } catch { toast.error("Failed to fetch supervisor data"); }
     };
-    fetchFormDropdowns();
+    load();
   }, [newUser.Department]);
 
-  const hasDir = (key: string) => newUser.Directories?.includes(key);
-
-  const toggleDir = (key: string, checked: boolean) => {
-    setNewUser((prev) => {
-      const current = prev.Directories || [];
-      if (key === "Ecodesk") {
-        if (!checked) return { ...prev, Directories: current.filter((d) => !d.startsWith("Ecodesk")) };
-        if (!current.includes("Ecodesk")) return { ...prev, Directories: [...current, "Ecodesk"] };
-      }
-      if (checked) {
-        if (!current.includes(key)) return { ...prev, Directories: [...current, key] };
-      } else {
-        return { ...prev, Directories: current.filter((d) => d !== key) };
-      }
-      return prev;
-    });
-  };
-
+  /* ── CRUD ── */
   const resetForm = () => {
     setNewUser({ ReferenceID: "", TSM: "", Manager: "", Location: "", Firstname: "", Lastname: "", Email: "", Department: "", Company: "", Position: "", Role: "", Password: "", Status: "Active", TargetQuota: "", Directories: [] });
     setShowPassword(false);
     setFormMode("create");
   };
 
-  const handleCreateAccount = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formMode === "edit") {
-      await handleSaveEdit();
-      return;
-    }
-    if (!newUser.Firstname || !newUser.Lastname || !newUser.Email || !newUser.Location) {
-      toast.error("Missing required fields");
-      return;
-    }
+    if (formMode === "edit") { await handleSaveEdit(); return; }
+    if (!newUser.Firstname || !newUser.Lastname || !newUser.Email || !newUser.Location) { toast.error("Missing required fields"); return; }
     setIsFormLoading(true);
     try {
-      const res = await fetch("/api/UserManagement/UserCreate", {
-        method: "POST",
-        headers: getAuditHeaders(),
-        body: JSON.stringify(newUser),
-      });
+      const res = await fetch("/api/UserManagement/UserCreate", { method: "POST", headers: getAuditHeaders(), body: JSON.stringify(newUser) });
       const result = await res.json();
       if (!res.ok || !result.success) throw new Error(result.message || "Create failed");
-      setAccounts((prev) => [...prev, result.data]);
-      toast.success("User profile created successfully");
-      resetForm();
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setIsFormLoading(false);
-    }
-  };
-
-  const departmentOptions = useMemo(() => ["all", ...Array.from(new Set(accounts.map((a) => a.Department).filter(Boolean)))], [accounts]);
-  const companyOptions = useMemo(() => ["all", ...Array.from(new Set(accounts.map((a) => a.Company).filter(Boolean)))], [accounts]);
-  const salesRoleOptions = useMemo(() => ["all", ...Array.from(new Set(accounts.filter((a) => a.Department === "Sales").map((a) => a.Role).filter(Boolean)))], [accounts]);
-
-  const filtered = useMemo(() => {
-    const list = accounts
-      .filter((a) => [a.Firstname, a.Lastname, a.Email, a.Department, a.Company, a.Position].some((f) => f?.toLowerCase().includes(search.toLowerCase())))
-      .filter((a) => (filterDepartment === "all" ? true : a.Department === filterDepartment))
-      .filter((a) => (filterCompany === "all" ? true : a.Company === filterCompany))
-      .filter((a) => (filterRole === "all" || filterDepartment !== "Sales" ? true : a.Role === filterRole));
-    return [...list].sort((a, b) => {
-      const va = (a[sortKey] || "").toString().toLowerCase();
-      const vb = (b[sortKey] || "").toString().toLowerCase();
-      return va < vb ? (sortAsc ? -1 : 1) : va > vb ? (sortAsc ? 1 : -1) : 0;
-    });
-  }, [accounts, search, filterDepartment, filterCompany, filterRole, sortKey, sortAsc]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
-  const current = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else { setSortKey(key); setSortAsc(true); }
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === current.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(current.map((u) => u._id)));
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const copy = new Set(prev);
-      copy.has(id) ? copy.delete(id) : copy.add(id);
-      return copy;
-    });
-  };
-
-  const handleEdit = (user: UserAccount) => {
-    const copy: Partial<UserAccount> & { Password?: string } = { ...user };
-    delete copy.Password;
-    setNewUser({ ...copy, Password: "" });
-    setFormMode("edit");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const confirmDelete = async () => {
-    const toastId = toast.loading("Purging accounts...");
-    try {
-      const res = await fetch("/api/UserManagement/UserDelete", {
-        method: "POST",
-        headers: getAuditHeaders(),
-        body: JSON.stringify({ ids: Array.from(selectedIds) }),
-      });
-      const result = await res.json();
-      if (!res.ok || !result.success) throw new Error("Delete failed");
-      setAccounts((prev) => prev.filter((a) => !selectedIds.has(a._id)));
-      setSelectedIds(new Set());
-      toast.success("Accounts purged from system", { id: toastId });
-    } catch (err) {
-      toast.error("Error deleting accounts", { id: toastId });
-    } finally {
-      setShowDeleteDialog(false);
-    }
-  };
-
-  const syncTsmManager = async (tsaReferenceId: string, field: "tsm" | "manager", newSupervisorReferenceId: string): Promise<void> => {
-    if (!tsaReferenceId || !newSupervisorReferenceId) return;
-    try {
-      const res = await fetch("/api/UserManagement/TransferTSA", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tsaReferenceId, field, newSupervisorReferenceId }),
-      });
-      const contentType = res.headers.get("content-type") ?? "";
-      if (!contentType.includes("application/json")) {
-        console.error("[TransferTSA] HTTP " + res.status + " - route not found");
-        return;
-      }
-      const data = await res.json();
-      if (!data.success) console.warn("[TransferTSA] partial failure:", data);
-    } catch (err) {
-      console.error("[TransferTSA]", err);
-    }
+      setAccounts(prev => [...prev, result.data]);
+      toast.success("Identity created");
+      resetForm(); setFormOpen(false);
+    } catch (err) { toast.error((err as Error).message); }
+    finally { setIsFormLoading(false); }
   };
 
   const handleSaveEdit = async () => {
-    if (!newUser._id) { toast.error("No user loaded for editing"); return; }
-    const toastId = toast.loading("Updating profile...");
+    if (!newUser._id) { toast.error("No user loaded"); return; }
     setIsFormLoading(true);
-    const prevUser = accounts.find((a) => a._id === newUser._id);
-
+    const tid = toast.loading("Updating profile…");
+    const prevUser = accounts.find(a => a._id === newUser._id);
     try {
       const payload = { ...newUser };
-      if (!payload.Password || payload.Password.trim() === "") delete payload.Password;
-
-      const res = await fetch("/api/UserManagement/UserUpdate", {
-        method: "PUT",
-        headers: getAuditHeaders(),
-        body: JSON.stringify({ id: newUser._id, ...payload }),
-      });
+      if (!payload.Password?.trim()) delete payload.Password;
+      const res = await fetch("/api/UserManagement/UserUpdate", { method: "PUT", headers: getAuditHeaders(), body: JSON.stringify({ id: newUser._id, ...payload }) });
       const result = await res.json();
       if (!res.ok || !result.success) throw new Error(result.message || "Update failed");
 
       const savedStatus = (newUser.Status || "").trim().toLowerCase();
       const isSales = (newUser.Department || "").trim().toLowerCase() === "sales";
-      const isPark = ["inactive", "terminated", "resigned"].includes(savedStatus);
-      const isRestore = savedStatus === "active";
-
-      if (isSales && (isPark || isRestore) && newUser.ReferenceID) {
+      const isPark = ["inactive","terminated","resigned"].includes(savedStatus);
+      if (isSales && (isPark || savedStatus === "active") && newUser.ReferenceID) {
         try {
-          const parkRes = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/ParkByReferenceId", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ referenceId: newUser.ReferenceID, targetStatus: isPark ? "park" : "Active" }),
-          });
-          const parkResult = await parkRes.json();
-          if (parkResult.success) toast.info(parkResult.message);
-        } catch (cascadeErr) {
-          console.error("[cascade park]", cascadeErr);
-        }
+          const pr = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/ParkByReferenceId", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ referenceId: newUser.ReferenceID, targetStatus: isPark ? "park" : "Active" }) });
+          const pd = await pr.json();
+          if (pd.success) toast.info(pd.message);
+        } catch {}
       }
-
       if (isSales && newUser.ReferenceID) {
-        const syncOps: Promise<void>[] = [];
-        if (newUser.TSM && newUser.TSM !== prevUser?.TSM) syncOps.push(syncTsmManager(newUser.ReferenceID, "tsm", newUser.TSM));
-        if (newUser.Manager && newUser.Manager !== prevUser?.Manager) syncOps.push(syncTsmManager(newUser.ReferenceID, "manager", newUser.Manager));
-        if (syncOps.length > 0) {
-          await Promise.all(syncOps);
-          toast.info("Supervisor data synced across databases");
-        }
+        const ops: Promise<void>[] = [];
+        const sync = async (field: "tsm"|"manager", v: string) => {
+          await fetch("/api/UserManagement/TransferTSA", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tsaReferenceId: newUser.ReferenceID, field, newSupervisorReferenceId: v }) });
+        };
+        if (newUser.TSM && newUser.TSM !== prevUser?.TSM) ops.push(sync("tsm", newUser.TSM));
+        if (newUser.Manager && newUser.Manager !== prevUser?.Manager) ops.push(sync("manager", newUser.Manager));
+        if (ops.length) { await Promise.all(ops); toast.info("Supervisor data synced"); }
       }
-
-      setAccounts((prev) => prev.map((a) => (a._id === newUser._id ? { ...a, ...newUser } : a)));
-      toast.success("Profile updated successfully", { id: toastId });
-      resetForm();
-    } catch (err) {
-      toast.error((err as Error).message, { id: toastId });
-    } finally {
-      setIsFormLoading(false);
-    }
+      setAccounts(prev => prev.map(a => a._id === newUser._id ? { ...a, ...newUser } : a));
+      toast.success("Profile updated", { id: tid });
+      resetForm(); setFormOpen(false);
+    } catch (err) { toast.error((err as Error).message, { id: tid }); }
+    finally { setIsFormLoading(false); }
   };
 
-  const handleResetClientAccess = async () => {
+  const handleDelete = async () => {
+    const tid = toast.loading("Purging accounts…");
+    try {
+      const res = await fetch("/api/UserManagement/UserDelete", { method: "POST", headers: getAuditHeaders(), body: JSON.stringify({ ids: Array.from(selectedIds) }) });
+      const result = await res.json();
+      if (!res.ok || !result.success) throw new Error("Delete failed");
+      setAccounts(prev => prev.filter(a => !selectedIds.has(a._id)));
+      setSelectedIds(new Set());
+      toast.success("Accounts purged", { id: tid });
+    } catch { toast.error("Delete failed", { id: tid }); }
+    finally { setShowDeleteDialog(false); }
+  };
+
+  const handleResetAccess = async () => {
     if (!newUser._id) { toast.error("No user selected"); return; }
     setIsResetting(true);
-    const toastId = toast.loading("Resetting access credentials...");
+    const tid = toast.loading("Resetting credentials…");
     try {
-      const res = await fetch("/api/UserManagement/ResetClientAccess", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: newUser._id }),
-      });
+      const res = await fetch("/api/UserManagement/ResetClientAccess", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: newUser._id }) });
       const result = await res.json();
       if (!res.ok || !result.success) throw new Error(result.message || "Reset failed");
-      setNewUser((prev) => ({ ...prev, Status: "Active", LoginAttempts: 0, LockUntil: null }));
-      setAccounts((prev) => prev.map((a) => (a._id === newUser._id ? { ...a, Status: "Active", LoginAttempts: 0 } : a)));
-      toast.success("Access credentials reset - user unlocked", { id: toastId });
-    } catch (err) {
-      toast.error((err as Error).message, { id: toastId });
-    } finally {
-      setIsResetting(false);
-    }
+      setNewUser(prev => ({ ...prev, Status: "Active", LoginAttempts: 0, LockUntil: null }));
+      setAccounts(prev => prev.map(a => a._id === newUser._id ? { ...a, Status: "Active", LoginAttempts: 0 } : a));
+      toast.success("Access reset — user unlocked", { id: tid });
+    } catch (err) { toast.error((err as Error).message, { id: tid }); }
+    finally { setIsResetting(false); }
   };
 
   const handleDownload = async () => {
-    if (filtered.length === 0) return;
+    if (!filtered.length) return;
     setIsDownloading(true);
-    const toastId = toast.loading("Generating data export...");
+    const tid = toast.loading("Generating export…");
     try {
       const header = "ReferenceID,Firstname,Lastname,Email,Department,Company,Position,TSM,Manager,Status";
-      const rows = filtered.map((u) => {
-        const values = [u.ReferenceID, u.Firstname, u.Lastname, u.Email, u.Department, u.Company, u.Position, u.TSM, u.Manager, u.Status];
-        return values.map((v) => '"' + (v || "") + '"').join(",");
-      });
-      const csvContent = [header, ...rows].join("\n");
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const blob = new Blob([csvContent], { type: "text/csv" });
+      const rows = filtered.map(u => [u.ReferenceID,u.Firstname,u.Lastname,u.Email,u.Department,u.Company,u.Position,u.TSM,u.Manager,u.Status].map(v => `"${v||""}"`).join(","));
+      await new Promise(r => setTimeout(r, 300));
+      const blob = new Blob([[header,...rows].join("\n")], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "user_accounts_export_" + new Date().toISOString().split("T")[0] + ".csv";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const a = Object.assign(document.createElement("a"), { href: url, download: `users_${new Date().toISOString().split("T")[0]}.csv` });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success("Data export complete", { id: toastId });
-    } catch {
-      toast.error("Export failed", { id: toastId });
-    } finally {
-      setIsDownloading(false);
-    }
+      toast.success("Export complete", { id: tid });
+    } catch { toast.error("Export failed", { id: tid }); }
+    finally { setIsDownloading(false); }
   };
 
-  const handleCompanyChange = (value: string) => {
-    const domain = value === "Ecoshift Corporation" ? "@ecoshiftcorp.com" : value === "Disruptive Solutions Inc" ? "@disruptivesolutionsinc.com" : value === "Buildchem Solutions" ? "@buildchemsolutions.com" : "";
-    setNewUser((prev) => {
-      const firstInitial = prev.Firstname ? prev.Firstname.charAt(0).toLowerCase() : "";
-      const lastName = prev.Lastname ? prev.Lastname.toLowerCase() : "";
-      const email = firstInitial && lastName && domain ? firstInitial + "." + lastName + domain : prev.Email || "";
-      return { ...prev, Company: value, Email: email };
+  const openEdit = (user: UserAccount) => {
+    const copy: Partial<UserAccount> & { Password?: string } = { ...user };
+    delete copy.Password;
+    setNewUser({ ...copy, Password: "" });
+    setFormMode("edit");
+    setFormOpen(true);
+  };
+
+  /* ── Computed ── */
+  const departmentOptions = useMemo(() => ["all", ...Array.from(new Set(accounts.map(a => a.Department).filter(Boolean)))], [accounts]);
+  const companyOptions    = useMemo(() => ["all", ...Array.from(new Set(accounts.map(a => a.Company).filter(Boolean)))], [accounts]);
+  const statusOptions     = useMemo(() => ["all", ...Array.from(new Set(accounts.map(a => a.Status).filter(Boolean)))], [accounts]);
+  const salesRoleOptions  = useMemo(() => ["all", ...Array.from(new Set(accounts.filter(a => a.Department === "Sales").map(a => a.Role).filter(Boolean)))], [accounts]);
+
+  const filtered = useMemo(() => {
+    return [...accounts
+      .filter(a => [a.Firstname,a.Lastname,a.Email,a.Department,a.Company,a.Position,a.ReferenceID].some(f => f?.toLowerCase().includes(search.toLowerCase())))
+      .filter(a => filterDepartment === "all" || a.Department === filterDepartment)
+      .filter(a => filterCompany === "all" || a.Company === filterCompany)
+      .filter(a => filterStatus === "all" || (a.Status||"").toLowerCase() === filterStatus.toLowerCase())
+      .filter(a => filterRole === "all" || filterDepartment !== "Sales" || a.Role === filterRole)
+    ].sort((a, b) => {
+      const va = (a[sortKey] || "").toLowerCase();
+      const vb = (b[sortKey] || "").toLowerCase();
+      return va < vb ? (sortAsc ? -1 : 1) : va > vb ? (sortAsc ? 1 : -1) : 0;
     });
+  }, [accounts, search, filterDepartment, filterCompany, filterStatus, filterRole, sortKey, sortAsc]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const current = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+  const stats = useMemo(() => ({
+    total:      accounts.length,
+    active:     accounts.filter(a => (a.Status||"").toLowerCase() === "active").length,
+    locked:     accounts.filter(a => (a.Status||"").toLowerCase() === "locked").length,
+    terminated: accounts.filter(a => ["terminated","resigned"].includes((a.Status||"").toLowerCase())).length,
+    departments: new Set(accounts.map(a => a.Department).filter(Boolean)).size,
+  }), [accounts]);
+
+  const handleSort = (key: SortKey) => { if (sortKey === key) setSortAsc(!sortAsc); else { setSortKey(key); setSortAsc(true); } };
+  const toggleSelectAll = () => { if (selectedIds.size === current.length) setSelectedIds(new Set()); else setSelectedIds(new Set(current.map(u => u._id))); };
+  const toggleSelect = (id: string) => { setSelectedIds(prev => { const c = new Set(prev); c.has(id) ? c.delete(id) : c.add(id); return c; }); };
+
+  const hasFilters = filterDepartment !== "all" || filterCompany !== "all" || filterRole !== "all" || filterStatus !== "all";
+
+  const SortHead = ({ col, label }: { col: SortKey; label: string }) => (
+    <TableHead onClick={() => handleSort(col)}
+      className="text-[10px] font-mono font-bold uppercase tracking-widest text-orange-400/60 cursor-pointer select-none hover:text-orange-400 transition-colors whitespace-nowrap">
+      <div className="flex items-center gap-1">
+        {label}
+        <ArrowUpDown size={10} className={sortKey === col ? "text-orange-400" : "text-slate-700"} />
+      </div>
+    </TableHead>
+  );
+
+  /* ─── Color tokens ───────────────────────────────────────────── */
+  const C = {
+    bg:     "#080d12",
+    panel:  "#0d1117",
+    border: "#1a2535",
+    muted:  "#253040",
+    dim:    "#4a6070",
+    text:   "#c8d8e8",
+    accent: "#e8630a",
+    font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
   };
 
-  const isEditingLockedUser = formMode === "edit" && ((newUser.Status || "").trim().toLowerCase() === "locked" || (newUser.LoginAttempts ?? 0) >= 5);
+  /* ─── Render ─────────────────────────────────────────────────── */
 
   return (
     <UserProvider>
@@ -524,442 +768,458 @@ export default function AccountPage() {
           <TooltipProvider delayDuration={0}>
             <SidebarProvider>
               <AppSidebar />
-              <SidebarInset>
-                <div className="min-h-screen w-full bg-[#050a14] relative overflow-hidden">
-                  <div className="absolute inset-0 h-full w-full">
-                    <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "linear-gradient(rgba(6,182,212,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,0.5) 1px, transparent 1px)", backgroundSize: "50px 50px" }} />
+              <SidebarInset className="flex flex-col h-svh overflow-hidden"
+                style={{ backgroundColor: C.bg, fontFamily: C.font, color: C.text }}>
+
+                {/* Dot-grid texture */}
+                <div className="fixed inset-0 pointer-events-none" style={{
+                  backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+                  backgroundSize: "24px 24px", opacity: 0.15, zIndex: 0,
+                }} />
+
+                {/* ── Header ── */}
+                <header className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b"
+                  style={{ backgroundColor: C.bg, borderColor: C.border }}>
+                  <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: C.dim }} />
+                  <div className="w-px h-4" style={{ backgroundColor: C.border }} />
+                  <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}
+                    className="hidden sm:flex h-7 px-2 text-[10px] uppercase tracking-widest rounded-none hover:bg-transparent"
+                    style={{ color: C.dim }}>Home</Button>
+                  <div className="w-px h-4 hidden sm:block" style={{ backgroundColor: C.border }} />
+                  <Breadcrumb>
+                    <BreadcrumbList>
+                      <BreadcrumbItem>
+                        <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>Admin</BreadcrumbLink>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
+                      <BreadcrumbItem>
+                        <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: C.accent }}>User Accounts</BreadcrumbPage>
+                      </BreadcrumbItem>
+                    </BreadcrumbList>
+                  </Breadcrumb>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    {isFetching && <Loader2 className="size-3 animate-spin" style={{ color: C.accent }} />}
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Live</span>
                   </div>
-                  <div className="relative z-10 w-full">
-                    <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
-                      <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
-                      <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-                      <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-                      <div className="flex items-center gap-2 px-4 relative z-10">
-                      <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
-                      <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")} className="text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 text-xs font-mono hidden sm:flex">Home</Button>
-                      <Separator orientation="vertical" className="h-4 bg-orange-500/20 hidden sm:block" />
-                      <Breadcrumb className="hidden sm:flex">
-                        <BreadcrumbList>
-                          <BreadcrumbItem><BreadcrumbLink href="#" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Admin</BreadcrumbLink></BreadcrumbItem>
-                          <BreadcrumbSeparator className="text-slate-700" />
-                          <BreadcrumbItem><BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">User Accounts</BreadcrumbPage></BreadcrumbItem>
-                        </BreadcrumbList>
-                      </Breadcrumb>
-                      </div>
-                    </header>
-                    <div className="px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30"><Fingerprint className="h-6 w-6 text-cyan-400" /></div>
-                        <div>
-                          <h1 className="text-2xl font-bold text-white tracking-wider">IDENTITY MANAGEMENT</h1>
-                          <p className="text-sm text-cyan-300/60">Manage user profiles and access credentials</p>
-                        </div>
-                        <div className="ml-auto flex items-center gap-2">
-                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/50 border border-cyan-500/20">
-                            <Activity className="h-4 w-4 text-emerald-400" />
-                            <span className="text-xs text-cyan-300">{accounts.length} Profiles</span>
-                          </div>
-                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/50 border border-cyan-500/20">
-                            <Wifi className="h-4 w-4 text-cyan-400 animate-pulse" />
-                            <span className="text-xs text-cyan-300">System Online</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 px-4 pb-8 items-start">
-                      <div className="lg:col-span-4 sticky top-6 z-10">
-                        <SciFiCard className="max-h-[calc(100vh-10rem)] overflow-y-auto">
-                          <CardHeader className="border-b border-cyan-500/20">
-                            <div className="flex items-center justify-between gap-3">
-                              <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-cyan-100">
-                                {formMode === "edit" ? <><Fingerprint className="w-4 h-4 text-cyan-400" /> Edit Profile</> : <><UserPlus className="w-4 h-4 text-cyan-400" /> New Identity</>}
-                              </CardTitle>
-                              {(formMode === "edit" || newUser.Firstname || newUser.Email || newUser.Role) && (
-                                <SciFiButton variant="ghost" size="sm" onClick={resetForm} disabled={isFormLoading} className="h-7"><XIcon className="mr-1 h-3 w-3" /> {formMode === "edit" ? "Cancel" : "Reset"}</SciFiButton>
-                              )}
-                            </div>
-                            {formMode === "edit" && newUser.Firstname && (
-                              <p className="text-[10px] text-cyan-300/60 mt-1">Target: <span className="font-semibold text-cyan-100">{newUser.Firstname} {newUser.Lastname}</span></p>
-                            )}
-                          </CardHeader>
-                          <CardContent className="pt-5">
-                            <form onSubmit={handleCreateAccount} className="space-y-4">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                  <label className="text-[10px] font-bold uppercase text-cyan-400/70">Firstname <span className="text-red-400">*</span></label>
-                                  <SciFiInput placeholder="Firstname" className="h-10" value={newUser.Firstname || ""} disabled={isFormLoading} onChange={(e) => { const Firstname = e.target.value; setNewUser((prev) => ({ ...prev, Firstname, ReferenceID: generateReferenceID(Firstname, prev.Lastname || "", prev.Location || "") })); }} />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <label className="text-[10px] font-bold uppercase text-cyan-400/70">Lastname <span className="text-red-400">*</span></label>
-                                  <SciFiInput placeholder="Lastname" className="h-10" value={newUser.Lastname || ""} disabled={isFormLoading} onChange={(e) => { const Lastname = e.target.value; setNewUser((prev) => ({ ...prev, Lastname, ReferenceID: generateReferenceID(prev.Firstname || "", Lastname, prev.Location || "") })); }} />
-                                </div>
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Location <span className="text-red-400">*</span></label>
-                                <select className={`w-full ${THEME.inputBg} ${THEME.border} ${THEME.text} px-3 py-2 text-xs h-10 rounded-none focus:border-cyan-400 focus:outline-none`} value={newUser.Location || ""} disabled={isFormLoading} onChange={(e) => { const Location = e.target.value; setNewUser((prev) => ({ ...prev, Location, ReferenceID: generateReferenceID(prev.Firstname || "", prev.Lastname || "", Location) })); }}>
-                                  <option value="" className="bg-slate-900">Select Location</option>
-                                  {["NCR", "CDO", "Davao", "Cebu", "North-Luzon", "Philippines"].map((loc) => <option key={loc} value={loc} className="bg-slate-900">{loc}</option>)}
-                                </select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Reference ID</label>
-                                <div className="relative">
-                                  <SciFiInput value={newUser.ReferenceID || ""} readOnly className="h-10 bg-cyan-950/30 font-mono text-cyan-300" />
-                                  <Fingerprint className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-cyan-500/50" />
-                                </div>
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Organization</label>
-                                <Select value={newUser.Company || ""} onValueChange={handleCompanyChange} disabled={isFormLoading}>
-                                  <SelectTrigger className={`${THEME.inputBg} ${THEME.border} ${THEME.text} rounded-none h-10`}><SelectValue placeholder="Select Company" /></SelectTrigger>
-                                  <SelectContent className={`${THEME.cardBg} ${THEME.border}`}>
-                                    <SelectItem value="Ecoshift Corporation" className="text-cyan-100">Ecoshift Corporation</SelectItem>
-                                    <SelectItem value="Disruptive Solutions Inc" className="text-cyan-100">Disruptive Solutions Inc</SelectItem>
-                                    <SelectItem value="Buildchem Solutions" className="text-cyan-100">Buildchem Solutions</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Email <span className="text-red-400">*</span></label>
-                                <SciFiInput type="email" placeholder="Auto-generated from company" className="h-10" value={newUser.Email || ""} disabled={isFormLoading} onChange={(e) => setNewUser((prev) => ({ ...prev, Email: e.target.value }))} />
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Department</label>
-                                <Select value={newUser.Department || ""} onValueChange={(v) => setNewUser((prev) => ({ ...prev, Department: v, Role: "" }))} disabled={isFormLoading}>
-                                  <SelectTrigger className={`${THEME.inputBg} ${THEME.border} ${THEME.text} rounded-none h-10`}><SelectValue placeholder="Select Department" /></SelectTrigger>
-                                  <SelectContent className={`${THEME.cardBg} ${THEME.border}`}>
-                                    {["Sales", "IT", "CSR", "HR", "Ecommerce", "Marketing", "Engineering", "Admin", "Warehouse Operations", "Accounting", "Owner", "Procurement"].map((d) => <SelectItem key={d} value={d} className="text-cyan-100">{d}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              {newUser.Department === "Sales" && (
-                                <>
-                                  <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold uppercase text-cyan-400/70">Manager</label>
-                                    <Select value={newUser.Manager || ""} onValueChange={(v) => { const selectedManager = formManagers.find((m) => m.value === v); setNewUser((prev) => ({ ...prev, Manager: v, ManagerName: selectedManager?.label || "", TSM: "", TSMName: "" })); }} disabled={isFormLoading}>
-                                      <SelectTrigger className={`${THEME.inputBg} ${THEME.border} ${THEME.text} rounded-none h-10`}><SelectValue placeholder="Select Manager" /></SelectTrigger>
-                                      <SelectContent className={`${THEME.cardBg} ${THEME.border}`}>{formManagers.map((m) => <SelectItem key={m.value} value={m.value} className="text-cyan-100">{m.label}</SelectItem>)}</SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold uppercase text-cyan-400/70">TSM</label>
-                                    <Select value={newUser.TSM || ""} onValueChange={(v) => { const selectedTSM = formTsms.find((t) => t.value === v); const tsmUser = accounts.find((a) => a.ReferenceID === v && a.Role === "Territory Sales Manager"); const managerDetails = tsmUser?.Manager ? formManagers.find((m) => m.value === tsmUser.Manager) : null; setNewUser((prev) => ({ ...prev, TSM: v, TSMName: selectedTSM?.label || "", ...(tsmUser?.Manager ? { Manager: tsmUser.Manager, ManagerName: managerDetails?.label || "" } : {}) })); }} disabled={isFormLoading}>
-                                      <SelectTrigger className={`${THEME.inputBg} ${THEME.border} ${THEME.text} rounded-none h-10`}><SelectValue placeholder="Select TSM" /></SelectTrigger>
-                                      <SelectContent className={`${THEME.cardBg} ${THEME.border}`}>{formTsms.map((t) => <SelectItem key={t.value} value={t.value} className="text-cyan-100">{t.label}</SelectItem>)}</SelectContent>
-                                    </Select>
-                                  </div>
-                                </>
-                              )}
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Role</label>
-                                <Select value={newUser.Role || ""} onValueChange={(v) => setNewUser((prev) => ({ ...prev, Role: v }))} disabled={isFormLoading || !newUser.Department}>
-                                  <SelectTrigger className={`${THEME.inputBg} ${THEME.border} ${THEME.text} rounded-none h-10`}><SelectValue placeholder={newUser.Department ? "Select Role" : "Select Department first"} /></SelectTrigger>
-                                  <SelectContent className={`${THEME.cardBg} ${THEME.border}`}>{getRolesForDepartment(newUser.Department || "").map((r) => <SelectItem key={r} value={r} className="text-cyan-100">{r}</SelectItem>)}</SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Position</label>
-                                <SciFiInput placeholder="Position" className="h-10" value={newUser.Position || ""} disabled={isFormLoading} onChange={(e) => setNewUser((prev) => ({ ...prev, Position: e.target.value }))} />
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Status</label>
-                                <select className={`w-full ${THEME.inputBg} ${THEME.border} ${THEME.text} px-3 py-2 text-xs h-10 rounded-none focus:border-cyan-400 focus:outline-none`} value={newUser.Status || "Active"} disabled={isFormLoading} onChange={(e) => setNewUser((prev) => ({ ...prev, Status: e.target.value }))}>
-                                  <option value="Active" className="bg-slate-900">Active</option>
-                                  <option value="Inactive" className="bg-slate-900">Inactive</option>
-                                  <option value="Suspended" className="bg-slate-900">Suspended</option>
-                                  <option value="Terminated" className="bg-slate-900">Terminated</option>
-                                  <option value="Resigned" className="bg-slate-900">Resigned</option>
-                                  <option value="Locked" className="bg-slate-900">Locked</option>
-                                </select>
-                                {(newUser.Status || "").toLowerCase() === "locked" && (
-                                  <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Account locked - reset required</p>
-                                )}
-                              </div>
-                              {isEditingLockedUser && (
-                                <div className="rounded-none border border-amber-500/30 bg-amber-950/20 p-3 space-y-2">
-                                  <div className="flex items-center gap-2">
-                                    <ShieldOff className="h-4 w-4 text-amber-400 shrink-0" />
-                                    <span className="text-[11px] font-semibold text-amber-300">Security Lock Active</span>
-                                    {(newUser.LoginAttempts ?? 0) > 0 && <span className="ml-auto text-[10px] text-amber-400">{newUser.LoginAttempts}/5 attempts</span>}
-                                  </div>
-                                  <p className="text-[10px] text-amber-400/70">Reset credentials to unlock account</p>
-                                  <SciFiButton type="button" variant="outline" disabled={isResetting || isFormLoading} onClick={handleResetClientAccess} className="w-full h-9 text-[10px] border-amber-500/30 text-amber-400 hover:bg-amber-500/20">
-                                    {isResetting ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Resetting...</> : <><RotateCcw className="h-3.5 w-3.5" /> Reset Access</>}
-                                  </SciFiButton>
-                                </div>
-                              )}
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Password <span className="text-red-400">*</span></label>
-                                <div className="flex gap-2">
-                                  <div className="relative flex-1">
-                                    <SciFiInput type={showPassword ? "text" : "password"} placeholder="Min. 8 characters" className="h-10 pr-10" value={newUser.Password || ""} disabled={isFormLoading} onChange={(e) => setNewUser((prev) => ({ ...prev, Password: e.target.value }))} />
-                                    <button type="button" onClick={() => setShowPassword((p) => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-cyan-400/50 hover:text-cyan-300" disabled={isFormLoading}>
-                                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                                    </button>
-                                  </div>
-                                  <SciFiButton type="button" variant="outline" className="h-10 px-3 shrink-0" disabled={isFormLoading} onClick={() => { const generated = Math.random().toString(36).slice(-10); setNewUser((prev) => ({ ...prev, Password: generated })); toast.info("New password generated"); }}><Zap className="h-4 w-4" /></SciFiButton>
-                                </div>
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase text-cyan-400/70">Access Permissions</label>
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                  {DIRECTORIES.map((dir) => (
-                                    <div key={dir.key} className={`rounded-none border ${THEME.border} p-3 ${hasDir(dir.key) ? "bg-cyan-500/5 border-cyan-400/40" : "bg-slate-900/30"}`}>
-                                      <label className="flex items-start gap-3 cursor-pointer">
-                                        <input type="checkbox" checked={!!hasDir(dir.key)} onChange={(e) => toggleDir(dir.key, e.target.checked)} className="mt-1 h-4 w-4 rounded border-cyan-500/50 bg-slate-900 text-cyan-400 focus:ring-cyan-400/50" />
-                                        <div className="flex flex-col"><span className="text-xs font-medium text-cyan-100">{dir.label}</span><span className="text-[10px] text-cyan-400/50">{dir.description}</span></div>
-                                      </label>
-                                      {dir.submodules.length > 0 && hasDir(dir.key) && (
-                                        <div className="mt-3 ml-7 space-y-2 border-l border-cyan-500/20 pl-4">
-                                          {dir.submodules.map((sub) => {
-                                            const key = dir.key + ":" + sub;
-                                            return (
-                                              <label key={key} className="flex items-center gap-2 text-[10px] cursor-pointer text-cyan-300/70 hover:text-cyan-200">
-                                                <input type="checkbox" checked={!!hasDir(key)} onChange={(e) => toggleDir(key, e.target.checked)} className="h-3.5 w-3.5 rounded border-cyan-500/50 bg-slate-900 text-cyan-400" />
-                                                {sub}
-                                              </label>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                              <SciFiButton type="submit" disabled={isFormLoading} className="w-full h-11">
-                                {isFormLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> {formMode === "edit" ? "Saving..." : "Creating..."}</> : formMode === "edit" ? <><Save className="h-4 w-4" /> Save Profile</> : <><UserPlus className="h-4 w-4" /> Create Identity</>}
-                              </SciFiButton>
-                            </form>
-                          </CardContent>
-                        </SciFiCard>
-                      </div>
-                      <div className="lg:col-span-8 space-y-4">
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                          <div className="relative w-full sm:max-w-xs">
-                            <Search className="absolute left-2 top-2.5 size-4 text-cyan-400/50" />
-                            <SciFiInput placeholder="Search profiles..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="pl-8 w-full" />
-                            {isFetching && <Loader2 className="absolute right-2 top-2.5 size-4 animate-spin text-cyan-400" />}
-                          </div>
-                          <div className="flex flex-wrap gap-2 items-center">
-                            <SciFiButton variant="outline" size="sm" className="h-10" onClick={() => setShowConvertDialog(true)}><Repeat2 className="w-4 h-4 mr-1" /> Convert</SciFiButton>
-                            <ConvertEmailDialog open={showConvertDialog} onOpenChangeAction={setShowConvertDialog} accounts={accounts} setAccountsAction={setAccounts} />
-                            <SciFiButton variant="outline" size="sm" className="h-10" disabled={filtered.length === 0 || isDownloading} onClick={handleDownload}><Download className="w-4 h-4 mr-1" /> Export</SciFiButton>
-                            {selectedAreSales && <SciFiButton variant="outline" size="sm" className="h-10" disabled={selectedIds.size === 0} onClick={() => setShowTransferDialog(true)}><ArrowRight className="w-4 h-4 mr-1" /> Transfer</SciFiButton>}
-                            {selectedIds.size > 0 && <SciFiButton variant="destructive" size="sm" className="h-10" onClick={() => setShowDeleteDialog(true)}><Trash2 className="w-4 h-4 mr-1" /> Delete {selectedIds.size}</SciFiButton>}
-                            <ButtonGroup>
-                              <SciFiButton variant={activeView === "grid" ? "default" : "outline"} size="sm" className="h-10" onClick={() => setActiveView("grid")}><LayoutGrid className="w-4 h-4" /></SciFiButton>
-                              <SciFiButton variant={activeView === "list" ? "default" : "outline"} size="sm" className="h-10" onClick={() => setActiveView("list")}><Server className="w-4 h-4" /></SciFiButton>
-                            </ButtonGroup>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <SciFiButton variant="outline" size="sm" className={`h-10 gap-2 ${filterDepartment !== "all" || filterCompany !== "all" || filterRole !== "all" || sortKey !== "Firstname" || !sortAsc ? "border-cyan-400 text-cyan-300 bg-cyan-500/10" : ""}`}>
-                                  <SlidersHorizontal className="w-4 h-4" /> Filters
-                                  {(filterDepartment !== "all" || filterCompany !== "all" || filterRole !== "all" || sortKey !== "Firstname" || !sortAsc) && <span className="ml-1 w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />}
-                                </SciFiButton>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className={`w-56 p-0 flex flex-col max-h-[420px] ${THEME.cardBg} ${THEME.border}`}>
-                                <div className="sticky top-0 z-10 bg-slate-900 border-b border-cyan-500/20 px-3 py-2 flex items-center justify-between">
-                                  <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400">Filters</span>
-                                  <button type="button" className="text-[10px] font-semibold text-cyan-400 hover:text-cyan-300 transition-colors" onClick={() => { setFilterDepartment("all"); setFilterCompany("all"); setFilterRole("all"); setSortKey("Firstname"); setSortAsc(true); setRowsPerPage(10); setPage(1); }}>Reset all</button>
-                                </div>
-                                <div className="overflow-y-auto flex-1">
-                                  <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70 pt-2">Sort By</DropdownMenuLabel>
-                                  {[{ key: "Firstname", asc: true, label: "Name A → Z" }, { key: "Firstname", asc: false, label: "Name Z → A" }, { key: "Department", asc: true, label: "Department A → Z" }, { key: "Company", asc: true, label: "Company A → Z" }, { key: "Position", asc: true, label: "Position A → Z" }, { key: "Email", asc: true, label: "Email A → Z" }].map((opt) => (
-                                    <DropdownMenuCheckboxItem key={opt.key + "-" + opt.asc} checked={sortKey === opt.key && sortAsc === opt.asc} onCheckedChange={() => { setSortKey(opt.key as SortKey); setSortAsc(opt.asc); setPage(1); }} className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-200">{opt.label}</DropdownMenuCheckboxItem>
-                                  ))}
-                                  <DropdownMenuSeparator className="bg-cyan-500/20" />
-                                  <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70">Department</DropdownMenuLabel>
-                                  {departmentOptions.map((d) => <DropdownMenuCheckboxItem key={d} checked={filterDepartment === d} onCheckedChange={() => { setFilterDepartment(d); setFilterRole("all"); setPage(1); }} className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-200">{d === "all" ? "All Departments" : d}</DropdownMenuCheckboxItem>)}
-                                  {filterDepartment === "Sales" && (<><DropdownMenuSeparator className="bg-cyan-500/20" /><DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70">Sales Role</DropdownMenuLabel>{salesRoleOptions.map((r) => <DropdownMenuCheckboxItem key={r} checked={filterRole === r} onCheckedChange={() => { setFilterRole(r); setPage(1); }} className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-200">{r === "all" ? "All Roles" : r}</DropdownMenuCheckboxItem>)}</>)}
-                                  <DropdownMenuSeparator className="bg-cyan-500/20" />
-                                  <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70">Company</DropdownMenuLabel>
-                                  {companyOptions.map((c) => <DropdownMenuCheckboxItem key={c} checked={filterCompany === c} onCheckedChange={() => { setFilterCompany(c); setPage(1); }} className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-200">{c === "all" ? "All Companies" : c}</DropdownMenuCheckboxItem>)}
-                                  <DropdownMenuSeparator className="bg-cyan-500/20" />
-                                  <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70">Rows per page</DropdownMenuLabel>
-                                  {[10, 20, 50, 100].map((n) => <DropdownMenuCheckboxItem key={n} checked={rowsPerPage === n} onCheckedChange={() => { setRowsPerPage(n); setPage(1); }} className="text-cyan-100 focus:bg-cyan-500/20 focus:text-cyan-200">{n} rows</DropdownMenuCheckboxItem>)}
-                                </div>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <TransferDialog open={showTransferDialog} onOpenChangeAction={setShowTransferDialog} selectedUsers={accounts.filter((a) => selectedIds.has(a._id))} setSelectedIdsAction={setSelectedIds} setAccountsAction={setAccounts} tsms={tsms} managers={managers} />
-                          </div>
-                        </div>
-                        <SciFiCard className="overflow-auto">
-                          {isFetching && (
-                            <div className="py-10 text-center flex flex-col items-center gap-2 text-cyan-300/40">
-                              <Loader2 className="size-8 animate-spin" />
-                              <span className="text-xs tracking-wider">SYNCHRONIZING DATA...</span>
-                            </div>
-                          )}
-                          {!isFetching && current.length > 0 && activeView === "grid" && (
-                            <Table className="text-sm">
-                              <TableHeader>
-                                <TableRow className="border-b border-cyan-500/20 hover:bg-transparent">
-                                  <TableHead className="w-10 text-center">
-                                    <Checkbox checked={selectedIds.size === current.length && current.length > 0} onCheckedChange={toggleSelectAll} className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500" />
-                                  </TableHead>
-                                  <TableHead className="text-cyan-300">Identity</TableHead>
-                                  <TableHead className="text-cyan-300 cursor-pointer select-none" onClick={() => handleSort("Firstname")}>
-                                    <div className="flex items-center gap-1">
-                                      Fullname
-                                      <ArrowUpDown className={sortKey === "Firstname" ? "size-4 text-cyan-400" : "size-4 text-cyan-500/50"} />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead className="text-cyan-300 cursor-pointer select-none" onClick={() => handleSort("Email")}>
-                                    <div className="flex items-center gap-1">
-                                      Email
-                                      <ArrowUpDown className={sortKey === "Email" ? "size-4 text-cyan-400" : "size-4 text-cyan-500/50"} />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead className="text-cyan-300 cursor-pointer select-none" onClick={() => handleSort("Department")}>
-                                    <div className="flex items-center gap-1">
-                                      Dept
-                                      <ArrowUpDown className={sortKey === "Department" ? "size-4 text-cyan-400" : "size-4 text-cyan-500/50"} />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead className="text-cyan-300 cursor-pointer select-none" onClick={() => handleSort("Company")}>
-                                    <div className="flex items-center gap-1">
-                                      Org
-                                      <ArrowUpDown className={sortKey === "Company" ? "size-4 text-cyan-400" : "size-4 text-cyan-500/50"} />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead className="text-cyan-300">Status</TableHead>
-                                  <TableHead className="text-cyan-300">Actions</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {current.map((u) => (
-                                  <TableRow key={u._id} className="cursor-pointer border-b border-cyan-500/10 hover:bg-cyan-500/5 transition-colors" onClick={() => setViewingUser(u)}>
-                                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                                      <Checkbox checked={selectedIds.has(u._id)} onCheckedChange={() => toggleSelect(u._id)} className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500" />
-                                    </TableCell>
-                                    <TableCell onClick={(e) => e.stopPropagation()}>
-                                      {u.profilePicture ? (
-                                        <img src={u.profilePicture} alt="profile" className="w-10 h-10 rounded-lg object-cover border border-cyan-500/30" />
-                                      ) : (
-                                        <div className="w-10 h-10 rounded-lg bg-slate-800 border border-cyan-500/20 flex items-center justify-center">
-                                          <Fingerprint className="w-5 h-5 text-cyan-500/50" />
-                                        </div>
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="capitalize text-cyan-100">{u.Firstname}, {u.Lastname}</TableCell>
-                                    <TableCell className="text-cyan-300/70">
-                                      {u.Email}
-                                      <br />
-                                      <span className="text-[10px] font-mono text-cyan-400/50">{u.ReferenceID}</span>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge className={getBadgeColor(["Guest", "Senior Fullstack Developer", "IT - OJT"].includes(u.Position) ? "Dev-Team" : u.Department) + " text-xs"}>
-                                        {["Guest", "Senior Fullstack Developer", "IT - OJT"].includes(u.Position) ? "Dev Team" : u.Department || "—"}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-cyan-300/70">
-                                      {u.Company || "—"}
-                                      <br />
-                                      <span className="text-[10px] text-cyan-400/50">{u.Location || "—"}</span>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge className={(STATUS_COLORS[(u.Status || "").toLowerCase()] || "bg-slate-500/20 text-slate-400") + " text-xs border"}>
-                                        {u.Status}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell onClick={(e) => e.stopPropagation()}>
-                                      <SciFiButton variant="outline" size="sm" onClick={() => handleEdit(u)}>
-                                        <Pencil className="w-3 h-3" />
-                                      </SciFiButton>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          )}
-                          {!isFetching && current.length > 0 && activeView === "list" && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
-                              {current.map((u) => (
-                                <div key={u._id} className={"p-4 rounded-lg border " + THEME.border + " " + THEME.cardBg + " hover:border-cyan-400/50 transition-all cursor-pointer group"} onClick={() => setViewingUser(u)}>
-                                  <div className="flex items-start gap-3">
-                                    {u.profilePicture ? (
-                                      <img src={u.profilePicture} alt="profile" className="w-12 h-12 rounded-lg object-cover border border-cyan-500/30" />
-                                    ) : (
-                                      <div className="w-12 h-12 rounded-lg bg-slate-800 border border-cyan-500/20 flex items-center justify-center">
-                                        <Fingerprint className="w-6 h-6 text-cyan-500/50" />
-                                      </div>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-medium text-cyan-100 truncate">{u.Firstname} {u.Lastname}</h3>
-                                        <Checkbox checked={selectedIds.has(u._id)} onCheckedChange={() => toggleSelect(u._id)} onClick={(e) => e.stopPropagation()} className="border-cyan-500/50 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500" />
-                                      </div>
-                                      <p className="text-xs text-cyan-400/50 truncate font-mono">{u.ReferenceID}</p>
-                                      <p className="text-xs text-cyan-300/60 truncate">{u.Email}</p>
-                                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                        <Badge className={getBadgeColor(u.Department) + " text-[10px]"}>{u.Department}</Badge>
-                                        <Badge className={(STATUS_COLORS[(u.Status || "").toLowerCase()] || "") + " text-[10px]"}>{u.Status}</Badge>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {!isFetching && current.length === 0 && (
-                            <div className="py-10 text-center text-cyan-300/40">
-                              <Database className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                              <p className="text-sm">No user profiles found</p>
-                            </div>
-                          )}
-                        </SciFiCard>
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                          <p className="text-xs text-cyan-300/50">Showing {filtered.length === 0 ? 0 : (page - 1) * rowsPerPage + 1}–{Math.min(page * rowsPerPage, filtered.length)} of {filtered.length} profiles</p>
-                          <Pagination page={page} totalPages={totalPages} onPageChangeAction={setPage} />
-                        </div>
-                      </div>
-                    </div>
+                </header>
+
+                {/* ── Page title bar ── */}
+                <div className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b"
+                  style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                  <div className="flex h-8 w-8 items-center justify-center border"
+                    style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+                    <Fingerprint className="size-4" style={{ color: C.accent }} />
+                  </div>
+                  <div>
+                    <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>Identity Management</h1>
+                    <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>Users · Roles · Access Control</p>
+                  </div>
+                  <div className="ml-auto hidden md:flex items-center gap-3 text-[10px] uppercase tracking-widest">
+                    <span style={{ color: C.muted }}>{accounts.length} loaded</span>
+                    <div className="w-px h-3" style={{ backgroundColor: C.border }} />
+                    <span style={{ color: C.dim }}>{filtered.length} matching</span>
                   </div>
                 </div>
-              </SidebarInset>
-            </SidebarProvider>
-            {viewingUser && (
-              <Dialog open={!!viewingUser} onOpenChange={() => setViewingUser(null)}>
-                <DialogContent className={`sm:max-w-2xl max-w-[95vw] max-h-[90vh] overflow-y-auto ${THEME.cardBg} ${THEME.border} border`}>
-                  <DialogHeader className="pb-0">
-                    <div className="flex items-start gap-4">
-                      {viewingUser.profilePicture ? <img src={viewingUser.profilePicture} alt="avatar" className="w-16 h-16 rounded-lg object-cover border border-cyan-500/30" /> : <div className="w-16 h-16 rounded-lg bg-slate-800 border border-cyan-500/20 flex items-center justify-center"><Fingerprint className="w-8 h-8 text-cyan-500/50" /></div>}
-                      <div className="flex-1 min-w-0">
-                        <DialogTitle className="text-lg text-cyan-100">{viewingUser.Firstname} {viewingUser.Lastname}</DialogTitle>
-                        <p className="text-xs text-cyan-300/60 mt-0.5">{viewingUser.Email}</p>
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          <Badge className={`${STATUS_COLORS[(viewingUser.Status || "").toLowerCase()] || ""} text-[10px]`}>{viewingUser.Status}</Badge>
-                          {viewingUser.Department && <Badge className={`${getBadgeColor(viewingUser.Department)} text-[10px]`}>{viewingUser.Department}</Badge>}
-                        </div>
-                      </div>
+
+                {/* ── Stats bar ── */}
+                <div className="relative z-10 shrink-0 grid grid-cols-5 border-b" style={{ borderColor: C.border }}>
+                  {[
+                    { label: "Total",       value: stats.total,       color: C.text,      icon: Users },
+                    { label: "Active",      value: stats.active,      color: "#34d399",   icon: UserCheck },
+                    { label: "Locked",      value: stats.locked,      color: "#f87171",   icon: Lock },
+                    { label: "Terminated",  value: stats.terminated,  color: "#ef4444",   icon: AlertTriangle },
+                    { label: "Departments", value: stats.departments, color: "#60a5fa",   icon: Building2 },
+                  ].map(({ label, value, color, icon: Icon }, i) => (
+                    <div key={i} className="flex flex-col items-center justify-center py-3 border-r last:border-r-0"
+                      style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                      <span className="text-lg font-bold leading-none" style={{ color }}>{value}</span>
+                      <span className="text-[9px] uppercase tracking-widest mt-1" style={{ color: C.muted }}>{label}</span>
                     </div>
-                  </DialogHeader>
-                  <div className="space-y-5 pt-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {[{ label: "Reference ID", value: viewingUser.ReferenceID }, { label: "Company", value: viewingUser.Company }, { label: "Location", value: viewingUser.Location }, { label: "Department", value: viewingUser.Department }, { label: "Position", value: viewingUser.Position }, { label: "Role", value: viewingUser.Role }].map(({ label, value }) => (
-                        <div key={label} className="p-3 rounded-lg bg-slate-950/50 border border-cyan-500/10">
-                          <p className="text-[10px] text-cyan-400/50 uppercase tracking-wider">{label}</p>
-                          <p className="text-sm font-medium text-cyan-100 mt-0.5">{value || "—"}</p>
-                        </div>
-                      ))}
-                    </div>
-                    {viewingUser.Directories && viewingUser.Directories.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/50 mb-2">Access Permissions</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {viewingUser.Directories.map((dir, i) => <span key={i} className="text-[10px] bg-cyan-500/10 text-cyan-300 px-2 py-1 rounded border border-cyan-500/20">{dir}</span>)}
-                        </div>
-                      </div>
+                  ))}
+                </div>
+
+                {/* ── Toolbar ── */}
+                <div className="relative z-10 shrink-0 flex items-center gap-2 px-4 py-2 border-b flex-wrap"
+                  style={{ borderColor: C.border, backgroundColor: C.bg }}>
+
+                  {/* Search */}
+                  <div className="relative flex-1 min-w-[180px] max-w-xs">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3" style={{ color: C.dim }} />
+                    <input placeholder="Search name, email, ref ID…" value={search}
+                      onChange={e => { setSearch(e.target.value); setPage(1); }}
+                      className="w-full pl-8 pr-3 h-8 text-[11px] focus:outline-none"
+                      style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                      onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                      onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                    />
+                    {search && (
+                      <button onClick={() => { setSearch(""); setPage(1); }} className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <XIcon className="size-3" style={{ color: C.dim }} />
+                      </button>
                     )}
                   </div>
-                  <DialogFooter className="mt-4 gap-2">
-                    <SciFiButton variant="outline" onClick={() => setViewingUser(null)}>Close</SciFiButton>
-                    <SciFiButton onClick={() => { setViewingUser(null); handleEdit(viewingUser); }}><Pencil className="w-3 h-3 mr-1.5" /> Edit Profile</SciFiButton>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-            <DeleteDialog open={showDeleteDialog} count={selectedIds.size} onCancelAction={() => setShowDeleteDialog(false)} onConfirmAction={confirmDelete} />
+
+                  {/* Dept filter */}
+                  <select value={filterDepartment} onChange={e => { setFilterDepartment(e.target.value); setFilterRole("all"); setPage(1); }}
+                    className="h-8 text-[11px] px-2 focus:outline-none"
+                    style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+                    {departmentOptions.map(d => <option key={d} value={d}>{d === "all" ? "All Depts" : d}</option>)}
+                  </select>
+
+                  {/* Status filter */}
+                  <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+                    className="h-8 text-[11px] px-2 focus:outline-none"
+                    style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+                    {statusOptions.map(s => <option key={s} value={s}>{s === "all" ? "All Status" : s}</option>)}
+                  </select>
+
+                  {/* Sales role filter */}
+                  {filterDepartment === "Sales" && (
+                    <select value={filterRole} onChange={e => { setFilterRole(e.target.value); setPage(1); }}
+                      className="h-8 text-[11px] px-2 focus:outline-none"
+                      style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+                      {salesRoleOptions.map(r => <option key={r} value={r}>{r === "all" ? "All Roles" : r}</option>)}
+                    </select>
+                  )}
+
+                  {hasFilters && (
+                    <button onClick={() => { setFilterDepartment("all"); setFilterCompany("all"); setFilterRole("all"); setFilterStatus("all"); setPage(1); }}
+                      className="flex items-center gap-1 text-[10px]" style={{ color: C.dim }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#f87171")}
+                      onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+                      <XIcon className="size-3" /> Clear
+                    </button>
+                  )}
+
+                  <div className="flex-1" />
+
+                  {/* Selection actions */}
+                  {selectedIds.size > 0 && (
+                    <>
+                      <span className="text-[10px] px-2 py-1 border" style={{ borderColor: C.border, color: C.accent, fontFamily: C.font }}>
+                        {selectedIds.size} selected
+                      </span>
+                      {selectedAreSales && (
+                        <button onClick={() => setShowTransferDialog(true)}
+                          className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                          style={{ backgroundColor: "transparent", borderColor: "#38bdf8", color: "#38bdf8" }}
+                          onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(56,189,248,0.1)" }}
+                          onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent" }}>
+                          <ArrowRight className="size-3" /> Transfer
+                        </button>
+                      )}
+                      <button onClick={() => setShowDeleteDialog(true)}
+                        className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                        style={{ backgroundColor: "transparent", borderColor: "#f87171", color: "#f87171" }}
+                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.1)" }}
+                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent" }}>
+                        <Trash2 className="size-3" /> Delete {selectedIds.size}
+                      </button>
+                    </>
+                  )}
+
+                  <button onClick={() => setShowConvertDialog(true)}
+                    className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                    style={{ backgroundColor: "transparent", borderColor: C.border, color: C.dim }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim }}>
+                    <Repeat2 className="size-3" /> Convert
+                  </button>
+
+                  <button onClick={handleDownload} disabled={!filtered.length || isDownloading}
+                    className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-30"
+                    style={{ backgroundColor: "transparent", borderColor: C.border, color: C.dim }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim }}>
+                    {isDownloading ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />} Export
+                  </button>
+
+                  <button onClick={() => { resetForm(); setFormMode("create"); setFormOpen(true); }}
+                    className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                    style={{ backgroundColor: "rgba(232,99,10,0.1)", borderColor: C.accent, color: C.accent }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.2)" }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.1)" }}>
+                    <Plus className="size-3" /> New Identity
+                  </button>
+                </div>
+
+                {/* ── Table ── */}
+                <div className="relative z-10 flex-1 overflow-auto">
+                  {isFetching ? (
+                    <div className="flex items-center justify-center h-full gap-3">
+                      <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
+                      <span className="text-xs uppercase tracking-widest" style={{ color: C.muted }}>Synchronizing…</span>
+                    </div>
+                  ) : current.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <Database className="size-7" style={{ color: C.muted }} />
+                      <p className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>No profiles found</p>
+                      {hasFilters && (
+                        <button onClick={() => { setFilterDepartment("all"); setFilterCompany("all"); setFilterRole("all"); setFilterStatus("all"); }}
+                          className="text-[10px] mt-1" style={{ color: C.dim }}>Clear filters</button>
+                      )}
+                    </div>
+                  ) : (
+                    <table className="w-full border-collapse" style={{ fontSize: "11px", fontFamily: C.font }}>
+                      <thead className="sticky top-0 z-10">
+                        <tr style={{ backgroundColor: C.panel, borderBottom: `1px solid ${C.border}` }}>
+                          <th className="px-3 py-2.5 w-10" style={{ borderRight: `1px solid ${C.border}` }}>
+                            <Checkbox checked={selectedIds.size === current.length && current.length > 0}
+                              onCheckedChange={toggleSelectAll}
+                              className="border-orange-500/30 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-none h-3.5 w-3.5" />
+                          </th>
+                          <th className="px-3 py-2.5 w-10 text-left text-[9px] font-bold uppercase tracking-widest"
+                            style={{ color: C.accent, borderRight: `1px solid ${C.border}` }}>Av</th>
+                          {(["Firstname","Email","Department","Company","Position"] as SortKey[]).map((col, i) => (
+                            <th key={col} onClick={() => handleSort(col)}
+                              className="text-left px-3 py-2.5 whitespace-nowrap font-bold uppercase tracking-widest cursor-pointer select-none"
+                              style={{ color: sortKey === col ? C.accent : `${C.accent}99`, fontSize: "9px", borderRight: `1px solid ${C.border}` }}>
+                              <div className="flex items-center gap-1">
+                                {["Identity","Email","Dept","Org","Position"][i]}
+                                <ArrowUpDown className="size-2.5" style={{ color: sortKey === col ? C.accent : C.muted }} />
+                              </div>
+                            </th>
+                          ))}
+                          <th className="text-left px-3 py-2.5 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
+                            style={{ color: `${C.accent}99`, borderRight: `1px solid ${C.border}` }}>Status</th>
+                          <th className="text-right px-3 py-2.5 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
+                            style={{ color: `${C.accent}99` }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {current.map((u, i) => (
+                          <tr key={u._id}
+                            style={{ backgroundColor: i % 2 === 0 ? C.bg : C.panel, borderBottom: `1px solid ${C.border}`, cursor: "pointer" }}
+                            onClick={() => setViewingUser(u)}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)")}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? C.bg : C.panel)}>
+
+                            <td className="px-3 py-2" style={{ borderRight: `1px solid ${C.border}` }} onClick={e => e.stopPropagation()}>
+                              <Checkbox checked={selectedIds.has(u._id)} onCheckedChange={() => toggleSelect(u._id)}
+                                className="border-orange-500/30 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-none h-3.5 w-3.5" />
+                            </td>
+
+                            <td className="px-3 py-2" style={{ borderRight: `1px solid ${C.border}` }} onClick={e => e.stopPropagation()}>
+                              {u.profilePicture ? (
+                                <img src={u.profilePicture} alt="" className="w-7 h-7 object-cover" style={{ border: `1px solid ${C.border}` }} />
+                              ) : (
+                                <div className="w-7 h-7 flex items-center justify-center text-[10px] font-bold"
+                                  style={{ border: `1px solid ${C.border}`, backgroundColor: "rgba(232,99,10,0.05)", color: `${C.accent}80` }}>
+                                  {(u.Firstname?.[0] || "")}{(u.Lastname?.[0] || "")}
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <p className="font-semibold" style={{ color: C.text }}>{u.Firstname} {u.Lastname}</p>
+                              <p className="text-[10px] mt-0.5" style={{ color: `${C.accent}60` }}>{u.ReferenceID}</p>
+                            </td>
+
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <p className="truncate max-w-[180px]" style={{ color: C.dim }}>{u.Email}</p>
+                            </td>
+
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <DeptBadge dept={u.Department} position={u.Position} />
+                            </td>
+
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <p style={{ color: C.dim }}>{u.Company || "—"}</p>
+                              <p className="text-[10px] mt-0.5" style={{ color: C.muted }}>{u.Location || "—"}</p>
+                            </td>
+
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <p className="truncate max-w-[120px]" style={{ color: C.dim }}>{u.Position || "—"}</p>
+                              <p className="text-[10px] mt-0.5" style={{ color: C.muted }}>{u.Role || "—"}</p>
+                            </td>
+
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <StatusBadge status={u.Status} />
+                              {(u.LoginAttempts ?? 0) > 0 && (
+                                <p className="text-[9px] mt-0.5" style={{ color: "#f87171" }}>{u.LoginAttempts}/5 attempts</p>
+                              )}
+                            </td>
+
+                            <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button onClick={() => setViewingUser(u)}
+                                      className="w-6 h-6 flex items-center justify-center border transition-all"
+                                      style={{ borderColor: C.border, color: C.dim }}
+                                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent }}
+                                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim }}>
+                                      <Eye className="size-3" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left" className="text-[10px] font-mono bg-[#0d1117] border-orange-500/20">View</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button onClick={() => openEdit(u)}
+                                      className="w-6 h-6 flex items-center justify-center border transition-all"
+                                      style={{ borderColor: C.border, color: C.dim }}
+                                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent }}
+                                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim }}>
+                                      <Pencil className="size-3" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left" className="text-[10px] font-mono bg-[#0d1117] border-orange-500/20">Edit</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button onClick={() => { setSelectedIds(new Set([u._id])); setShowDeleteDialog(true); }}
+                                      className="w-6 h-6 flex items-center justify-center border transition-all"
+                                      style={{ borderColor: C.border, color: C.dim }}
+                                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#f87171"; e.currentTarget.style.color = "#f87171" }}
+                                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim }}>
+                                      <Trash2 className="size-3" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left" className="text-[10px] font-mono bg-[#0d1117] border-orange-500/20">Delete</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* ── Footer / Pagination ── */}
+                <div className="relative z-10 shrink-0 flex items-center justify-between px-4 py-2 border-t"
+                  style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                  <span className="text-[10px]" style={{ color: C.muted }}>
+                    Showing{" "}
+                    <span style={{ color: C.text }}>
+                      {filtered.length === 0 ? 0 : (page - 1) * rowsPerPage + 1}–{Math.min(page * rowsPerPage, filtered.length)}
+                    </span>
+                    {" "}of{" "}
+                    <span style={{ color: C.text }}>{filtered.length}</span>
+                    {" "}profiles
+                    {selectedIds.size > 0 && <span style={{ color: C.accent }}> · {selectedIds.size} selected</span>}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <select value={String(rowsPerPage)} onChange={e => { setRowsPerPage(Number(e.target.value)); setPage(1); }}
+                      className="h-7 text-[10px] px-2 focus:outline-none"
+                      style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.dim, fontFamily: C.font }}>
+                      {[10,20,50,100].map(n => <option key={n} value={n}>{n} rows</option>)}
+                    </select>
+                    <Pagination page={page} totalPages={totalPages} onPageChangeAction={setPage} />
+                  </div>
+                </div>
+
+                {/* ── Form Sheet ── */}
+                <FormPanel
+                  open={formOpen} onClose={() => { setFormOpen(false); }} mode={formMode}
+                  newUser={newUser} setNewUser={setNewUser} isLoading={isFormLoading}
+                  isResetting={isResetting} showPassword={showPassword} setShowPassword={setShowPassword}
+                  formManagers={formManagers} formTsms={formTsms} accounts={accounts}
+                  onSubmit={handleSubmit} onReset={resetForm} onResetAccess={handleResetAccess}
+                />
+
+                {/* ── View Dialog ── */}
+                {viewingUser && (
+                  <Dialog open={!!viewingUser} onOpenChange={() => setViewingUser(null)}>
+                    <DialogContent className="sm:max-w-xl max-w-[95vw] max-h-[88vh] overflow-y-auto rounded-none p-0 gap-0"
+                      style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}>
+
+                      <DialogHeader className="px-5 py-4 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                        <div className="flex items-start gap-3">
+                          {viewingUser.profilePicture ? (
+                            <img src={viewingUser.profilePicture} alt="" className="w-12 h-12 object-cover" style={{ border: `1px solid ${C.border}` }} />
+                          ) : (
+                            <div className="w-12 h-12 flex items-center justify-center text-sm font-bold"
+                              style={{ border: `1px solid ${C.border}`, backgroundColor: "rgba(232,99,10,0.05)", color: `${C.accent}80` }}>
+                              {viewingUser.Firstname?.[0]}{viewingUser.Lastname?.[0]}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <DialogTitle className="text-sm font-bold" style={{ color: C.text }}>
+                              {viewingUser.Firstname} {viewingUser.Lastname}
+                            </DialogTitle>
+                            <p className="text-[10px] mt-0.5 truncate" style={{ color: C.dim }}>{viewingUser.Email}</p>
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              <StatusBadge status={viewingUser.Status} />
+                              <DeptBadge dept={viewingUser.Department} position={viewingUser.Position} />
+                            </div>
+                          </div>
+                        </div>
+                      </DialogHeader>
+
+                      <div className="p-5 space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {[
+                            { label: "Reference ID", value: viewingUser.ReferenceID },
+                            { label: "Company",      value: viewingUser.Company },
+                            { label: "Location",     value: viewingUser.Location },
+                            { label: "Department",   value: viewingUser.Department },
+                            { label: "Position",     value: viewingUser.Position },
+                            { label: "Role",         value: viewingUser.Role },
+                          ].map(({ label, value }) => (
+                            <div key={label} className="px-3 py-2.5 border" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                              <p className="text-[9px] uppercase tracking-widest" style={{ color: C.muted }}>{label}</p>
+                              <p className="text-[11px] font-semibold mt-0.5" style={{ color: C.text }}>{value || "—"}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {viewingUser.Directories && viewingUser.Directories.length > 0 && (
+                          <div>
+                            <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: C.muted }}>Access Permissions</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {viewingUser.Directories.map((dir, i) => (
+                                <span key={i} className="text-[10px] px-2 py-0.5 border"
+                                  style={{ borderColor: C.border, color: `${C.accent}80`, backgroundColor: "rgba(232,99,10,0.05)" }}>
+                                  {dir}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <DialogFooter className="px-5 py-3 border-t flex gap-2" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                        <button onClick={() => setViewingUser(null)}
+                          className="px-4 py-1.5 text-[10px] uppercase tracking-widest border transition-colors"
+                          style={{ borderColor: C.border, color: C.dim }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim }}>
+                          Close
+                        </button>
+                        <button onClick={() => { setViewingUser(null); openEdit(viewingUser); }}
+                          className="flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest border transition-colors"
+                          style={{ backgroundColor: "rgba(232,99,10,0.1)", borderColor: C.accent, color: C.accent }}
+                          onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.2)" }}
+                          onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.1)" }}>
+                          <Pencil className="size-3" /> Edit Profile
+                        </button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {/* ── Dialogs ── */}
+                <DeleteDialog
+                  open={showDeleteDialog} count={selectedIds.size}
+                  onCancelAction={() => setShowDeleteDialog(false)}
+                  onConfirmAction={handleDelete}
+                />
+                <TransferDialog
+                  open={showTransferDialog} onOpenChangeAction={setShowTransferDialog}
+                  selectedUsers={accounts.filter(a => selectedIds.has(a._id))}
+                  setSelectedIdsAction={setSelectedIds} setAccountsAction={setAccounts}
+                  tsms={tsms} managers={managers}
+                />
+                <ConvertEmailDialog
+                  open={showConvertDialog} onOpenChangeAction={setShowConvertDialog}
+                  accounts={accounts} setAccountsAction={setAccounts}
+                />
+
+              </SidebarInset>
+            </SidebarProvider>
           </TooltipProvider>
         </ProtectedPageWrapper>
       </FormatProvider>
