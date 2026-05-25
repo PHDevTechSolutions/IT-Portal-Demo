@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -364,9 +364,9 @@ export default function ITPermissionsPage() {
                         <th style={{ borderRight: `1px solid ${C.border}` }} />
                         <th style={{ borderRight: `1px solid ${C.border}` }} />
                         {sidebarModules.map(m => (
-                          <>
+                          <React.Fragment key={m.key}>
                             {/* Module-level checkbox header */}
-                            <th key={`${m.key}-all`}
+                            <th
                               className="text-center px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider border-l"
                               style={{ color: C.dim, borderColor: C.border, minWidth: 52, backgroundColor: "rgba(232,99,10,0.04)" }}>
                               All
@@ -378,7 +378,7 @@ export default function ITPermissionsPage() {
                                 <span className="block truncate max-w-[72px] mx-auto" title={item.title}>{item.title}</span>
                               </th>
                             ))}
-                          </>
+                          </React.Fragment>
                         ))}
                         <th style={{ borderLeft: `1px solid ${C.border}` }} />
                       </tr>
@@ -414,9 +414,9 @@ export default function ITPermissionsPage() {
 
                             {/* Module + submodule checkboxes */}
                             {sidebarModules.map(m => (
-                              <>
+                              <React.Fragment key={m.key}>
                                 {/* Module-level "All" checkbox */}
-                                <td key={`${user._id}-${m.key}`}
+                                <td
                                   className="text-center px-2 py-2 border-l"
                                   style={{ borderColor: C.border, backgroundColor: "rgba(232,99,10,0.03)" }}>
                                   <Checkbox
@@ -440,7 +440,7 @@ export default function ITPermissionsPage() {
                                     </td>
                                   );
                                 })}
-                              </>
+                              </React.Fragment>
                             ))}
 
                             {/* Actions */}
