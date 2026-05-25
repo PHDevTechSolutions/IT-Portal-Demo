@@ -1,462 +1,340 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, BreadcrumbPage } from "@/components/ui/breadcrumb";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "@/components/app-sidebar";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-import { 
-  Archive, 
-  Trash2, 
-  Calendar, 
-  Clock, 
-  AlertTriangle,
-  CheckCircle2,
-  Loader2,
-  Database,
-  HardDrive,
-  ChevronLeft,
-  Settings
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbSeparator, BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { toast } from "sonner";
+import {
+  Archive, Trash2, Calendar, Clock, AlertTriangle,
+  CheckCircle2, Loader2, Database, HardDrive, Settings,
 } from "lucide-react";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface LogStats {
-  systemAudits: { count: number };
-  systemAudits_archive: { count: number };
-  activity_logs: { count: number };
-  taskflow_customer_audit_logs: { count: number };
+  systemAudits:                    { count: number };
+  systemAudits_archive:            { count: number };
+  activity_logs:                   { count: number };
+  taskflow_customer_audit_logs:    { count: number };
 }
-
 interface RetentionSettings {
   retentionDays: number;
-  autoArchive: boolean;
-  autoPurge: boolean;
-  archiveEnabled: boolean;
+  autoArchive:   boolean;
+  autoPurge:     boolean;
+  archiveEnabled:boolean;
+}
+
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  text:   "#c8d8e8",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function SectionCard({ icon: Icon, title, danger, children }: {
+  icon: any; title: string; danger?: boolean; children: React.ReactNode;
+}) {
+  const color = danger ? "#f87171" : C.accent;
+  return (
+    <div className="border" style={{ borderColor: danger ? "#f8717140" : C.border, backgroundColor: C.panel }}>
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b"
+        style={{ borderColor: danger ? "#f8717140" : C.border, backgroundColor: C.bg }}>
+        <div className="flex h-6 w-6 items-center justify-center border"
+          style={{ borderColor: danger ? "#f8717140" : C.border, backgroundColor: "#0f1923" }}>
+          <Icon className="size-3" style={{ color }} />
+        </div>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest" style={{ color }}>{title}</h2>
+      </div>
+      <div className="p-4 space-y-4">{children}</div>
+    </div>
+  );
+}
+
+function ToggleRow({ label, hint, checked, onCheckedChange }: {
+  label: string; hint?: string; checked: boolean; onCheckedChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b last:border-b-0"
+      style={{ borderColor: C.muted + "30" }}>
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: C.text }}>{label}</p>
+        {hint && <p className="text-[10px] mt-0.5" style={{ color: C.muted }}>{hint}</p>}
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange}
+        className="data-[state=checked]:bg-orange-500" />
+    </div>
+  );
+}
+
+function StatTile({ icon: Icon, label, value, color }: {
+  icon: any; label: string; value: string | number; color: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-3 border-r last:border-r-0"
+      style={{ borderColor: C.border, backgroundColor: C.panel }}>
+      <span className="text-lg font-bold leading-none" style={{ color }}>{value}</span>
+      <span className="text-[9px] uppercase tracking-widest mt-1" style={{ color: C.muted }}>{label}</span>
+    </div>
+  );
 }
 
 export default function AuditLogSettingsPage() {
   const router = useRouter();
-  const [stats, setStats] = useState<LogStats | null>(null);
-  const [settings, setSettings] = useState<RetentionSettings>({
-    retentionDays: 90,
-    autoArchive: true,
-    autoPurge: false,
-    archiveEnabled: true,
-  });
-  const [loading, setLoading] = useState(false);
-  const [archiving, setArchiving] = useState(false);
-  const [purging, setPurging] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [purgeDateRange, setPurgeDateRange] = useState({
-    from: "",
-    to: "",
-  });
 
-  // Fetch stats on mount
-  useEffect(() => {
-    fetchStats();
-  }, []);
+  const [stats,    setStats]    = useState<LogStats | null>(null);
+  const [settings, setSettings] = useState<RetentionSettings>({
+    retentionDays: 90, autoArchive: true, autoPurge: false, archiveEnabled: true,
+  });
+  const [archiving, setArchiving] = useState(false);
+  const [purging,   setPurging]   = useState(false);
+  const [purgeDateRange, setPurgeDateRange] = useState({ from: "", to: "" });
+
+  useEffect(() => { fetchStats(); }, []);
+
+  const api = async (body: object) => {
+    const res = await fetch("/api/Data/Applications/Admin/AuditLogs/Manage", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  };
 
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/Data/Applications/Admin/AuditLogs/Manage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_stats" }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStats(data.stats);
-      }
-    } catch (err) {
-      console.error("Failed to fetch stats:", err);
-    }
+      const data = await api({ action: "get_stats" });
+      if (data.success) setStats(data.stats);
+    } catch {}
   };
 
   const handleArchive = async () => {
     setArchiving(true);
-    setMessage(null);
     try {
-      const res = await fetch("/api/Data/Applications/Admin/AuditLogs/Manage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "archive",
-          params: { retentionDays: settings.retentionDays },
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({
-          type: "success",
-          text: `Successfully archived ${data.archivedCount} logs older than ${settings.retentionDays} days.`,
-        });
-        fetchStats();
-      } else {
-        setMessage({ type: "error", text: data.error || "Failed to archive logs." });
-      }
-    } catch (err) {
-      setMessage({ type: "error", text: "Failed to archive logs." });
-    } finally {
-      setArchiving(false);
-    }
+      const data = await api({ action: "archive", params: { retentionDays: settings.retentionDays } });
+      data.success
+        ? (toast.success(`Archived ${data.archivedCount} logs older than ${settings.retentionDays} days`), fetchStats())
+        : toast.error(data.error || "Archive failed");
+    } catch { toast.error("Archive failed"); } finally { setArchiving(false); }
   };
 
   const handlePurge = async () => {
-    if (!confirm("Are you sure you want to permanently delete these logs? This action cannot be undone.")) {
-      return;
-    }
-    
+    if (!confirm("Permanently delete these logs? This cannot be undone.")) return;
     setPurging(true);
-    setMessage(null);
     try {
-      const res = await fetch("/api/Data/Applications/Admin/AuditLogs/Manage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "purge",
-          params: purgeDateRange.from && purgeDateRange.to
-            ? { fromDate: purgeDateRange.from, toDate: purgeDateRange.to }
-            : { all: true },
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({
-          type: "success",
-          text: `Successfully deleted ${data.deletedCount} logs.`,
-        });
-        fetchStats();
-      } else {
-        setMessage({ type: "error", text: data.error || "Failed to purge logs." });
-      }
-    } catch (err) {
-      setMessage({ type: "error", text: "Failed to purge logs." });
-    } finally {
-      setPurging(false);
-    }
+      const params = purgeDateRange.from && purgeDateRange.to
+        ? { fromDate: purgeDateRange.from, toDate: purgeDateRange.to }
+        : { all: true };
+      const data = await api({ action: "purge", params });
+      data.success
+        ? (toast.success(`Deleted ${data.deletedCount} logs`), fetchStats())
+        : toast.error(data.error || "Purge failed");
+    } catch { toast.error("Purge failed"); } finally { setPurging(false); }
   };
 
-  const totalLogs = stats
-    ? stats.systemAudits.count + 
-      stats.activity_logs.count + 
-      stats.taskflow_customer_audit_logs.count
-    : 0;
+  const set = (patch: Partial<RetentionSettings>) => setSettings(p => ({ ...p, ...patch }));
 
-  const archivedLogs = stats?.systemAudits_archive?.count || 0;
+  const totalLogs   = stats ? stats.systemAudits.count + stats.activity_logs.count + stats.taskflow_customer_audit_logs.count : 0;
+  const archivedLogs = stats?.systemAudits_archive?.count ?? 0;
 
   return (
     <ProtectedPageWrapper>
-      <TooltipProvider delayDuration={0}>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            {/* Header */}
-            <header className="flex h-auto min-h-[56px] shrink-0 items-center gap-2 px-2 md:px-4 py-2 flex-wrap">
-              <SidebarTrigger className="-ml-1 touch-button" />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push("/dashboard")}
-              >
-                Home
-              </Button>
-              <Separator orientation="vertical" className="h-4 hidden sm:block" />
-              <Breadcrumb className="hidden sm:flex">
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    <BreadcrumbLink href="/audit-logs">Audit Logs</BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>Settings</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
-            </header>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="flex flex-col h-svh overflow-hidden bg-[#080d12]"
+          style={{ fontFamily: C.font, color: C.text }}>
 
-            <main className="p-6 md:p-10 space-y-6">
-              {/* Page heading */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => router.push("/audit-logs")}
-                    className="h-8 w-8"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <div>
-                    <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-                      <Settings className="h-5 w-5" />
-                      Audit Log Settings
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Manage data retention policies, archive old logs, and purge log data.
-                    </p>
-                  </div>
-                </div>
-              </div>
+          {/* Dot-grid */}
+          <div className="fixed inset-0 pointer-events-none" style={{
+            backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+            backgroundSize: "24px 24px", opacity: 0.15, zIndex: 0,
+          }} />
 
-      {message && (
-        <Alert 
-          variant={message.type === "success" ? "default" : "destructive"}
-          className={cn("mb-6", message.type === "success" && "border-green-500 bg-green-50")}
-        >
-          {message.type === "success" ? (
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-          ) : (
-            <AlertTriangle className="h-4 w-4" />
-          )}
-          <AlertTitle>{message.type === "success" ? "Success" : "Error"}</AlertTitle>
-          <AlertDescription>{message.text}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Database className="h-8 w-8 text-blue-500" />
-              <div>
-                <p className="text-sm text-muted-foreground">Active Logs</p>
-                <p className="text-2xl font-bold">{totalLogs.toLocaleString()}</p>
-              </div>
+          {/* ── Header ── */}
+          <header className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b bg-[#080d12]"
+            style={{ borderColor: C.border }}>
+            <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: C.dim }} />
+            <div className="w-px h-4" style={{ backgroundColor: C.border }} />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/dashboard" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>Dashboard</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/audit-logs" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>Audit Logs</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: C.accent }}>Settings</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <div className="ml-auto flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Live</span>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Archive className="h-8 w-8 text-amber-500" />
-              <div>
-                <p className="text-sm text-muted-foreground">Archived</p>
-                <p className="text-2xl font-bold">{archivedLogs.toLocaleString()}</p>
-              </div>
+          </header>
+
+          {/* ── Title bar ── */}
+          <div className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b bg-[#0d1117]"
+            style={{ borderColor: C.border }}>
+            <div className="flex h-8 w-8 items-center justify-center border"
+              style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+              <Settings className="size-4" style={{ color: C.accent }} />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Clock className="h-8 w-8 text-green-500" />
-              <div>
-                <p className="text-sm text-muted-foreground">Retention</p>
-                <p className="text-2xl font-bold">{settings.retentionDays} days</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <HardDrive className="h-8 w-8 text-purple-500" />
-              <div>
-                <p className="text-sm text-muted-foreground">Collections</p>
-                <p className="text-2xl font-bold">4</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Retention Policy Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Retention Policy
-            </CardTitle>
-            <CardDescription>
-              Configure how long audit logs are kept before archiving or deletion.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between mb-2">
-                  <Label>Retention Period (days)</Label>
-                  <Badge variant="secondary">{settings.retentionDays} days</Badge>
-                </div>
-                <Slider
-                  value={[settings.retentionDays]}
-                  onValueChange={([value]: number[]) => setSettings(s => ({ ...s, retentionDays: value }))}
-                  min={7}
-                  max={365}
-                  step={1}
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Logs older than {settings.retentionDays} days will be eligible for archiving.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Auto-Archive</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Automatically archive old logs
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.autoArchive}
-                  onCheckedChange={(checked) => 
-                    setSettings(s => ({ ...s, autoArchive: checked }))
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Enable Archiving</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Keep archived logs in separate collection
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.archiveEnabled}
-                  onCheckedChange={(checked) => 
-                    setSettings(s => ({ ...s, archiveEnabled: checked }))
-                  }
-                />
-              </div>
-            </div>
-
-            <Button 
-              onClick={handleArchive}
-              disabled={archiving}
-              className="w-full"
-            >
-              {archiving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Archiving...
-                </>
-              ) : (
-                <>
-                  <Archive className="mr-2 h-4 w-4" />
-                  Archive Old Logs Now
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Purge Logs */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 className="h-5 w-5" />
-              Purge Logs
-            </CardTitle>
-            <CardDescription>
-              Permanently delete logs. This action cannot be undone.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Warning</AlertTitle>
-              <AlertDescription>
-                Purging logs will permanently delete them from the database. 
-                Consider archiving instead if you need to keep records.
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>From Date</Label>
-                  <Input
-                    type="date"
-                    value={purgeDateRange.from}
-                    onChange={(e) => setPurgeDateRange(r => ({ ...r, from: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>To Date</Label>
-                  <Input
-                    type="date"
-                    value={purgeDateRange.to}
-                    onChange={(e) => setPurgeDateRange(r => ({ ...r, to: e.target.value }))}
-                  />
-                </div>
-              </div>
-              
-              <p className="text-xs text-muted-foreground">
-                Leave dates empty to purge all logs (not recommended).
+            <div>
+              <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>Audit Log Settings</h1>
+              <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>
+                Retention · Archive · Purge
               </p>
             </div>
-
-            <Button 
-              onClick={handlePurge}
-              disabled={purging}
-              variant="destructive"
-              className="w-full"
-            >
-              {purging ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Purging...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Purge Logs
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Collection Stats */}
-      {stats && (
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle>Collection Statistics</CardTitle>
-            <CardDescription>Current log counts by collection</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {Object.entries(stats).map(([collection, data]) => (
-                <div key={collection} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Database className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-mono text-sm">{collection}</span>
-                  </div>
-                  <Badge variant={collection.includes("archive") ? "secondary" : "default"}>
-                    {data.count.toLocaleString()} logs
-                  </Badge>
-                </div>
-              ))}
+            <div className="ml-auto">
+              <button onClick={() => router.push("/audit-logs")}
+                className="flex items-center gap-1.5 h-7 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                ← Audit Logs
+              </button>
             </div>
-          </CardContent>
-        </Card>
-      )}
-            </main>
-          </SidebarInset>
-        </SidebarProvider>
-      </TooltipProvider>
+          </div>
+
+          {/* ── Stats bar ── */}
+          <div className="relative z-10 shrink-0 grid grid-cols-4 border-b" style={{ borderColor: C.border }}>
+            <StatTile icon={Database}  label="Active Logs"  value={totalLogs.toLocaleString()}    color={C.text} />
+            <StatTile icon={Archive}   label="Archived"     value={archivedLogs.toLocaleString()}  color="#fbbf24" />
+            <StatTile icon={Clock}     label="Retention"    value={`${settings.retentionDays}d`}   color="#34d399" />
+            <StatTile icon={HardDrive} label="Collections"  value={4}                              color="#60a5fa" />
+          </div>
+
+          {/* ── Scrollable content ── */}
+          <div className="relative z-10 flex-1 overflow-y-auto px-4 py-5">
+            <div className="w-full space-y-4">
+
+              {/* Row 1: Retention + Purge */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                {/* Retention Policy */}
+                <SectionCard icon={Clock} title="Retention Policy">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.dim }}>
+                        Retention Period
+                      </p>
+                      <span className="text-[11px] font-bold px-2 py-0.5 border"
+                        style={{ borderColor: C.border, color: C.accent, backgroundColor: "rgba(232,99,10,0.1)" }}>
+                        {settings.retentionDays} days
+                      </span>
+                    </div>
+                    <Slider
+                      value={[settings.retentionDays]}
+                      onValueChange={([v]: number[]) => set({ retentionDays: v })}
+                      min={7} max={365} step={1}
+                      className="w-full [&_[role=slider]]:bg-orange-500 [&_[role=slider]]:border-orange-500 [&_.bg-primary]:bg-orange-500"
+                    />
+                    <p className="text-[10px] mt-2" style={{ color: C.muted }}>
+                      Logs older than {settings.retentionDays} days are eligible for archiving
+                    </p>
+                  </div>
+
+                  <ToggleRow label="Auto-Archive" hint="Automatically archive old logs on schedule"
+                    checked={settings.autoArchive} onCheckedChange={v => set({ autoArchive: v })} />
+                  <ToggleRow label="Enable Archiving" hint="Keep archived logs in a separate collection"
+                    checked={settings.archiveEnabled} onCheckedChange={v => set({ archiveEnabled: v })} />
+
+                  <button onClick={handleArchive} disabled={archiving}
+                    className="w-full flex items-center justify-center gap-2 h-9 text-[11px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+                    style={{ backgroundColor: "rgba(232,99,10,0.1)", borderColor: C.accent, color: C.accent }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.2)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.1)"; }}>
+                    {archiving ? <Loader2 className="size-3 animate-spin" /> : <Archive className="size-3" />}
+                    {archiving ? "Archiving…" : "Archive Old Logs Now"}
+                  </button>
+                </SectionCard>
+
+                {/* Purge */}
+                <SectionCard icon={Trash2} title="Purge Logs" danger>
+                  {/* Warning */}
+                  <div className="flex items-start gap-2.5 px-3 py-2.5 border"
+                    style={{ borderColor: "#f8717140", backgroundColor: "rgba(248,113,113,0.05)" }}>
+                    <AlertTriangle className="size-3.5 shrink-0 mt-0.5" style={{ color: "#f87171" }} />
+                    <p className="text-[10px]" style={{ color: "#f87171" }}>
+                      Purging permanently deletes logs from the database. Consider archiving instead.
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: C.dim }}>
+                      Date Range (optional)
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[["From", "from"], ["To", "to"]].map(([lbl, key]) => (
+                        <div key={key}>
+                          <p className="text-[9px] uppercase tracking-wider mb-1" style={{ color: C.muted }}>{lbl}</p>
+                          <input type="date" value={(purgeDateRange as any)[key]}
+                            onChange={e => setPurgeDateRange(p => ({ ...p, [key]: e.target.value }))}
+                            className="w-full h-8 px-2 text-[11px] focus:outline-none"
+                            style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }} />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] mt-1.5" style={{ color: C.muted }}>
+                      Leave empty to purge all logs (not recommended)
+                    </p>
+                  </div>
+
+                  <button onClick={handlePurge} disabled={purging}
+                    className="w-full flex items-center justify-center gap-2 h-9 text-[11px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+                    style={{ backgroundColor: "rgba(248,113,113,0.1)", borderColor: "#f8717140", color: "#f87171" }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.2)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.1)"; }}>
+                    {purging ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+                    {purging ? "Purging…" : "Purge Logs"}
+                  </button>
+                </SectionCard>
+              </div>
+
+              {/* Collection Stats */}
+              {stats && (
+                <SectionCard icon={Database} title="Collection Statistics">
+                  <div className="space-y-0 border" style={{ borderColor: C.border }}>
+                    {Object.entries(stats).map(([col, data], i) => (
+                      <div key={col} className="flex items-center justify-between px-4 py-3 border-b last:border-b-0"
+                        style={{ borderColor: C.muted + "30", backgroundColor: i % 2 === 0 ? C.bg : C.panel }}>
+                        <div className="flex items-center gap-2.5">
+                          <Database className="size-3" style={{ color: C.dim }} />
+                          <span className="text-[11px] font-mono" style={{ color: C.text }}>{col}</span>
+                        </div>
+                        <span className="text-[11px] font-bold px-2 py-0.5 border"
+                          style={{
+                            borderColor: col.includes("archive") ? "#fbbf2440" : `${C.accent}40`,
+                            color: col.includes("archive") ? "#fbbf24" : C.accent,
+                            backgroundColor: col.includes("archive") ? "rgba(251,191,36,0.08)" : "rgba(232,99,10,0.08)",
+                          }}>
+                          {data.count.toLocaleString()} logs
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </SectionCard>
+              )}
+
+            </div>
+          </div>
+
+        </SidebarInset>
+      </SidebarProvider>
     </ProtectedPageWrapper>
   );
 }

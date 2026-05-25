@@ -1,1416 +1,745 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Separator } from "@/components/ui/separator";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator, BreadcrumbPage } from "@/components/ui/breadcrumb";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "@/components/app-sidebar";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbSeparator, BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { 
-  Database, 
-  Download,
-  Calendar,
-  Clock,
-  CheckCircle2,
-  Loader2,
-  HardDrive,
-  FileSpreadsheet,
-  Save,
-  Play,
-  Bell,
-  RotateCcw,
-  Shield,
-  AlertCircle,
-  Server,
-  Cloud,
-  Zap,
-  Trash2,
-  Eye,
-  X,
-  Mail,
-  Upload,
-  CheckCircle,
-  CalendarDays
-} from "lucide-react";
 import { format } from "date-fns";
+import {
+  Database, Download, Calendar, Clock, Loader2, HardDrive,
+  FileSpreadsheet, Save, Play, Bell, RotateCcw, Shield,
+  AlertCircle, Cloud, Trash2, Eye, Upload, CheckCircle,
+  CalendarDays, Mail, Server,
+} from "lucide-react";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface BackupSettings {
-  enabled: boolean;
-  frequency: "weekly" | "monthly" | "yearly";
-  dayOfWeek: number;
-  dayOfMonth: number;
-  monthOfYear: number;
-  time: string;
-  dateRangeFrom: string;
-  dateRangeTo: string;
-  includeTables: string[];
-  notifyOnSuccess: boolean;
-  notifyOnFailure: boolean;
-  emailNotifications: boolean;
-  notificationEmail: string;
-  retentionCount: number;
-  storageLocation: "local" | "cloud" | "both";
-  cloudProvider: "aws" | "gcp" | "azure" | "supabase";
+  enabled: boolean; frequency: "weekly"|"monthly"|"yearly";
+  dayOfWeek: number; dayOfMonth: number; monthOfYear: number; time: string;
+  dateRangeFrom: string; dateRangeTo: string; includeTables: string[];
+  notifyOnSuccess: boolean; notifyOnFailure: boolean;
+  emailNotifications: boolean; notificationEmail: string;
+  retentionCount: number; storageLocation: "local"|"cloud"|"both";
+  cloudProvider: "aws"|"gcp"|"azure"|"supabase";
 }
-
 interface BackupHistory {
-  id: string;
-  timestamp: string;
-  status: "success" | "failed" | "in_progress";
-  size: string;
-  frequency: string;
-  recordsCount: number;
-  downloadUrl?: string;
-  tables?: string[];
+  id: string; timestamp: string; status: "success"|"failed"|"in_progress";
+  size: string; frequency: string; recordsCount: number;
+  downloadUrl?: string; tables?: string[];
 }
 
 const AVAILABLE_TABLES = [
-  { id: "activity", name: "Activity Logs", db: "supabase", label: "Activity Logs" },
-  { id: "documentation", name: "Documentation", db: "supabase", label: "Documentation" },
-  { id: "history", name: "History", db: "supabase", label: "History" },
-  { id: "revised_quotations", name: "Revised Quotations", db: "supabase", label: "Revised Quotations" },
-  { id: "meetings", name: "Meetings", db: "supabase" },
-  { id: "signatories", name: "Signatories", db: "supabase" },
-  { id: "spf_request", name: "SPF Requests", db: "supabase" },
-  { id: "users", name: "Users (MongoDB)", db: "mongodb" },
-  { id: "system_audits", name: "System Audits", db: "mongodb" },
-  { id: "customer_database", name: "Customer Database", db: "mongodb" },
+  { id: "activity",          name: "Activity Logs",       db: "supabase" },
+  { id: "documentation",     name: "Documentation",       db: "supabase" },
+  { id: "history",           name: "History",             db: "supabase" },
+  { id: "revised_quotations",name: "Revised Quotations",  db: "supabase" },
+  { id: "meetings",          name: "Meetings",            db: "supabase" },
+  { id: "signatories",       name: "Signatories",         db: "supabase" },
+  { id: "spf_request",       name: "SPF Requests",        db: "supabase" },
+  { id: "users",             name: "Users (MongoDB)",     db: "mongodb"  },
+  { id: "system_audits",     name: "System Audits",       db: "mongodb"  },
+  { id: "customer_database", name: "Customer Database",   db: "mongodb"  },
 ];
 
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  text:   "#c8d8e8",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+};
+
+// ─── Small helpers ────────────────────────────────────────────────────────────
+function SectionCard({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
+  return (
+    <div className="border" style={{ borderColor: C.border, backgroundColor: C.panel }}>
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+        <div className="flex h-6 w-6 items-center justify-center border" style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+          <Icon className="size-3" style={{ color: C.accent }} />
+        </div>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.accent }}>{title}</h2>
+      </div>
+      <div className="p-4 space-y-4">{children}</div>
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: C.dim }}>{children}</p>;
+}
+
+function OpsSelect({ value, onValueChange, disabled, children }: {
+  value: string; onValueChange: (v: any) => void; disabled?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+      <SelectTrigger className="h-8 rounded-none text-[11px] focus:ring-0 w-full"
+        style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="rounded-none" style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}>
+        {children}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function OpsSelectItem({ value, children }: { value: string; children: React.ReactNode }) {
+  return (
+    <SelectItem value={value} className="text-[11px] rounded-none focus:bg-orange-500/10 focus:text-orange-400"
+      style={{ color: C.text, fontFamily: C.font }}>{children}</SelectItem>
+  );
+}
+
+function ToggleRow({ label, hint, checked, onCheckedChange }: {
+  label: string; hint?: string; checked: boolean; onCheckedChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b last:border-b-0"
+      style={{ borderColor: C.muted + "30" }}>
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: C.text }}>{label}</p>
+        {hint && <p className="text-[10px] mt-0.5" style={{ color: C.muted }}>{hint}</p>}
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange}
+        className="data-[state=checked]:bg-orange-500" />
+    </div>
+  );
+}
+
+function StatusDot({ status }: { status: string }) {
+  const color = status === "success" ? "#34d399" : status === "failed" ? "#f87171" : "#fbbf24";
+  return <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function BackupDatabaseSettingsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+
+  const [loading,       setLoading]       = useState(false);
   const [runningBackup, setRunningBackup] = useState(false);
   const [settings, setSettings] = useState<BackupSettings>({
-    enabled: true,
-    frequency: "weekly",
-    dayOfWeek: 0,
-    dayOfMonth: 1,
-    monthOfYear: 1,
-    time: "02:00",
-    dateRangeFrom: format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
+    enabled: true, frequency: "weekly", dayOfWeek: 0, dayOfMonth: 1,
+    monthOfYear: 1, time: "02:00",
+    dateRangeFrom: format(new Date(Date.now() - 30*24*60*60*1000), "yyyy-MM-dd"),
     dateRangeTo: format(new Date(), "yyyy-MM-dd"),
-    includeTables: ["activity", "history", "users", "customer_database"],
-    notifyOnSuccess: true,
-    notifyOnFailure: true,
-    emailNotifications: false,
-    notificationEmail: "",
-    retentionCount: 10,
-    storageLocation: "local" as const,
-    cloudProvider: "supabase" as const,
+    includeTables: ["activity","history","users","customer_database"],
+    notifyOnSuccess: true, notifyOnFailure: true,
+    emailNotifications: false, notificationEmail: "",
+    retentionCount: 10, storageLocation: "local", cloudProvider: "supabase",
   });
-  const [backupHistory, setBackupHistory] = useState<BackupHistory[]>([]);
-  const [nextBackupTime, setNextBackupTime] = useState<string>("");
-  
-  // Preview dialog state
-  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
-  const [previewData, setPreviewData] = useState<any>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  
-  // Progress tracking for backup
-  const [backupProgress, setBackupProgress] = useState<{ current: number; total: number; table: string } | null>(null);
-  
-  // Restore dialog state
-  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-  const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null);
-  const [restoreOptions, setRestoreOptions] = useState({
-    restoreTables: [] as string[],
-    overwrite: false,
-    notifyOnRestore: true,
-  });
-  const [restoringBackup, setRestoringBackup] = useState(false);
-  const [restoreResults, setRestoreResults] = useState<any>(null);
-  
-  // Calendar view state
-  const [calendarViewOpen, setCalendarViewOpen] = useState(false);
-  const [scheduledBackups, setScheduledBackups] = useState<any[]>([]);
-  
-  // Verification state
-  const [verifyingBackup, setVerifyingBackup] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<any>(null);
+  const [backupHistory,      setBackupHistory]      = useState<BackupHistory[]>([]);
+  const [nextBackupTime,     setNextBackupTime]      = useState("");
+  const [previewDialogOpen,  setPreviewDialogOpen]   = useState(false);
+  const [previewData,        setPreviewData]         = useState<any>(null);
+  const [loadingPreview,     setLoadingPreview]      = useState(false);
+  const [restoreDialogOpen,  setRestoreDialogOpen]   = useState(false);
+  const [selectedBackupId,   setSelectedBackupId]    = useState<string|null>(null);
+  const [restoreOptions,     setRestoreOptions]      = useState({ restoreTables: [] as string[], overwrite: false, notifyOnRestore: true });
+  const [restoringBackup,    setRestoringBackup]     = useState(false);
+  const [restoreResults,     setRestoreResults]      = useState<any>(null);
+  const [verifyingBackup,    setVerifyingBackup]     = useState(false);
+  const [verificationResult, setVerificationResult]  = useState<any>(null);
+  const [calendarOpen,       setCalendarOpen]        = useState(false);
 
-  useEffect(() => {
-    fetchSettings();
-    fetchBackupHistory();
-  }, []);
+  useEffect(() => { fetchSettings(); fetchBackupHistory(); }, []);
+  useEffect(() => { calculateNextBackup(); }, [settings]);
 
-  useEffect(() => {
-    calculateNextBackup();
-  }, [settings]);
+  const api = async (body: object) => {
+    const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  };
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_settings" }),
-      });
-      const data = await res.json();
-      if (data.success && data.settings) {
-        setSettings(data.settings);
-      }
-    } catch (err) {
-      console.error("Failed to fetch settings:", err);
-    }
+      const data = await api({ action: "get_settings" });
+      if (data.success && data.settings) setSettings(data.settings);
+    } catch {}
   };
 
   const fetchBackupHistory = async () => {
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_history" }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBackupHistory(data.history || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch backup history:", err);
-    }
+      const data = await api({ action: "get_history" });
+      if (data.success) setBackupHistory(data.history || []);
+    } catch {}
   };
 
   const calculateNextBackup = () => {
-    if (!settings.enabled) {
-      setNextBackupTime("Disabled");
-      return;
-    }
-
+    if (!settings.enabled) { setNextBackupTime("Disabled"); return; }
     const now = new Date();
-    const [hours, minutes] = settings.time.split(":").map(Number);
-    let nextDate = new Date(now);
-    nextDate.setHours(hours, minutes, 0, 0);
-
+    const [h, m] = settings.time.split(":").map(Number);
+    let next = new Date(now); next.setHours(h, m, 0, 0);
     if (settings.frequency === "weekly") {
-      const daysUntilTarget = (settings.dayOfWeek - now.getDay() + 7) % 7;
-      nextDate.setDate(now.getDate() + daysUntilTarget);
-      if (nextDate <= now) {
-        nextDate.setDate(nextDate.getDate() + 7);
-      }
+      const d = (settings.dayOfWeek - now.getDay() + 7) % 7;
+      next.setDate(now.getDate() + d);
+      if (next <= now) next.setDate(next.getDate() + 7);
     } else if (settings.frequency === "monthly") {
-      nextDate.setDate(settings.dayOfMonth);
-      if (nextDate <= now) {
-        nextDate.setMonth(nextDate.getMonth() + 1);
-      }
-    } else if (settings.frequency === "yearly") {
-      nextDate.setMonth(settings.monthOfYear - 1);
-      nextDate.setDate(settings.dayOfMonth);
-      if (nextDate <= now) {
-        nextDate.setFullYear(nextDate.getFullYear() + 1);
-      }
+      next.setDate(settings.dayOfMonth);
+      if (next <= now) next.setMonth(next.getMonth() + 1);
+    } else {
+      next.setMonth(settings.monthOfYear - 1); next.setDate(settings.dayOfMonth);
+      if (next <= now) next.setFullYear(next.getFullYear() + 1);
     }
-
-    setNextBackupTime(format(nextDate, "MMM dd, yyyy 'at' h:mm a"));
+    setNextBackupTime(format(next, "MMM dd, yyyy 'at' h:mm a"));
   };
 
-  const handleSaveSettings = async () => {
+  const handleSave = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save_settings", settings }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Backup settings saved successfully");
-      } else {
-        toast.error(data.error || "Failed to save settings");
-      }
-    } catch (err) {
-      toast.error("Failed to save settings");
-    } finally {
-      setLoading(false);
-    }
+      const data = await api({ action: "save_settings", settings });
+      data.success ? toast.success("Settings saved") : toast.error(data.error || "Failed");
+    } catch { toast.error("Failed to save"); } finally { setLoading(false); }
   };
 
-  const handleRunBackupNow = async () => {
+  const handleRunNow = async () => {
     setRunningBackup(true);
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "run_backup", settings }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(`Backup completed! Exported ${data.recordsCount} records.`);
-        fetchBackupHistory();
-      } else {
-        toast.error(data.error || "Backup failed");
-      }
-    } catch (err) {
-      toast.error("Backup failed");
-    } finally {
-      setRunningBackup(false);
-    }
+      const data = await api({ action: "run_backup", settings });
+      if (data.success) { toast.success(`Backup done — ${data.recordsCount} records`); fetchBackupHistory(); }
+      else toast.error(data.error || "Backup failed");
+    } catch { toast.error("Backup failed"); } finally { setRunningBackup(false); }
   };
 
-  const handleDownloadBackup = async (backupId: string) => {
+  const handleDownloadZip = async (id: string) => {
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "download", backupId }),
-      });
-      const data = await res.json();
+      const data = await api({ action: "download_zip", backupId: id });
       if (data.success && data.downloadUrl) {
-        window.open(data.downloadUrl, "_blank");
-      } else {
-        toast.error("Failed to get download URL");
-      }
-    } catch (err) {
-      toast.error("Failed to download backup");
-    }
+        const a = document.createElement("a"); a.href = data.downloadUrl;
+        a.download = `backup_${id}.zip`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        toast.success("ZIP downloaded");
+      } else toast.error(data.error || "Failed");
+    } catch { toast.error("Download failed"); }
   };
 
-  const handleDownloadZip = async (backupId: string) => {
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this backup?")) return;
     try {
-      toast.info("Preparing ZIP file with separate Excel files for each table...");
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "download_zip", backupId }),
-      });
-      const data = await res.json();
-      if (data.success && data.downloadUrl) {
-        // Create temporary link to download ZIP
-        const link = document.createElement("a");
-        link.href = data.downloadUrl;
-        link.download = `backup_${backupId}.zip`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success("ZIP file downloaded successfully! Each table is in a separate Excel file.");
-      } else {
-        toast.error(data.error || "Failed to generate ZIP file");
-      }
-    } catch (err) {
-      console.error("Download error:", err);
-      toast.error("Failed to download ZIP file");
-    }
+      const data = await api({ action: "delete_backup", backupId: id });
+      data.success ? (toast.success("Deleted"), fetchBackupHistory()) : toast.error(data.error || "Failed");
+    } catch { toast.error("Delete failed"); }
   };
 
-  const handleDeleteBackup = async (backupId: string) => {
+  const handlePreview = async (id: string) => {
+    setLoadingPreview(true); setPreviewDialogOpen(true);
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete_backup", backupId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Backup deleted successfully");
-        fetchBackupHistory();
-      } else {
-        toast.error(data.error || "Failed to delete backup");
-      }
-    } catch (err) {
-      toast.error("Failed to delete backup");
-    }
+      const data = await api({ action: "get_preview", backupId: id });
+      data.success ? setPreviewData(data.preview) : (toast.error(data.error || "Failed"), setPreviewDialogOpen(false));
+    } catch { toast.error("Preview failed"); setPreviewDialogOpen(false); } finally { setLoadingPreview(false); }
   };
 
-  const handlePreviewBackup = async (backupId: string) => {
-    setLoadingPreview(true);
-    setPreviewDialogOpen(true);
-    try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_preview", backupId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPreviewData(data.preview);
-      } else {
-        toast.error(data.error || "Failed to load preview");
-        setPreviewDialogOpen(false);
-      }
-    } catch (err) {
-      toast.error("Failed to load preview");
-      setPreviewDialogOpen(false);
-    } finally {
-      setLoadingPreview(false);
-    }
+  const handleOpenRestore = (id: string, tables: string[]) => {
+    setSelectedBackupId(id); setRestoreOptions(p => ({ ...p, restoreTables: tables }));
+    setRestoreDialogOpen(true); setRestoreResults(null);
   };
 
-  const handleOpenRestore = (backupId: string, tables: string[]) => {
-    setSelectedBackupId(backupId);
-    setRestoreOptions((prev) => ({ ...prev, restoreTables: tables }));
-    setRestoreDialogOpen(true);
-    setRestoreResults(null);
-  };
-
-  const handleRestoreBackup = async () => {
+  const handleRestore = async () => {
     if (!selectedBackupId) return;
     setRestoringBackup(true);
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "restore_backup",
-          backupId: selectedBackupId,
-          options: restoreOptions,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Backup restored successfully!");
-        setRestoreResults(data.results);
-      } else {
-        toast.error(data.error || "Failed to restore backup");
-      }
-    } catch (err) {
-      toast.error("Failed to restore backup");
-    } finally {
-      setRestoringBackup(false);
-    }
+      const data = await api({ action: "restore_backup", backupId: selectedBackupId, options: restoreOptions });
+      data.success ? (toast.success("Restored!"), setRestoreResults(data.results)) : toast.error(data.error || "Failed");
+    } catch { toast.error("Restore failed"); } finally { setRestoringBackup(false); }
   };
 
-  const handleVerifyBackup = async (backupId: string) => {
+  const handleVerify = async (id: string) => {
     setVerifyingBackup(true);
     try {
-      const res = await fetch("/api/Data/Applications/Admin/BackupSettings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "verify_backup", backupId }),
-      });
-      const data = await res.json();
+      const data = await api({ action: "verify_backup", backupId: id });
       setVerificationResult(data);
-      if (data.success && data.verified) {
-        toast.success("Backup verified successfully!");
-      } else if (data.success && !data.verified) {
-        toast.error("Backup verification failed - data may be corrupted!");
-      } else {
-        toast.error(data.error || "Failed to verify backup");
-      }
-    } catch (err) {
-      toast.error("Failed to verify backup");
-    } finally {
-      setVerifyingBackup(false);
-    }
+      data.verified ? toast.success("Verified!") : toast.error("Verification failed");
+    } catch { toast.error("Verify failed"); } finally { setVerifyingBackup(false); }
   };
 
-  const toggleTable = (tableId: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      includeTables: prev.includeTables.includes(tableId)
-        ? prev.includeTables.filter((id) => id !== tableId)
-        : [...prev.includeTables, tableId],
+  const toggleTable = (id: string) =>
+    setSettings(p => ({
+      ...p, includeTables: p.includeTables.includes(id)
+        ? p.includeTables.filter(t => t !== id)
+        : [...p.includeTables, id],
     }));
-  };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "success":
-        return "bg-emerald-500";
-      case "failed":
-        return "bg-red-500";
-      case "in_progress":
-        return "bg-amber-500";
-      default:
-        return "bg-slate-500";
-    }
-  };
+  const set = (patch: Partial<BackupSettings>) => setSettings(p => ({ ...p, ...patch }));
 
   return (
     <ProtectedPageWrapper>
-      <TooltipProvider delayDuration={0}>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            {/* Dark Tech Background */}
-            <div className="min-h-screen w-full bg-[#050a14] relative overflow-hidden">
-              {/* Animated background grid */}
-              <div className="absolute inset-0 h-full w-full">
-                <div 
-                  className="h-full w-full opacity-10"
-                  style={{
-                    backgroundImage: `
-                      linear-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(6, 182, 212, 0.15) 1px, transparent 1px)
-                    `,
-                    backgroundSize: '50px 50px',
-                    backgroundRepeat: 'repeat'
-                  }}
-                />
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="flex flex-col h-svh overflow-hidden bg-[#080d12]"
+          style={{ fontFamily: C.font, color: C.text }}>
+
+          {/* Dot-grid */}
+          <div className="fixed inset-0 pointer-events-none" style={{
+            backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+            backgroundSize: "24px 24px", opacity: 0.15, zIndex: 0,
+          }} />
+
+          {/* ── Header ── */}
+          <header className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b bg-[#080d12]"
+            style={{ borderColor: C.border }}>
+            <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: C.dim }} />
+            <div className="w-px h-4" style={{ backgroundColor: C.border }} />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/dashboard" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>Dashboard</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/settings/general" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>Settings</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: C.accent }}>Database Backup</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <div className="ml-auto flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Online</span>
+            </div>
+          </header>
+
+          {/* ── Title bar ── */}
+          <div className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b bg-[#0d1117]"
+            style={{ borderColor: C.border }}>
+            <div className="flex h-8 w-8 items-center justify-center border" style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+              <Database className="size-4" style={{ color: C.accent }} />
+            </div>
+            <div>
+              <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>Database Backup</h1>
+              <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>Automated Data Protection System</p>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={() => setCalendarOpen(true)}
+                className="flex items-center gap-1.5 h-7 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                <CalendarDays className="size-3" /> Schedule
+              </button>
+            </div>
+          </div>
+
+          {/* ── Stats bar ── */}
+          <div className="relative z-10 shrink-0 grid grid-cols-4 border-b" style={{ borderColor: C.border }}>
+            {[
+              { label: "Frequency",      value: settings.frequency,          color: "#60a5fa", icon: Clock },
+              { label: "Next Backup",    value: nextBackupTime || "…",       color: "#34d399", icon: Calendar },
+              { label: "Tables",         value: settings.includeTables.length, color: "#a78bfa", icon: HardDrive },
+              { label: "Keep",           value: `${settings.retentionCount} backups`, color: C.accent, icon: RotateCcw },
+            ].map(({ label, value, color, icon: Icon }, i) => (
+              <div key={i} className="flex flex-col items-center justify-center py-3 border-r last:border-r-0"
+                style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                <span className="text-sm font-bold leading-none capitalize" style={{ color }}>{value}</span>
+                <span className="text-[9px] uppercase tracking-widest mt-1" style={{ color: C.muted }}>{label}</span>
               </div>
+            ))}
+          </div>
 
-              {/* Floating particles */}
-              <div className="absolute inset-0 h-full w-full overflow-hidden pointer-events-none">
-                {[...Array(15)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="absolute w-1 h-1 bg-cyan-400/40 rounded-full"
-                    style={{
-                      left: `${Math.random() * 100}%`,
-                      top: `${Math.random() * 100}%`,
-                      animation: `float ${5 + Math.random() * 10}s linear infinite`,
-                      animationDelay: `${Math.random() * 5}s` 
-                    }}
-                  />
-                ))}
-              </div>
+          {/* ── Scrollable content ── */}
+          <div className="relative z-10 flex-1 overflow-y-auto px-4 py-5">
+            <div className="w-full space-y-4">
 
-              {/* Main Content */}
-              <div className="relative z-10 w-full">
-                {/* Header */}
-                <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
-                  <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
-                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-                  <div className="flex items-center gap-2 px-4 relative z-10">
-                    <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
-                    <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
-                    <Breadcrumb>
-                      <BreadcrumbList>
-                        <BreadcrumbItem>
-                          <BreadcrumbLink href="/dashboard" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Dashboard</BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator className="text-slate-700" />
-                        <BreadcrumbItem>
-                          <BreadcrumbLink href="/settings/general" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Settings</BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator className="text-slate-700" />
-                        <BreadcrumbItem>
-                          <BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">Database Backup</BreadcrumbPage>
-                        </BreadcrumbItem>
-                      </BreadcrumbList>
-                    </Breadcrumb>
+              {/* Row 1: Schedule + Data Selection */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                {/* Schedule */}
+                <SectionCard icon={Clock} title="Backup Schedule">
+                  <ToggleRow label="Enable Automated Backups" hint="Turn on/off the backup schedule"
+                    checked={settings.enabled} onCheckedChange={v => set({ enabled: v })} />
+
+                  <div>
+                    <FieldLabel>Frequency</FieldLabel>
+                    <OpsSelect value={settings.frequency} onValueChange={v => set({ frequency: v })} disabled={!settings.enabled}>
+                      <OpsSelectItem value="weekly">Weekly</OpsSelectItem>
+                      <OpsSelectItem value="monthly">Monthly</OpsSelectItem>
+                      <OpsSelectItem value="yearly">Yearly</OpsSelectItem>
+                    </OpsSelect>
                   </div>
-                  <div className="flex items-center gap-4 px-4 text-xs relative z-10">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
-                      <span className="text-orange-400/60 font-mono uppercase tracking-widest text-[10px]">System Online</span>
+
+                  {settings.frequency === "weekly" && (
+                    <div>
+                      <FieldLabel>Day of Week</FieldLabel>
+                      <OpsSelect value={settings.dayOfWeek.toString()} onValueChange={v => set({ dayOfWeek: +v })} disabled={!settings.enabled}>
+                        {DAYS.map((d, i) => <OpsSelectItem key={i} value={i.toString()}>{d}</OpsSelectItem>)}
+                      </OpsSelect>
                     </div>
+                  )}
+
+                  {(settings.frequency === "monthly" || settings.frequency === "yearly") && (
+                    <div>
+                      <FieldLabel>Day of Month</FieldLabel>
+                      <OpsSelect value={settings.dayOfMonth.toString()} onValueChange={v => set({ dayOfMonth: +v })} disabled={!settings.enabled}>
+                        {Array.from({length:31},(_,i)=>i+1).map(d => <OpsSelectItem key={d} value={d.toString()}>{d}</OpsSelectItem>)}
+                      </OpsSelect>
+                    </div>
+                  )}
+
+                  {settings.frequency === "yearly" && (
+                    <div>
+                      <FieldLabel>Month</FieldLabel>
+                      <OpsSelect value={settings.monthOfYear.toString()} onValueChange={v => set({ monthOfYear: +v })} disabled={!settings.enabled}>
+                        {MONTHS.map((m, i) => <OpsSelectItem key={i+1} value={(i+1).toString()}>{m}</OpsSelectItem>)}
+                      </OpsSelect>
+                    </div>
+                  )}
+
+                  <div>
+                    <FieldLabel>Backup Time</FieldLabel>
+                    <input type="time" value={settings.time} disabled={!settings.enabled}
+                      onChange={e => set({ time: e.target.value })}
+                      className="w-full h-8 px-3 text-[11px] focus:outline-none"
+                      style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }} />
+                    <p className="text-[10px] mt-1" style={{ color: C.muted }}>Recommended: off-peak hours (e.g. 02:00)</p>
                   </div>
-                </header>
 
-                <main className="px-4 py-6 w-full">
-                  <div className="mx-auto w-full space-y-6">
-                    {/* Page Title */}
-                    <div className="mb-8">
-                      <h1 className="text-3xl font-bold tracking-wider text-white uppercase">
-                        <span className="text-cyan-400">DATABASE</span> BACKUP
-                      </h1>
-                      <p className="text-white/60 text-xs tracking-[0.3em] uppercase mt-1">
-                        Automated Data Protection System
-                      </p>
+                  <div>
+                    <FieldLabel>Retention (backups to keep)</FieldLabel>
+                    <OpsSelect value={settings.retentionCount.toString()} onValueChange={v => set({ retentionCount: +v })}>
+                      {[5,10,20,30,50,100].map(n => <OpsSelectItem key={n} value={n.toString()}>{n} backups</OpsSelectItem>)}
+                    </OpsSelect>
+                  </div>
+                </SectionCard>
+
+                {/* Data Selection */}
+                <SectionCard icon={FileSpreadsheet} title="Data Selection">
+                  <div>
+                    <FieldLabel>Date Range (optional)</FieldLabel>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[["From", "dateRangeFrom"], ["To", "dateRangeTo"]].map(([lbl, key]) => (
+                        <div key={key}>
+                          <p className="text-[9px] uppercase tracking-wider mb-1" style={{ color: C.muted }}>{lbl}</p>
+                          <input type="date" value={(settings as any)[key]}
+                            onChange={e => set({ [key]: e.target.value } as any)}
+                            className="w-full h-8 px-2 text-[11px] focus:outline-none"
+                            style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }} />
+                        </div>
+                      ))}
                     </div>
+                    <p className="text-[10px] mt-1" style={{ color: C.muted }}>Leave empty to backup all data</p>
+                  </div>
 
-                    {/* Stats Overview */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      {/* Frequency Card */}
-                      <div className="relative group">
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                          <div className="absolute top-0 left-0 w-4 h-4 border-l-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute top-0 right-0 w-4 h-4 border-r-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 left-0 w-4 h-4 border-l-2 border-b-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 right-0 w-4 h-4 border-r-2 border-b-2 border-cyan-500/50" />
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                              <Clock className="h-8 w-8 text-cyan-400" />
-                              <div>
-                                <p className="text-xs text-cyan-300/60 uppercase tracking-wider">Backup Frequency</p>
-                                <p className="text-lg font-bold text-cyan-100 capitalize">{settings.frequency}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Next Backup Card */}
-                      <div className="relative group">
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                          <div className="absolute top-0 left-0 w-4 h-4 border-l-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute top-0 right-0 w-4 h-4 border-r-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 left-0 w-4 h-4 border-l-2 border-b-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 right-0 w-4 h-4 border-r-2 border-b-2 border-cyan-500/50" />
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                              <Calendar className="h-8 w-8 text-emerald-400" />
-                              <div>
-                                <p className="text-xs text-cyan-300/60 uppercase tracking-wider">Next Backup</p>
-                                <p className="text-sm font-bold text-cyan-100">{nextBackupTime || "Calculating..."}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Tables Card */}
-                      <div className="relative group">
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                          <div className="absolute top-0 left-0 w-4 h-4 border-l-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute top-0 right-0 w-4 h-4 border-r-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 left-0 w-4 h-4 border-l-2 border-b-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 right-0 w-4 h-4 border-r-2 border-b-2 border-cyan-500/50" />
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                              <HardDrive className="h-8 w-8 text-purple-400" />
-                              <div>
-                                <p className="text-xs text-cyan-300/60 uppercase tracking-wider">Tables Selected</p>
-                                <p className="text-2xl font-bold text-cyan-100">{settings.includeTables.length}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Retention Card */}
-                      <div className="relative group">
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                          <div className="absolute top-0 left-0 w-4 h-4 border-l-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute top-0 right-0 w-4 h-4 border-r-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 left-0 w-4 h-4 border-l-2 border-b-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 right-0 w-4 h-4 border-r-2 border-b-2 border-cyan-500/50" />
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                              <RotateCcw className="h-8 w-8 text-amber-400" />
-                              <div>
-                                <p className="text-xs text-cyan-300/60 uppercase tracking-wider">Backups Kept</p>
-                                <p className="text-2xl font-bold text-cyan-100">{settings.retentionCount}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
-
-                    {/* Settings Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Backup Schedule Card */}
-                      <div className="relative group">
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                          
-                          <CardHeader className="pb-3">
-                            <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                              <Clock className="h-5 w-5" />
-                              Backup Schedule
-                            </CardTitle>
-                            <CardDescription className="text-cyan-300/60">
-                              Configure when automated backups should run.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-6">
-                            {/* Enable/Disable */}
-                            <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                              <div className="space-y-0.5">
-                                <Label className="text-cyan-100">Enable Automated Backups</Label>
-                                <p className="text-xs text-cyan-300/60">
-                                  Turn on/off automated backup schedule
-                                </p>
-                              </div>
-                              <Switch
-                                checked={settings.enabled}
-                                onCheckedChange={(checked) =>
-                                  setSettings((s) => ({ ...s, enabled: checked }))
-                                }
-                              />
-                            </div>
-
-                            {/* Frequency */}
-                            <div className="space-y-2">
-                              <Label className="text-cyan-100">Backup Frequency</Label>
-                              <Select
-                                value={settings.frequency}
-                                onValueChange={(value: "weekly" | "monthly" | "yearly") =>
-                                  setSettings((s) => ({ ...s, frequency: value }))
-                                }
-                                disabled={!settings.enabled}
-                              >
-                                <SelectTrigger className="bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                  <SelectValue placeholder="Select frequency" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                  <SelectItem value="weekly" className="text-cyan-100 focus:bg-cyan-500/20">Weekly</SelectItem>
-                                  <SelectItem value="monthly" className="text-cyan-100 focus:bg-cyan-500/20">Monthly</SelectItem>
-                                  <SelectItem value="yearly" className="text-cyan-100 focus:bg-cyan-500/20">Yearly</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            {/* Day Selection based on frequency */}
-                            {settings.frequency === "weekly" && (
-                              <div className="space-y-2">
-                                <Label className="text-cyan-100">Day of Week</Label>
-                                <Select
-                                  value={settings.dayOfWeek.toString()}
-                                  onValueChange={(value) =>
-                                    setSettings((s) => ({ ...s, dayOfWeek: parseInt(value) }))
-                                  }
-                                  disabled={!settings.enabled}
-                                >
-                                  <SelectTrigger className="bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                    <SelectValue placeholder="Select day" />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                    {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map(
-                                      (day, index) => (
-                                        <SelectItem key={index} value={index.toString()} className="text-cyan-100 focus:bg-cyan-500/20">
-                                          {day}
-                                        </SelectItem>
-                                      )
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-
-                            {settings.frequency === "monthly" && (
-                              <div className="space-y-2">
-                                <Label className="text-cyan-100">Day of Month</Label>
-                                <Select
-                                  value={settings.dayOfMonth.toString()}
-                                  onValueChange={(value) =>
-                                    setSettings((s) => ({ ...s, dayOfMonth: parseInt(value) }))
-                                  }
-                                  disabled={!settings.enabled}
-                                >
-                                  <SelectTrigger className="bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                    <SelectValue placeholder="Select day" />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                                      <SelectItem key={day} value={day.toString()} className="text-cyan-100 focus:bg-cyan-500/20">
-                                        {day}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-
-                            {settings.frequency === "yearly" && (
-                              <>
-                                <div className="space-y-2">
-                                  <Label className="text-cyan-100">Month</Label>
-                                  <Select
-                                    value={settings.monthOfYear.toString()}
-                                    onValueChange={(value) =>
-                                      setSettings((s) => ({ ...s, monthOfYear: parseInt(value) }))
-                                    }
-                                    disabled={!settings.enabled}
-                                  >
-                                    <SelectTrigger className="bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                      <SelectValue placeholder="Select month" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                      {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(
-                                        (month, index) => (
-                                          <SelectItem key={index + 1} value={(index + 1).toString()} className="text-cyan-100 focus:bg-cyan-500/20">
-                                            {month}
-                                          </SelectItem>
-                                        )
-                                      )}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-cyan-100">Day of Month</Label>
-                                  <Select
-                                    value={settings.dayOfMonth.toString()}
-                                    onValueChange={(value) =>
-                                      setSettings((s) => ({ ...s, dayOfMonth: parseInt(value) }))
-                                    }
-                                    disabled={!settings.enabled}
-                                  >
-                                    <SelectTrigger className="bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                      <SelectValue placeholder="Select day" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                                        <SelectItem key={day} value={day.toString()} className="text-cyan-100 focus:bg-cyan-500/20">
-                                          {day}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </>
-                            )}
-
-                            {/* Time */}
-                            <div className="space-y-2">
-                              <Label className="text-cyan-100">Backup Time</Label>
-                              <Input
-                                type="time"
-                                value={settings.time}
-                                onChange={(e) =>
-                                  setSettings((s) => ({ ...s, time: e.target.value }))
-                                }
-                                disabled={!settings.enabled}
-                                className="bg-slate-900 border-cyan-500/30 text-cyan-100"
-                              />
-                              <p className="text-xs text-cyan-300/60">
-                                Recommended: Set during off-peak hours (e.g., 2:00 AM)
-                              </p>
-                            </div>
-
-                            {/* Retention */}
-                            <div className="space-y-2">
-                              <Label className="text-cyan-100">Retention (Backups to Keep)</Label>
-                              <Select
-                                value={settings.retentionCount.toString()}
-                                onValueChange={(value) =>
-                                  setSettings((s) => ({ ...s, retentionCount: parseInt(value) }))
-                                }
-                              >
-                                <SelectTrigger className="bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                  <SelectValue placeholder="Select retention" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                  {[5, 10, 20, 30, 50, 100].map((count) => (
-                                    <SelectItem key={count} value={count.toString()} className="text-cyan-100 focus:bg-cyan-500/20">
-                                      {count} backups
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Data Selection Card */}
-                      <div className="relative group">
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                          <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                          <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                          
-                          <CardHeader className="pb-3">
-                            <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                              <FileSpreadsheet className="h-5 w-5" />
-                              Data Selection
-                            </CardTitle>
-                            <CardDescription className="text-cyan-300/60">
-                              Choose which tables to backup and set the date range.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-6">
-                            {/* Date Range */}
-                            <div className="space-y-4">
-                              <Label className="text-cyan-100">Date Range (Optional)</Label>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-cyan-300/60">From</Label>
-                                  <Input
-                                    type="date"
-                                    value={settings.dateRangeFrom}
-                                    onChange={(e) =>
-                                      setSettings((s) => ({ ...s, dateRangeFrom: e.target.value }))
-                                    }
-                                    className="bg-slate-900 border-cyan-500/30 text-cyan-100"
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-cyan-300/60">To</Label>
-                                  <Input
-                                    type="date"
-                                    value={settings.dateRangeTo}
-                                    onChange={(e) =>
-                                      setSettings((s) => ({ ...s, dateRangeTo: e.target.value }))
-                                    }
-                                    className="bg-slate-900 border-cyan-500/30 text-cyan-100"
-                                  />
-                                </div>
-                              </div>
-                              <p className="text-xs text-cyan-300/60">
-                                Leave dates empty to backup all data regardless of date.
-                              </p>
-                            </div>
-
-                            <Separator className="bg-cyan-500/20" />
-
-                            {/* Tables Selection */}
-                            <div className="space-y-3">
-                              <Label className="text-cyan-100">Select Tables to Backup</Label>
-                              <div className="space-y-2 max-h-[300px] overflow-y-auto border border-cyan-500/30 rounded-lg p-3 bg-slate-800/30">
-                                {AVAILABLE_TABLES.map((table) => (
-                                  <div key={table.id} className="flex items-center space-x-2 p-2 hover:bg-cyan-500/10 rounded transition-colors">
-                                    <Checkbox
-                                      id={table.id}
-                                      checked={settings.includeTables.includes(table.id)}
-                                      onCheckedChange={() => toggleTable(table.id)}
-                                    />
-                                    <div className="flex-1">
-                                      <Label htmlFor={table.id} className="text-sm text-cyan-100 cursor-pointer">
-                                        {table.name}
-                                      </Label>
-                                      <p className="text-xs text-cyan-300/60">
-                                        {table.db === "supabase" ? "PostgreSQL (Supabase)" : "MongoDB"}
-                                      </p>
-                                    </div>
-                                    <Badge variant="outline" className="text-xs border-cyan-500/30 text-cyan-300">
-                                      {table.db}
-                                    </Badge>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </div>
-
-                    {/* Storage Location Card */}
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                        
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                            <Cloud className="h-5 w-5" />
-                            Storage Location
-                          </CardTitle>
-                          <CardDescription className="text-cyan-300/60">
-                            Choose where to store your backup files.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="space-y-2">
-                            <Label className="text-cyan-100">Storage Type</Label>
-                            <Select
-                              value={settings.storageLocation}
-                              onValueChange={(v: "local" | "cloud" | "both") =>
-                                setSettings((s) => ({ ...s, storageLocation: v }))
-                              }
-                            >
-                              <SelectTrigger className="bg-slate-950 border-cyan-500/30 text-cyan-100">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                <SelectItem value="local" className="text-cyan-100">Local Storage</SelectItem>
-                                <SelectItem value="cloud" className="text-cyan-100">Cloud Only</SelectItem>
-                                <SelectItem value="both" className="text-cyan-100">Local + Cloud</SelectItem>
-                              </SelectContent>
-                            </Select>
+                  <div>
+                    <FieldLabel>Tables to Backup</FieldLabel>
+                    <div className="border overflow-y-auto max-h-52 space-y-0" style={{ borderColor: C.border }}>
+                      {AVAILABLE_TABLES.map(t => (
+                        <label key={t.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer border-b last:border-b-0 transition-colors"
+                          style={{ borderColor: C.muted + "30" }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)")}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+                          <Checkbox checked={settings.includeTables.includes(t.id)}
+                            onCheckedChange={() => toggleTable(t.id)}
+                            className="rounded-none border-orange-500/40 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 h-3.5 w-3.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-bold" style={{ color: C.text }}>{t.name}</p>
+                            <p className="text-[9px]" style={{ color: C.muted }}>{t.db === "supabase" ? "PostgreSQL · Supabase" : "MongoDB"}</p>
                           </div>
-                          
-                          {settings.storageLocation !== "local" && (
-                            <div className="space-y-2">
-                              <Label className="text-cyan-100">Cloud Provider</Label>
-                              <Select
-                                value={settings.cloudProvider}
-                                onValueChange={(v: "aws" | "gcp" | "azure" | "supabase") =>
-                                  setSettings((s) => ({ ...s, cloudProvider: v }))
-                                }
-                              >
-                                <SelectTrigger className="bg-slate-950 border-cyan-500/30 text-cyan-100">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                  <SelectItem value="supabase" className="text-cyan-100">Supabase</SelectItem>
-                                  <SelectItem value="aws" className="text-cyan-100">AWS S3</SelectItem>
-                                  <SelectItem value="gcp" className="text-cyan-100">Google Cloud</SelectItem>
-                                  <SelectItem value="azure" className="text-cyan-100">Azure Blob</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
+                          <span className="text-[9px] px-1.5 py-0.5 border font-bold uppercase"
+                            style={{ borderColor: t.db === "supabase" ? "#60a5fa40" : "#a78bfa40", color: t.db === "supabase" ? "#60a5fa" : "#a78bfa" }}>
+                            {t.db}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </SectionCard>
+              </div>
+
+              {/* Row 2: Storage + Notifications */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                {/* Storage */}
+                <SectionCard icon={Cloud} title="Storage Location">
+                  <div>
+                    <FieldLabel>Storage Type</FieldLabel>
+                    <OpsSelect value={settings.storageLocation} onValueChange={v => set({ storageLocation: v })}>
+                      <OpsSelectItem value="local">Local Storage</OpsSelectItem>
+                      <OpsSelectItem value="cloud">Cloud Only</OpsSelectItem>
+                      <OpsSelectItem value="both">Local + Cloud</OpsSelectItem>
+                    </OpsSelect>
+                  </div>
+                  {settings.storageLocation !== "local" && (
+                    <div>
+                      <FieldLabel>Cloud Provider</FieldLabel>
+                      <OpsSelect value={settings.cloudProvider} onValueChange={v => set({ cloudProvider: v })}>
+                        <OpsSelectItem value="supabase">Supabase</OpsSelectItem>
+                        <OpsSelectItem value="aws">AWS S3</OpsSelectItem>
+                        <OpsSelectItem value="gcp">Google Cloud</OpsSelectItem>
+                        <OpsSelectItem value="azure">Azure Blob</OpsSelectItem>
+                      </OpsSelect>
+                    </div>
+                  )}
+                </SectionCard>
+
+                {/* Notifications */}
+                <SectionCard icon={Bell} title="Notifications">
+                  <ToggleRow label="Notify on Success" hint="Alert when backup completes"
+                    checked={settings.notifyOnSuccess} onCheckedChange={v => set({ notifyOnSuccess: v })} />
+                  <ToggleRow label="Notify on Failure" hint="Alert when backup fails"
+                    checked={settings.notifyOnFailure} onCheckedChange={v => set({ notifyOnFailure: v })} />
+                  <ToggleRow label="Email Notifications" hint="Send email alongside Firebase"
+                    checked={settings.emailNotifications} onCheckedChange={v => set({ emailNotifications: v })} />
+                  {settings.emailNotifications && (
+                    <div>
+                      <FieldLabel>Notification Email</FieldLabel>
+                      <input type="email" placeholder="admin@company.com" value={settings.notificationEmail}
+                        onChange={e => set({ notificationEmail: e.target.value })}
+                        className="w-full h-8 px-3 text-[11px] focus:outline-none"
+                        style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }} />
+                    </div>
+                  )}
+                </SectionCard>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3">
+                <button onClick={handleSave} disabled={loading}
+                  className="flex items-center gap-2 h-9 px-5 text-[11px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+                  style={{ backgroundColor: "rgba(232,99,10,0.15)", borderColor: C.accent, color: C.accent }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.25)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.15)"; }}>
+                  {loading ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
+                  {loading ? "Saving…" : "Save Settings"}
+                </button>
+                <button onClick={handleRunNow} disabled={runningBackup || settings.includeTables.length === 0}
+                  className="flex items-center gap-2 h-9 px-5 text-[11px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                  {runningBackup ? <Loader2 className="size-3 animate-spin" /> : <Play className="size-3" />}
+                  {runningBackup ? "Running…" : "Run Backup Now"}
+                </button>
+              </div>
+
+              {/* Backup History */}
+              <SectionCard icon={Database} title="Backup History">
+                {backupHistory.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-2">
+                    <HardDrive className="size-8 opacity-20" style={{ color: C.dim }} />
+                    <p className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>No backup history</p>
+                  </div>
+                ) : (
+                  <div className="space-y-0 border" style={{ borderColor: C.border }}>
+                    {backupHistory.map((b, i) => (
+                      <div key={b.id} className="flex items-center gap-3 px-4 py-3 border-b last:border-b-0"
+                        style={{ borderColor: C.muted + "30", backgroundColor: i % 2 === 0 ? C.bg : C.panel }}>
+                        <StatusDot status={b.status} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold" style={{ color: C.text }}>
+                            {format(new Date(b.timestamp), "MMM dd, yyyy HH:mm")}
+                          </p>
+                          <p className="text-[10px]" style={{ color: C.muted }}>
+                            {b.frequency} · {b.recordsCount.toLocaleString()} records · {b.size}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Preview */}
+                          <button onClick={() => handlePreview(b.id)}
+                            className="h-6 w-6 flex items-center justify-center border transition-all"
+                            style={{ borderColor: C.border, color: C.dim }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                            <Eye className="size-3" />
+                          </button>
+                          {b.status === "success" && (<>
+                            {/* Download ZIP */}
+                            <button onClick={() => handleDownloadZip(b.id)}
+                              className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-all"
+                              style={{ borderColor: "#34d39940", color: "#34d399", backgroundColor: "rgba(52,211,153,0.08)" }}
+                              onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(52,211,153,0.15)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(52,211,153,0.08)"; }}>
+                              <Download className="size-3" /> ZIP
+                            </button>
+                            {/* Restore */}
+                            <button onClick={() => handleOpenRestore(b.id, b.tables || [])}
+                              className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase tracking-wider border transition-all"
+                              style={{ borderColor: "#fbbf2440", color: "#fbbf24", backgroundColor: "rgba(251,191,36,0.08)" }}
+                              onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(251,191,36,0.15)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(251,191,36,0.08)"; }}>
+                              <RotateCcw className="size-3" /> Restore
+                            </button>
+                            {/* Verify */}
+                            <button onClick={() => handleVerify(b.id)} disabled={verifyingBackup}
+                              className="h-6 w-6 flex items-center justify-center border transition-all disabled:opacity-40"
+                              style={{ borderColor: "#a78bfa40", color: "#a78bfa" }}
+                              onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(167,139,250,0.1)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; }}>
+                              {verifyingBackup ? <Loader2 className="size-3 animate-spin" /> : <Shield className="size-3" />}
+                            </button>
+                          </>)}
+                          {b.status === "in_progress" && (
+                            <span className="text-[9px] px-2 py-0.5 border font-bold uppercase"
+                              style={{ borderColor: "#fbbf2440", color: "#fbbf24" }}>
+                              <Loader2 className="size-3 animate-spin inline mr-1" />Running
+                            </span>
                           )}
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* Notifications Card */}
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                        
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                            <Bell className="h-5 w-5" />
-                            Notifications
-                          </CardTitle>
-                          <CardDescription className="text-cyan-300/60">
-                            Configure notification alerts for backup status.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                            <div className="space-y-0.5">
-                              <Label className="text-cyan-100">Notify on Success</Label>
-                              <p className="text-xs text-cyan-300/60">
-                                Send notification when backup completes successfully
-                              </p>
-                            </div>
-                            <Switch
-                              checked={settings.notifyOnSuccess}
-                              onCheckedChange={(checked) =>
-                                setSettings((s) => ({ ...s, notifyOnSuccess: checked }))
-                              }
-                            />
-                          </div>
-                          <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                            <div className="space-y-0.5">
-                              <Label className="text-cyan-100">Notify on Failure</Label>
-                              <p className="text-xs text-cyan-300/60">
-                                Send notification when backup fails
-                              </p>
-                            </div>
-                            <Switch
-                              checked={settings.notifyOnFailure}
-                              onCheckedChange={(checked) =>
-                                setSettings((s) => ({ ...s, notifyOnFailure: checked }))
-                              }
-                            />
-                          </div>
-                          <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                            <div className="space-y-0.5">
-                              <Label className="text-cyan-100 flex items-center gap-2">
-                                <Mail className="h-4 w-4" />
-                                Email Notifications
-                              </Label>
-                              <p className="text-xs text-cyan-300/60">
-                                Also send email notifications alongside Firebase
-                              </p>
-                            </div>
-                            <Switch
-                              checked={settings.emailNotifications}
-                              onCheckedChange={(checked) =>
-                                setSettings((s) => ({ ...s, emailNotifications: checked }))
-                              }
-                            />
-                          </div>
-                          {settings.emailNotifications && (
-                            <div className="space-y-2 p-3 bg-slate-800/30 rounded-lg border border-cyan-500/10">
-                              <Label className="text-cyan-100">Notification Email</Label>
-                              <Input
-                                type="email"
-                                placeholder="admin@company.com"
-                                value={settings.notificationEmail || ""}
-                                onChange={(e) =>
-                                  setSettings((s) => ({ ...s, notificationEmail: e.target.value }))
-                                }
-                                className="bg-slate-900 border-cyan-500/30 text-cyan-100"
-                              />
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <Button
-                        onClick={handleSaveSettings}
-                        disabled={loading}
-                        className="flex-1 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white border border-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="mr-2 h-4 w-4" />
-                            Save Settings
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        onClick={handleRunBackupNow}
-                        disabled={runningBackup || settings.includeTables.length === 0}
-                        variant="outline"
-                        className="flex-1 bg-slate-900 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300"
-                      >
-                        {runningBackup ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Running Backup...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="mr-2 h-4 w-4" />
-                            Run Backup Now
-                          </>
-                        )}
-                      </Button>
-                    </div>
-
-                    {/* Backup History Card */}
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                        
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                            <Cloud className="h-5 w-5" />
-                            Backup History
-                          </CardTitle>
-                          <CardDescription className="text-cyan-300/60">
-                            Recent backup operations and their status.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          {backupHistory.length === 0 ? (
-                            <div className="text-center py-8 text-cyan-300/60">
-                              <HardDrive className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                              <p>No backup history available</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-3 w-full">
-                              {backupHistory.map((backup) => (
-                                <div
-                                  key={backup.id}
-                                  className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20 w-full"
-                                >
-                                  <div className="flex items-center gap-3 flex-1">
-                                    <div
-                                      className={`h-3 w-3 rounded-full ${getStatusColor(backup.status)}`}
-                                    />
-                                    <div className="flex-1">
-                                      <p className="text-sm font-medium text-cyan-100">
-                                        {format(new Date(backup.timestamp), "MMM dd, yyyy HH:mm")}
-                                      </p>
-                                      <p className="text-xs text-cyan-300/60">
-                                        {backup.frequency} • {backup.recordsCount.toLocaleString()} records • {backup.size}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    {/* Preview Button - Available for all statuses */}
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handlePreviewBackup(backup.id)}
-                                      className="bg-slate-900 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                    
-                                    {backup.status === "success" && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          onClick={() => handleDownloadZip(backup.id)}
-                                          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white border border-emerald-400/50 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                                        >
-                                          <Download className="h-4 w-4 mr-1" />
-                                          ZIP
-                                        </Button>
-                                        
-                                        {/* Restore Button */}
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => handleOpenRestore(backup.id, backup.tables || [])}
-                                          className="bg-slate-900 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
-                                        >
-                                          <RotateCcw className="h-4 w-4 mr-1" />
-                                          Restore
-                                        </Button>
-                                        
-                                        {/* Verify Button */}
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => handleVerifyBackup(backup.id)}
-                                          disabled={verifyingBackup}
-                                          className="bg-slate-900 border-purple-500/30 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300"
-                                        >
-                                          {verifyingBackup ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                          ) : (
-                                            <Shield className="h-4 w-4" />
-                                          )}
-                                        </Button>
-                                      </>
-                                    )}
-                                    {backup.status === "failed" && (
-                                      <Badge variant="destructive">Failed</Badge>
-                                    )}
-                                    {backup.status === "in_progress" && (
-                                      <Badge variant="outline" className="border-amber-500/50 text-amber-400">
-                                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                        Running
-                                      </Badge>
-                                    )}
-                                    
-                                    {/* Delete Button */}
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => {
-                                        if (confirm("Are you sure you want to delete this backup?")) {
-                                          handleDeleteBackup(backup.id);
-                                        }
-                                      }}
-                                      className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
-                </main>
-              </div>
-            </div>
-          </SidebarInset>
-        </SidebarProvider>
-      </TooltipProvider>
-
-      {/* Preview Dialog */}
-      <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
-        <DialogContent className="bg-slate-900 border-cyan-500/30 text-cyan-100 max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-cyan-400 flex items-center gap-2">
-              <Eye className="h-5 w-5" />
-              Backup Preview
-            </DialogTitle>
-            <DialogDescription className="text-cyan-300/60">
-              Preview of the backup data (first 5 rows per table)
-            </DialogDescription>
-          </DialogHeader>
-          
-          {loadingPreview ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
-              <span className="ml-2 text-cyan-300">Loading preview...</span>
-            </div>
-          ) : previewData ? (
-            <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-4 p-4 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                <div>
-                  <p className="text-xs text-cyan-300/60 uppercase">Date</p>
-                  <p className="text-sm text-cyan-100">{format(new Date(previewData.timestamp), "MMM dd, yyyy HH:mm")}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-cyan-300/60 uppercase">Tables</p>
-                  <p className="text-sm text-cyan-100">{previewData.tables?.length || 0}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-cyan-300/60 uppercase">Records</p>
-                  <p className="text-sm text-cyan-100">{previewData.recordsCount?.toLocaleString() || 0}</p>
-                </div>
-              </div>
-
-              {previewData.previewData && Object.entries(previewData.previewData).map(([tableName, rows]: [string, any]) => (
-                <div key={tableName} className="space-y-2">
-                  <h3 className="text-sm font-semibold text-cyan-400 flex items-center gap-2">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    {tableName}
-                    <Badge variant="outline" className="text-xs border-cyan-500/30 text-cyan-300">
-                      {rows.length} rows
-                    </Badge>
-                  </h3>
-                  <div className="overflow-x-auto rounded-lg border border-cyan-500/20">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-slate-800/80 hover:bg-slate-800/80">
-                          {rows.length > 0 && Object.keys(rows[0]).slice(0, 5).map((key) => (
-                            <TableHead key={key} className="text-cyan-400 text-xs">{key}</TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {rows.map((row: any, idx: number) => (
-                          <TableRow key={idx} className="bg-slate-900/50 hover:bg-slate-800/50">
-                            {Object.values(row).slice(0, 5).map((value: any, vidx: number) => (
-                              <TableCell key={vidx} className="text-cyan-100/80 text-xs py-2">
-                                {typeof value === 'string' && value.length > 30 
-                                  ? value.substring(0, 30) + '...' 
-                                  : String(value)}
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-cyan-300/60 text-center py-4">No preview data available</p>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Progress Dialog */}
-      {runningBackup && backupProgress && (
-        <Dialog open={runningBackup}>
-          <DialogContent className="bg-slate-900 border-cyan-500/30 text-cyan-100">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-bold text-cyan-400 flex items-center gap-2">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Backup in Progress
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-cyan-300">Processing: {backupProgress.table}</span>
-                  <span className="text-cyan-400">{backupProgress.current} of {backupProgress.total}</span>
-                </div>
-                <Progress 
-                  value={(backupProgress.current / backupProgress.total) * 100} 
-                  className="h-2 bg-slate-800"
-                />
-              </div>
-              <p className="text-xs text-cyan-300/60 text-center">
-                Please wait while we backup your data...
-              </p>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Restore Dialog */}
-      <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
-        <DialogContent className="bg-slate-900 border-cyan-500/30 text-cyan-100 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-amber-400 flex items-center gap-2">
-              <RotateCcw className="h-5 w-5" />
-              Restore Backup
-            </DialogTitle>
-            <DialogDescription className="text-cyan-300/60">
-              Restore data from backup to database
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            {restoreResults ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <CheckCircle className="h-5 w-5" />
-                  <span className="font-medium">Restore completed!</span>
-                </div>
-                <div className="space-y-2">
-                  {restoreResults.map((result: any, idx: number) => (
-                    <div key={idx} className="flex justify-between p-2 bg-slate-800/50 rounded border border-cyan-500/20">
-                      <span className="text-cyan-300">{result.table}</span>
-                      <span className="text-emerald-400">{result.restored} / {result.total} records</span>
-                    </div>
-                  ))}
-                </div>
-                <Button 
-                  onClick={() => setRestoreDialogOpen(false)} 
-                  className="w-full bg-cyan-600 hover:bg-cyan-500"
-                >
-                  Close
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-cyan-100">Tables to Restore</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {AVAILABLE_TABLES.map((table) => (
-                      <div key={table.id} className="flex items-center gap-2 p-2 bg-slate-800/30 rounded">
-                        <Checkbox
-                          checked={restoreOptions.restoreTables.includes(table.id)}
-                          onCheckedChange={(checked) => {
-                            setRestoreOptions((prev) => ({
-                              ...prev,
-                              restoreTables: checked
-                                ? [...prev.restoreTables, table.id]
-                                : prev.restoreTables.filter((id) => id !== table.id),
-                            }));
-                          }}
-                        />
-                        <span className="text-sm text-cyan-200">{table.name}</span>
+                          {/* Delete */}
+                          <button onClick={() => handleDelete(b.id)}
+                            className="h-6 w-6 flex items-center justify-center border transition-all"
+                            style={{ borderColor: C.border, color: C.dim }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = "#f87171"; e.currentTarget.style.color = "#f87171"; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                            <Trash2 className="size-3" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
+                )}
+              </SectionCard>
+
+            </div>
+          </div>
+
+        </SidebarInset>
+      </SidebarProvider>
+
+      {/* ── Preview Dialog ── */}
+      <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto rounded-none p-0 gap-0"
+          style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}>
+          <DialogHeader className="px-5 py-4 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+            <DialogTitle className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: C.accent }}>
+              <Eye className="size-3" /> Backup Preview
+            </DialogTitle>
+            <DialogDescription className="text-[10px] uppercase tracking-wider mt-1" style={{ color: C.muted }}>
+              First 5 rows per table
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-5">
+            {loadingPreview ? (
+              <div className="flex items-center justify-center py-10 gap-3">
+                <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
+                <span className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>Loading…</span>
+              </div>
+            ) : previewData ? (
+              <div className="space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                  {[["Date", format(new Date(previewData.timestamp), "MMM dd, yyyy HH:mm")],
+                    ["Tables", previewData.tables?.length || 0],
+                    ["Records", (previewData.recordsCount || 0).toLocaleString()]].map(([l, v]) => (
+                    <div key={String(l)} className="px-3 py-2 border" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                      <p className="text-[9px] uppercase tracking-widest" style={{ color: C.muted }}>{l}</p>
+                      <p className="text-[11px] font-bold mt-0.5" style={{ color: C.text }}>{v}</p>
+                    </div>
+                  ))}
                 </div>
-                
-                <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                  <div>
-                    <Label className="text-cyan-100">Overwrite Existing Data</Label>
-                    <p className="text-xs text-cyan-300/60">Delete existing data before restoring</p>
+                {previewData.previewData && Object.entries(previewData.previewData).map(([tbl, rows]: [string, any]) => (
+                  <div key={tbl}>
+                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2" style={{ color: C.accent }}>
+                      <FileSpreadsheet className="size-3" /> {tbl}
+                      <span className="text-[9px] px-1.5 py-0.5 border" style={{ borderColor: C.border, color: C.dim }}>{rows.length} rows</span>
+                    </p>
+                    <div className="overflow-x-auto border" style={{ borderColor: C.border }}>
+                      <table className="w-full border-collapse" style={{ fontSize: "10px", fontFamily: C.font }}>
+                        <thead>
+                          <tr style={{ backgroundColor: C.panel, borderBottom: `1px solid ${C.border}` }}>
+                            {rows.length > 0 && Object.keys(rows[0]).slice(0,5).map((k: string) => (
+                              <th key={k} className="text-left px-3 py-2 font-bold uppercase tracking-widest text-[9px]" style={{ color: C.accent }}>{k}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row: any, i: number) => (
+                            <tr key={i} style={{ backgroundColor: i%2===0?C.bg:C.panel, borderBottom: `1px solid ${C.border}` }}>
+                              {Object.values(row).slice(0,5).map((v: any, j: number) => (
+                                <td key={j} className="px-3 py-1.5" style={{ color: C.dim }}>
+                                  {typeof v === "string" && v.length > 30 ? v.slice(0,30)+"…" : String(v ?? "—")}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <Switch
-                    checked={restoreOptions.overwrite}
-                    onCheckedChange={(checked) =>
-                      setRestoreOptions((prev) => ({ ...prev, overwrite: checked }))
-                    }
-                  />
+                ))}
+              </div>
+            ) : <p className="text-center py-8" style={{ color: C.muted }}>No preview data</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Restore Dialog ── */}
+      <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+        <DialogContent className="max-w-lg rounded-none p-0 gap-0"
+          style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}>
+          <DialogHeader className="px-5 py-4 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+            <DialogTitle className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: "#fbbf24" }}>
+              <RotateCcw className="size-3" /> Restore Backup
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-5 space-y-4">
+            {restoreResults ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2" style={{ color: "#34d399" }}>
+                  <CheckCircle className="size-4" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Restore completed</span>
                 </div>
-                
-                <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                  <Label className="text-cyan-100">Notify on Restore</Label>
-                  <Switch
-                    checked={restoreOptions.notifyOnRestore}
-                    onCheckedChange={(checked) =>
-                      setRestoreOptions((prev) => ({ ...prev, notifyOnRestore: checked }))
-                    }
-                  />
+                {restoreResults.map((r: any, i: number) => (
+                  <div key={i} className="flex justify-between px-3 py-2 border" style={{ borderColor: C.border }}>
+                    <span className="text-[11px]" style={{ color: C.text }}>{r.table}</span>
+                    <span className="text-[11px] font-bold" style={{ color: "#34d399" }}>{r.restored}/{r.total}</span>
+                  </div>
+                ))}
+                <button onClick={() => setRestoreDialogOpen(false)}
+                  className="w-full h-8 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}>
+                  Close
+                </button>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: C.dim }}>Tables to Restore</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {AVAILABLE_TABLES.map(t => (
+                      <label key={t.id} className="flex items-center gap-2 px-2 py-1.5 border cursor-pointer"
+                        style={{ borderColor: C.border }}>
+                        <Checkbox checked={restoreOptions.restoreTables.includes(t.id)}
+                          onCheckedChange={c => setRestoreOptions(p => ({
+                            ...p, restoreTables: c ? [...p.restoreTables, t.id] : p.restoreTables.filter(x => x !== t.id)
+                          }))}
+                          className="rounded-none border-orange-500/40 data-[state=checked]:bg-orange-500 h-3.5 w-3.5" />
+                        <span className="text-[10px]" style={{ color: C.text }}>{t.name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-                
-                <div className="flex gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setRestoreDialogOpen(false)}
-                    className="flex-1 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20"
-                  >
+                <ToggleRow label="Overwrite Existing Data" hint="Delete existing data before restoring"
+                  checked={restoreOptions.overwrite} onCheckedChange={v => setRestoreOptions(p => ({ ...p, overwrite: v }))} />
+                <ToggleRow label="Notify on Restore"
+                  checked={restoreOptions.notifyOnRestore} onCheckedChange={v => setRestoreOptions(p => ({ ...p, notifyOnRestore: v }))} />
+                <div className="flex gap-2 pt-2">
+                  <button onClick={() => setRestoreDialogOpen(false)}
+                    className="flex-1 h-8 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                    style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}>
                     Cancel
-                  </Button>
-                  <Button
-                    onClick={handleRestoreBackup}
-                    disabled={restoringBackup || restoreOptions.restoreTables.length === 0}
-                    className="flex-1 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white"
-                  >
-                    {restoringBackup ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Restoring...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Restore
-                      </>
-                    )}
-                  </Button>
+                  </button>
+                  <button onClick={handleRestore} disabled={restoringBackup || restoreOptions.restoreTables.length === 0}
+                    className="flex-1 flex items-center justify-center gap-2 h-8 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+                    style={{ backgroundColor: "rgba(251,191,36,0.15)", borderColor: "#fbbf24", color: "#fbbf24" }}>
+                    {restoringBackup ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
+                    {restoringBackup ? "Restoring…" : "Restore"}
+                  </button>
                 </div>
               </>
             )}
@@ -1418,109 +747,70 @@ export default function BackupDatabaseSettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Calendar View Dialog */}
-      <Dialog open={calendarViewOpen} onOpenChange={setCalendarViewOpen}>
-        <DialogContent className="bg-slate-900 border-cyan-500/30 text-cyan-100 max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-cyan-400 flex items-center gap-2">
-              <CalendarDays className="h-5 w-5" />
-              Backup Schedule Calendar
+      {/* ── Verification Dialog ── */}
+      <Dialog open={!!verificationResult} onOpenChange={() => setVerificationResult(null)}>
+        <DialogContent className="max-w-md rounded-none p-0 gap-0"
+          style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}>
+          <DialogHeader className="px-5 py-4 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+            <DialogTitle className="text-xs font-bold uppercase tracking-widest flex items-center gap-2"
+              style={{ color: verificationResult?.verified ? "#34d399" : "#f87171" }}>
+              {verificationResult?.verified ? <CheckCircle className="size-3" /> : <AlertCircle className="size-3" />}
+              {verificationResult?.verified ? "Verification Passed" : "Verification Failed"}
             </DialogTitle>
-            <DialogDescription className="text-cyan-300/60">
-              View upcoming scheduled backups
-            </DialogDescription>
           </DialogHeader>
-          
-          <div className="py-4">
+          <div className="p-5 space-y-3">
+            {[["Checksum (SHA-256)", verificationResult?.checksum], ["Stored Checksum", verificationResult?.storedChecksum]].filter(([,v])=>v).map(([l,v]) => (
+              <div key={String(l)} className="px-3 py-2 border" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                <p className="text-[9px] uppercase tracking-widest" style={{ color: C.muted }}>{l}</p>
+                <p className="text-[10px] font-mono break-all mt-0.5" style={{ color: C.text }}>{v}</p>
+              </div>
+            ))}
+            <p className="text-[11px] text-center" style={{ color: C.dim }}>{verificationResult?.message}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Calendar Dialog ── */}
+      <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <DialogContent className="max-w-lg rounded-none p-0 gap-0"
+          style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}>
+          <DialogHeader className="px-5 py-4 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+            <DialogTitle className="text-xs font-bold uppercase tracking-widest flex items-center gap-2" style={{ color: C.accent }}>
+              <CalendarDays className="size-3" /> Backup Schedule Calendar
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-5">
             <div className="grid grid-cols-7 gap-1 text-center mb-2">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <div key={day} className="text-xs text-cyan-400 font-medium py-2">{day}</div>
+              {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
+                <div key={d} className="text-[9px] font-bold uppercase py-1" style={{ color: C.accent }}>{d}</div>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: 35 }, (_, i) => {
-                const date = new Date();
-                date.setDate(date.getDate() - 15 + i);
+              {Array.from({length:35},(_,i) => {
+                const date = new Date(); date.setDate(date.getDate() - 15 + i);
                 const isToday = date.toDateString() === new Date().toDateString();
                 const hasBackup = date.getDay() === settings.dayOfWeek && settings.enabled;
-                
                 return (
-                  <div
-                    key={i}
-                    className={`
-                      aspect-square p-2 rounded-lg border text-xs flex flex-col items-center justify-center
-                      ${isToday ? "bg-cyan-600/30 border-cyan-500" : "bg-slate-800/30 border-cyan-500/20"}
-                      ${hasBackup ? "ring-2 ring-emerald-500/50" : ""}
-                    `}
-                  >
-                    <span className={isToday ? "text-cyan-200 font-bold" : "text-cyan-300/70"}>
-                      {date.getDate()}
-                    </span>
-                    {hasBackup && (
-                      <div className="mt-1">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      </div>
-                    )}
+                  <div key={i} className="aspect-square flex flex-col items-center justify-center border text-[10px]"
+                    style={{
+                      borderColor: isToday ? C.accent : C.border,
+                      backgroundColor: isToday ? "rgba(232,99,10,0.1)" : C.bg,
+                      color: isToday ? C.accent : C.dim,
+                    }}>
+                    {date.getDate()}
+                    {hasBackup && <div className="w-1.5 h-1.5 rounded-full mt-0.5" style={{ backgroundColor: "#34d399" }} />}
                   </div>
                 );
               })}
             </div>
-            <div className="mt-4 flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-cyan-300/70">Scheduled Backup</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded bg-cyan-600/30 border border-cyan-500" />
-                <span className="text-cyan-300/70">Today</span>
-              </div>
+            <div className="flex items-center gap-4 mt-4 text-[10px]" style={{ color: C.muted }}>
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: "#34d399" }} /> Scheduled</div>
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 border" style={{ borderColor: C.accent }} /> Today</div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Verification Result Dialog */}
-      <Dialog open={!!verificationResult} onOpenChange={() => setVerificationResult(null)}>
-        <DialogContent className="bg-slate-900 border-cyan-500/30 text-cyan-100 max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              {verificationResult?.verified ? (
-                <>
-                  <CheckCircle className="h-5 w-5 text-emerald-400" />
-                  <span className="text-emerald-400">Verification Passed</span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="h-5 w-5 text-red-400" />
-                  <span className="text-red-400">Verification Failed</span>
-                </>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="py-4 space-y-3">
-            <div className="p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-              <p className="text-xs text-cyan-300/60 uppercase mb-1">Checksum (SHA-256)</p>
-              <p className="text-xs text-cyan-100 font-mono break-all">
-                {verificationResult?.checksum}
-              </p>
-            </div>
-            
-            {verificationResult?.storedChecksum && (
-              <div className="p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                <p className="text-xs text-cyan-300/60 uppercase mb-1">Stored Checksum</p>
-                <p className="text-xs text-cyan-100 font-mono break-all">
-                  {verificationResult?.storedChecksum}
-                </p>
-              </div>
-            )}
-            
-            <p className="text-sm text-cyan-300/80 text-center">
-              {verificationResult?.message}
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
     </ProtectedPageWrapper>
   );
 }

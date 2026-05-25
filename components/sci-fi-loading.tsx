@@ -1,98 +1,111 @@
 "use client";
+import { Terminal } from "lucide-react";
 
-import { Cpu, Loader2 } from "lucide-react";
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+};
 
-export default function Loading() {
+interface SciFiLoadingProps {
+  message?: string;
+  fullScreen?: boolean;
+}
+
+export default function SciFiLoading({ message = "Initializing…", fullScreen = true }: SciFiLoadingProps) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-[#050a14]">
-      {/* Animated background grid - full screen coverage */}
-      <div className="absolute inset-0 h-full w-full">
-        <div 
-          className="h-full w-full opacity-20"
+    <div
+      className={`flex flex-col items-center justify-center ${fullScreen ? "fixed inset-0" : "w-full h-full min-h-[200px]"}`}
+      style={{ backgroundColor: fullScreen ? C.bg : "transparent", fontFamily: C.font }}
+    >
+      {/* Dot-grid (only on full screen) */}
+      {fullScreen && (
+        <div
+          className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: `
-              linear-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(6, 182, 212, 0.15) 1px, transparent 1px)
-            `,
-            backgroundSize: '50px 50px',
-            backgroundRepeat: 'repeat'
+            backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+            backgroundSize: "24px 24px",
+            opacity: 0.2,
           }}
         />
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
+      )}
 
-      {/* Floating particles */}
-      <div className="absolute inset-0 h-full w-full overflow-hidden pointer-events-none">
-        {[...Array(20)].map((_, i) => (
+      {/* Corner accents (only on full screen) */}
+      {fullScreen && (
+        <>
+          <div className="absolute top-6 left-6 w-6 h-6 border-l-2 border-t-2" style={{ borderColor: C.accent + "60" }} />
+          <div className="absolute top-6 right-6 w-6 h-6 border-r-2 border-t-2" style={{ borderColor: C.accent + "60" }} />
+          <div className="absolute bottom-6 left-6 w-6 h-6 border-l-2 border-b-2" style={{ borderColor: C.accent + "60" }} />
+          <div className="absolute bottom-6 right-6 w-6 h-6 border-r-2 border-b-2" style={{ borderColor: C.accent + "60" }} />
+        </>
+      )}
+
+      {/* Center content */}
+      <div className="relative z-10 flex flex-col items-center gap-5">
+
+        {/* Icon box */}
+        <div
+          className="flex h-14 w-14 items-center justify-center border"
+          style={{ borderColor: C.accent + "50", backgroundColor: "rgba(232,99,10,0.08)" }}
+        >
+          <Terminal className="size-6" style={{ color: C.accent }} />
+        </div>
+
+        {/* Spinner */}
+        <div className="relative flex items-center justify-center">
           <div
-            key={i}
-            className="absolute w-1 h-1 bg-cyan-400/60 rounded-full"
+            className="h-9 w-9 rounded-full border-2 border-t-transparent animate-spin"
+            style={{ borderColor: C.accent, borderTopColor: "transparent" }}
+          />
+          <div
+            className="absolute h-5 w-5 rounded-full border border-t-transparent animate-spin"
             style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `float ${5 + Math.random() * 10}s linear infinite`,
-              animationDelay: `${Math.random() * 5}s`
+              borderColor: C.dim,
+              borderTopColor: "transparent",
+              animationDirection: "reverse",
+              animationDuration: "0.8s",
             }}
           />
-        ))}
-      </div>
-
-      {/* Main loading container */}
-      <div className="relative z-10 flex flex-col items-center gap-6">
-        {/* CPU Icon with glow */}
-        <div className="relative">
-          <div className="absolute inset-0 bg-cyan-500/30 blur-xl rounded-full animate-pulse" />
-          <div className="relative flex h-20 w-20 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-cyan-500/40 shadow-[0_0_30px_rgba(6,182,212,0.3)]">
-            <Cpu className="h-10 w-10 text-cyan-400" />
-          </div>
         </div>
 
-        {/* Loading spinner */}
-        <div className="relative">
-          <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
-          <div className="absolute inset-0 blur-xl bg-cyan-500/30 rounded-full" />
-        </div>
-
-        {/* Loading text */}
-        <div className="text-center">
-          <p className="text-cyan-400 text-sm tracking-widest uppercase animate-pulse">
-            Initializing System...
+        {/* Label */}
+        <div className="text-center space-y-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.3em] animate-pulse" style={{ color: C.accent }}>
+            {message}
           </p>
-          <p className="text-slate-500 text-xs mt-2 font-mono">
-            LOADING MODULES
-          </p>
+          <p className="text-[10px] uppercase tracking-widest" style={{ color: C.dim }}>Loading modules</p>
         </div>
 
         {/* Progress bar */}
-        <div className="w-64 h-1 bg-slate-800 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 animate-[loading_2s_ease-in-out_infinite]" 
-            style={{
-              width: '30%',
-              animation: 'loading 2s ease-in-out infinite'
-            }}
+        <div className="w-40 h-px overflow-hidden" style={{ backgroundColor: C.muted }}>
+          <div
+            className="h-full"
+            style={{ backgroundColor: C.accent, animation: "progress-sweep 1.6s ease-in-out infinite" }}
           />
         </div>
       </div>
 
-      {/* Bottom status */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs text-slate-600">
-        <span className="font-mono">SYSTEM: ONLINE</span>
-        <span className="w-px h-4 bg-slate-700" />
-        <span className="font-mono">STATUS: LOADING</span>
-      </div>
+      {/* Bottom strip (full screen only) */}
+      {fullScreen && (
+        <div
+          className="absolute bottom-8 flex items-center gap-4 text-[10px] uppercase tracking-widest"
+          style={{ color: C.dim }}
+        >
+          <span>System: Online</span>
+          <span className="w-px h-3" style={{ backgroundColor: C.muted }} />
+          <span>Status: Loading</span>
+        </div>
+      )}
 
-      <style jsx global>{`
-        @keyframes loading {
-          0% { width: 0%; margin-left: 0%; }
-          50% { width: 30%; margin-left: 0%; }
-          100% { width: 0%; margin-left: 100%; }
-        }
-        @keyframes float {
-          0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+      <style>{`
+        @keyframes progress-sweep {
+          0%   { width: 0%;   margin-left: 0%;   }
+          50%  { width: 60%;  margin-left: 0%;   }
+          100% { width: 0%;   margin-left: 100%; }
         }
       `}</style>
     </div>

@@ -5,7 +5,6 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 
 import "./globals.css";
 import RootLayoutClient from "./root";
-import { ReactQueryProvider } from "@/lib/query-client";
 
 // Load Google Fonts with CSS variables for easy usage
 const inter = Inter({
@@ -35,9 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased font-sans`}>
-        <ReactQueryProvider>
-          <RootLayoutClient>{children}</RootLayoutClient>
-        </ReactQueryProvider>
+        <RootLayoutClient>{children}</RootLayoutClient>
       </body>
     </html>
   );

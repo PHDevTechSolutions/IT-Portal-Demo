@@ -39,7 +39,6 @@ const appOptions: Record<string, { name: string; path: string }[]> = {
     { name: "D-Tracking Logs", path: "/ecodesk/d-tracking-logs" },
     { name: "Outbound Calls", path: "/ecodesk/outbound-calls" },
   ],
-  Acculog: [{ name: "Activity Logs", path: "/acculog/activity-logs" }],
   WooCommerce: [{ name: "Orders", path: "/woocommerce/orders" }],
   Shopify: [
     { name: "Orders", path: "/shopify/orders" },

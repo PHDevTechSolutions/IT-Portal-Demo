@@ -1,310 +1,256 @@
 "use client";
-
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider, useFormat } from "@/contexts/FormatContext";
-
 import { AppSidebar } from "@/components/app-sidebar";
-
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbLink, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage,
+  BreadcrumbLink, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { type DateRange } from "react-day-picker";
-
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-
-import { 
-  Settings, 
-  Palette, 
-  Clock, 
-  Calendar, 
-  Monitor, 
-  CheckCircle2,
-  AlertCircle,
-  Shield,
-  Bell,
-  Globe
+import {
+  Palette, Clock, Calendar, Monitor, CheckCircle2,
+  AlertCircle, Shield, Settings,
 } from "lucide-react";
 
-function SettingsContent() {
-  const searchParams = useSearchParams();
-  const { userId, setUserId } = useUser();
+// ─── Color tokens ─────────────────────────────────────────────────────────────
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  text:   "#c8d8e8",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+};
 
-  const queryUserId = searchParams?.get("id") ?? "";
-  const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
-    useState<DateRange | undefined>(undefined);
+// ─── Setting card ─────────────────────────────────────────────────────────────
+function SettingCard({ icon: Icon, title, children }: {
+  icon: any; title: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="border" style={{ borderColor: C.border, backgroundColor: C.panel }}>
+      {/* Card header */}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+        <div className="flex h-6 w-6 items-center justify-center border"
+          style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+          <Icon className="size-3" style={{ color: C.accent }} />
+        </div>
+        <h2 className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.accent }}>{title}</h2>
+      </div>
+      <div className="p-4 space-y-3">{children}</div>
+    </div>
+  );
+}
+
+// ─── Setting row ──────────────────────────────────────────────────────────────
+function SettingRow({ label, hint, children }: {
+  label: string; hint?: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2 border-b last:border-b-0"
+      style={{ borderColor: C.muted + "30" }}>
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: C.text }}>{label}</p>
+        {hint && <p className="text-[10px] mt-0.5" style={{ color: C.muted }}>{hint}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Info row ─────────────────────────────────────────────────────────────────
+function InfoRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b last:border-b-0"
+      style={{ borderColor: C.muted + "30" }}>
+      <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>{label}</span>
+      <span className="text-[11px] font-bold font-mono" style={{ color: accent ? "#34d399" : C.text }}>{value}</span>
+    </div>
+  );
+}
+
+// ─── Ops Select ───────────────────────────────────────────────────────────────
+function OpsSelect({ value, onValueChange, children }: {
+  value: string; onValueChange: (v: string) => void; children: React.ReactNode;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="h-8 w-44 rounded-none text-[11px] focus:ring-0"
+        style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="rounded-none"
+        style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}>
+        {children}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function OpsSelectItem({ value, children }: { value: string; children: React.ReactNode }) {
+  return (
+    <SelectItem value={value}
+      className="text-[11px] rounded-none focus:bg-orange-500/10 focus:text-orange-400"
+      style={{ color: C.text, fontFamily: C.font }}>
+      {children}
+    </SelectItem>
+  );
+}
+
+// ─── Inner content (needs hooks) ──────────────────────────────────────────────
+function SettingsContent() {
+  const searchParams  = useSearchParams();
+  const { userId, setUserId } = useUser();
+  const queryUserId   = searchParams?.get("id") ?? "";
 
   useEffect(() => {
-    if (queryUserId && queryUserId !== userId) {
-      setUserId(queryUserId);
-    }
+    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
   }, [queryUserId, userId, setUserId]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme }                   = useTheme();
   const { timeFormat, setTimeFormat, dateFormat, setDateFormat } = useFormat();
 
-  const onTimeFormatChange = (val: string) => {
-    setTimeFormat(val);
-    toast.success(`Time format set to ${val}`);
-  };
+  const onTimeChange = (v: string) => { setTimeFormat(v); toast.success(`Time format → ${v}`); };
+  const onDateChange = (v: string) => { setDateFormat(v); toast.success(`Date format → ${v}`); };
 
-  const onDateFormatChange = (val: string) => {
-    setDateFormat(val);
-    toast.success(`Date format set to ${val}`);
-  };
+  const timePreview = timeFormat === "12h" ? "02:30 PM" : "14:30";
+  const datePreview = dateFormat === "short" ? "11/11/2025"
+    : dateFormat === "long" ? "Monday, November 11, 2025"
+    : "2025-11-11";
 
-  if (!mounted) {
-    return <></>;
-  }
+  // Don't render selects until theme is mounted (avoids hydration mismatch)
+  if (!mounted) return null;
 
   return (
-    <>
-      <ProtectedPageWrapper>
-        <AppSidebar />
-        <SidebarInset>
-          <div
-            className="min-h-screen w-full relative overflow-hidden"
-            style={{ backgroundColor: "#0d0d0b", fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace" }}
-          >
-            {/* Dot-grid texture */}
-            <div
-              className="fixed inset-0 pointer-events-none"
-              style={{ backgroundImage: `radial-gradient(circle, #2a2a1e 1px, transparent 1px)`, backgroundSize: "24px 24px", opacity: 0.18, zIndex: 0 }}
-            />
+    <div className="px-6 py-6 max-w-3xl mx-auto space-y-4">
 
-            {/* Main Content */}
-            <div className="relative z-10 w-full">
+      {/* Theme */}
+      <SettingCard icon={Palette} title="Theme">
+        <SettingRow label="Display Theme" hint="Applies immediately across all modules">
+          <OpsSelect value={theme ?? "system"} onValueChange={setTheme}>
+            <OpsSelectItem value="light">Light</OpsSelectItem>
+            <OpsSelectItem value="dark">Dark</OpsSelectItem>
+            <OpsSelectItem value="system">System</OpsSelectItem>
+          </OpsSelect>
+        </SettingRow>
+      </SettingCard>
 
-              {/* Header */}
-              <header className="flex h-11 shrink-0 items-center gap-2 px-4 border-b" style={{ backgroundColor: "#0d0d0b", borderColor: "#2a2a20" }}>
-                <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: "#5a5a40" }} />
-                <div className="w-px h-4" style={{ backgroundColor: "#2a2a20" }} />
+      {/* Time format */}
+      <SettingCard icon={Clock} title="Time Format">
+        <SettingRow label="Time Display" hint={`Preview: ${timePreview}`}>
+          <OpsSelect value={timeFormat} onValueChange={onTimeChange}>
+            <OpsSelectItem value="12h">12-Hour (AM/PM)</OpsSelectItem>
+            <OpsSelectItem value="24h">24-Hour (Military)</OpsSelectItem>
+          </OpsSelect>
+        </SettingRow>
+      </SettingCard>
+
+      {/* Date format */}
+      <SettingCard icon={Calendar} title="Date Format">
+        <SettingRow label="Date Display" hint={`Preview: ${datePreview}`}>
+          <OpsSelect value={dateFormat} onValueChange={onDateChange}>
+            <OpsSelectItem value="short">MM/DD/YYYY</OpsSelectItem>
+            <OpsSelectItem value="long">Monday, Nov 11, 2025</OpsSelectItem>
+            <OpsSelectItem value="iso">2025-11-11 (ISO)</OpsSelectItem>
+          </OpsSelect>
+        </SettingRow>
+      </SettingCard>
+
+      {/* System status */}
+      <SettingCard icon={Shield} title="System Status">
+        <InfoRow label="Version"     value="v2.0.6-stable" />
+        <InfoRow label="Environment" value="Production" />
+        <InfoRow label="Last Sync"   value={new Date().toLocaleTimeString()} />
+        <InfoRow label="Status"      value="● Online" accent />
+      </SettingCard>
+
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default function SettingsPage() {
+  return (
+    <UserProvider>
+      <FormatProvider>
+        <ProtectedPageWrapper>
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset className="flex flex-col h-svh overflow-hidden bg-[#080d12]"
+              style={{ fontFamily: C.font, color: C.text }}>
+
+              {/* Dot-grid */}
+              <div className="fixed inset-0 pointer-events-none" style={{
+                backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+                backgroundSize: "24px 24px", opacity: 0.15, zIndex: 0,
+              }} />
+
+              {/* ── Header ── */}
+              <header className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b bg-[#080d12]"
+                style={{ borderColor: C.border }}>
+                <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: C.dim }} />
+                <div className="w-px h-4" style={{ backgroundColor: C.border }} />
                 <Breadcrumb>
                   <BreadcrumbList>
                     <BreadcrumbItem>
-                      <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest" style={{ color: "#5a5a40" }}>Settings</BreadcrumbLink>
+                      <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest hidden sm:block"
+                        style={{ color: C.dim }}>Settings</BreadcrumbLink>
                     </BreadcrumbItem>
-                    <BreadcrumbSeparator style={{ color: "#3a3a28" }} />
+                    <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
                     <BreadcrumbItem>
-                      <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#e8630a" }}>General</BreadcrumbPage>
+                      <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold"
+                        style={{ color: C.accent }}>General</BreadcrumbPage>
                     </BreadcrumbItem>
                   </BreadcrumbList>
                 </Breadcrumb>
                 <div className="ml-auto flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] uppercase tracking-wider" style={{ color: "#5a5a40" }}>Online</span>
+                  <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Online</span>
                 </div>
               </header>
 
-              {/* Page Content */}
-              <div className="px-4 py-6">
-                <div className="mx-auto w-full max-w-4xl space-y-6">
-                  {/* Page Title */}
-                  <div className="mb-8">
-                    <h1 className="text-3xl font-bold tracking-wider text-white uppercase">
-                      <span className="text-cyan-400">SYSTEM</span> SETTINGS
-                    </h1>
-                    <p className="text-white/60 text-xs tracking-[0.3em] uppercase mt-1">
-                      Configuration Control Center
-                    </p>
-                  </div>
-
-                  {/* Settings Grid */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Theme Settings Card */}
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                        
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                            <Palette className="h-5 w-5" />
-                            Theme Settings
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                            <div className="flex items-center gap-3">
-                              <Monitor className="h-4 w-4 text-cyan-400" />
-                              <Label htmlFor="theme" className="text-cyan-100">Display Theme</Label>
-                            </div>
-                            <Select value={theme} onValueChange={setTheme}>
-                              <SelectTrigger id="theme" className="w-[160px] bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                <SelectValue placeholder="Select theme" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                <SelectItem value="light" className="text-cyan-100 focus:bg-cyan-500/20">Light</SelectItem>
-                                <SelectItem value="dark" className="text-cyan-100 focus:bg-cyan-500/20">Dark</SelectItem>
-                                <SelectItem value="system" className="text-cyan-100 focus:bg-cyan-500/20">System</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 text-xs text-cyan-300/60">
-                            <AlertCircle className="h-3 w-3" />
-                            <span>Changes apply immediately across all modules</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* Time Format Card */}
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                        
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                            <Clock className="h-5 w-5" />
-                            Time Format
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                            <div className="flex items-center gap-3">
-                              <Clock className="h-4 w-4 text-cyan-400" />
-                              <Label htmlFor="time-format" className="text-cyan-100">Time Display</Label>
-                            </div>
-                            <Select value={timeFormat} onValueChange={onTimeFormatChange}>
-                              <SelectTrigger id="time-format" className="w-[160px] bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                <SelectValue placeholder="Select time format" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                <SelectItem value="12h" className="text-cyan-100 focus:bg-cyan-500/20">12-Hour (AM/PM)</SelectItem>
-                                <SelectItem value="24h" className="text-cyan-100 focus:bg-cyan-500/20">24-Hour (Military)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 text-xs text-cyan-300/60">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>Current: {timeFormat === '12h' ? '02:30 PM' : '14:30'}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* Date Format Card */}
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                        
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                            <Calendar className="h-5 w-5" />
-                            Date Format
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                            <div className="flex items-center gap-3">
-                              <Calendar className="h-4 w-4 text-cyan-400" />
-                              <Label htmlFor="date-format" className="text-cyan-100">Date Display</Label>
-                            </div>
-                            <Select value={dateFormat} onValueChange={onDateFormatChange}>
-                              <SelectTrigger id="date-format" className="w-[160px] bg-slate-900 border-cyan-500/30 text-cyan-100">
-                                <SelectValue placeholder="Select date format" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-slate-900 border-cyan-500/30">
-                                <SelectItem value="short" className="text-cyan-100 focus:bg-cyan-500/20">MM/DD/YYYY</SelectItem>
-                                <SelectItem value="long" className="text-cyan-100 focus:bg-cyan-500/20">Monday, Nov 11, 2025</SelectItem>
-                                <SelectItem value="iso" className="text-cyan-100 focus:bg-cyan-500/20">2025-11-11</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 text-xs text-cyan-300/60">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>Preview: {dateFormat === 'short' ? '11/11/2025' : dateFormat === 'long' ? 'Monday, November 11, 2025' : '2025-11-11'}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* System Info Card */}
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <Card className="relative bg-slate-900/90 backdrop-blur-xl border-cyan-500/30 rounded-xl overflow-hidden">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-l-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute top-0 right-0 w-6 h-6 border-r-2 border-t-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-l-2 border-b-2 border-cyan-500/50" />
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-r-2 border-b-2 border-cyan-500/50" />
-                        
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg font-semibold flex items-center gap-2 text-cyan-400 tracking-wider uppercase">
-                            <Shield className="h-5 w-5" />
-                            System Status
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                              <p className="text-xs text-cyan-300/60 uppercase tracking-wider">Version</p>
-                              <p className="text-sm text-cyan-100 font-mono">v2.0.6-stable</p>
-                            </div>
-                            <div className="p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                              <p className="text-xs text-cyan-300/60 uppercase tracking-wider">Environment</p>
-                              <p className="text-sm text-cyan-100 font-mono">Production</p>
-                            </div>
-                            <div className="p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                              <p className="text-xs text-cyan-300/60 uppercase tracking-wider">Last Sync</p>
-                              <p className="text-sm text-cyan-100 font-mono">{new Date().toLocaleTimeString()}</p>
-                            </div>
-                            <div className="p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
-                              <p className="text-xs text-cyan-300/60 uppercase tracking-wider">Status</p>
-                              <p className="text-sm text-emerald-400 font-mono flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                Online
-                              </p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
+              {/* ── Title bar ── */}
+              <div className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b bg-[#0d1117]"
+                style={{ borderColor: C.border }}>
+                <div className="flex h-8 w-8 items-center justify-center border"
+                  style={{ borderColor: C.border, backgroundColor: "#0f1923" }}>
+                  <Settings className="size-4" style={{ color: C.accent }} />
+                </div>
+                <div>
+                  <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>General Settings</h1>
+                  <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>
+                    Theme · Time · Date · System
+                  </p>
                 </div>
               </div>
-            </div>
-          </div>
-        </SidebarInset>
-      </ProtectedPageWrapper>
-    </>
-  );
-}
 
-export default function SettingsPage() {
-  return (
-    <FormatProvider>
-      <SidebarProvider>
-        <Suspense fallback={<div>Loading...</div>}>
-          <SettingsContent />
-        </Suspense>
-      </SidebarProvider>
-    </FormatProvider>
+              {/* ── Content ── */}
+              <div className="relative z-10 flex-1 overflow-y-auto">
+                <Suspense fallback={
+                  <div className="flex items-center justify-center h-full gap-3">
+                    <div className="size-4 border-2 border-t-transparent rounded-full animate-spin"
+                      style={{ borderColor: C.accent, borderTopColor: "transparent" }} />
+                    <span className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>Loading…</span>
+                  </div>
+                }>
+                  <SettingsContent />
+                </Suspense>
+              </div>
+
+            </SidebarInset>
+          </SidebarProvider>
+        </ProtectedPageWrapper>
+      </FormatProvider>
+    </UserProvider>
   );
 }
