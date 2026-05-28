@@ -29,6 +29,7 @@ import {
   BadgeCheck, AlertTriangle, Clock, XCircle, PauseCircle,
   UserX, UserCheck, Hash, SlidersHorizontal, Terminal, Settings,
   ExternalLink, ChevronRight,
+  Sparkles, TrendingUp, Lightbulb, BarChart3, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -297,6 +298,90 @@ export default function AccountPage() {
   const [showImportDialog,  setShowImportDialog] = useState(false);
   const [showFilterDialog,  setShowFilterDialog] = useState(false);
   const [isGenerating,      setIsGenerating]     = useState(false);
+
+  /* ── AI Insights ── */
+  interface CDBAnalysis {
+    overview: string;
+    problems: { title:string; description:string; severity:string; count?:number }[];
+    patterns: { title:string; description:string }[];
+    recommendations: { title:string; description:string; priority:string }[];
+    metrics: Record<string,string>;
+  }
+  const [insightsOpen,    setInsightsOpen]    = useState(false);
+  const [isAnalyzing,     setIsAnalyzing]     = useState(false);
+  const [analysis,        setAnalysis]        = useState<CDBAnalysis|null>(null);
+  const [analyzedCount,   setAnalyzedCount]   = useState(0);
+  const [expandedSection, setExpandedSection] = useState<string|null>("problems");
+
+  const SEVERITY_STYLE: Record<string,{color:string;bg:string}> = {
+    critical: { color:"#f87171", bg:"rgba(248,113,113,0.1)" },
+    high:     { color:"#fb923c", bg:"rgba(251,146,60,0.1)"  },
+    medium:   { color:"#fbbf24", bg:"rgba(251,191,36,0.1)"  },
+    low:      { color:"#34d399", bg:"rgba(52,211,153,0.1)"  },
+  };
+  const PRIORITY_COLOR: Record<string,string> = {
+    immediate:    "#f87171",
+    "short-term": "#fbbf24",
+    "long-term":  "#60a5fa",
+  };
+
+  const handleAnalyze = async () => {
+    if (!filtered.length) { toast.error("No customers to analyze"); return; }
+    setIsAnalyzing(true); setInsightsOpen(true); setAnalysis(null);
+    try {
+      // Build a compact summary client-side — never send raw records (too large)
+      const byStatus: Record<string,number> = {};
+      const byType:   Record<string,number> = {};
+      const byRegion: Record<string,number> = {};
+      const byIndustry: Record<string,number> = {};
+      const byTSA:    Record<string,number> = {};
+      let missingEmail = 0, missingContact = 0, missingType = 0, missingStatus = 0, unassigned = 0, parked = 0, active = 0, forDeletion = 0;
+      const companyNames: Record<string,number> = {};
+
+      for (const c of filtered) {
+        const s = (c.status ?? "unknown").toLowerCase();
+        byStatus[s] = (byStatus[s]??0)+1;
+        const t = c.type_client ?? "unknown"; byType[t] = (byType[t]??0)+1;
+        const r = c.region ?? "unknown";      byRegion[r] = (byRegion[r]??0)+1;
+        const ind = c.industry ?? "unknown";  byIndustry[ind] = (byIndustry[ind]??0)+1;
+        const tsa = c.referenceid ?? "unassigned"; byTSA[tsa] = (byTSA[tsa]??0)+1;
+        if (!c.email_address?.trim())   missingEmail++;
+        if (!c.contact_number?.trim())  missingContact++;
+        if (!c.type_client?.trim())     missingType++;
+        if (!c.status?.trim())          missingStatus++;
+        if (!c.referenceid?.trim())     unassigned++;
+        if (s === "park")               parked++;
+        if (s === "active")             active++;
+        if (["for deletion","remove"].includes(s)) forDeletion++;
+        const cn = (c.company_name??"").toLowerCase().trim();
+        if (cn) companyNames[cn] = (companyNames[cn]??0)+1;
+      }
+
+      const summary = {
+        total: filtered.length,
+        byStatus,
+        byTypeClient: byType,
+        byRegion,
+        byIndustry,
+        topTSAs: Object.entries(byTSA).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([id,count])=>({id,count})),
+        missingEmail, missingContact, missingType, missingStatus,
+        unassigned, parkedCount: parked, activeCount: active, forDeletion,
+        duplicateCompanies: Object.values(companyNames).filter(v=>v>1).length,
+      };
+
+      const res  = await fetch("/api/taskflow/customer-database/analyze", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customers: summary }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Analysis failed");
+      setAnalysis(json.analysis);
+      setAnalyzedCount(filtered.length);
+    } catch (err: any) {
+      toast.error(err.message ?? "AI analysis failed");
+      setInsightsOpen(false);
+    } finally { setIsAnalyzing(false); }
+  };
 
   /* ── Actor ── */
   const [currentActor, setCurrentActor] = useState<AuditActor>({ uid:null,name:null,email:null,role:null,referenceId:null });
@@ -686,6 +771,15 @@ export default function AccountPage() {
                   className="bg-[#0d1117] border-slate-800 text-[11px] text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 uppercase tracking-wider font-mono">
                   <Settings className="size-4 mr-1" /> Others
                 </Button>
+                {/* AI Insights */}
+                <button onClick={handleAnalyze} disabled={isAnalyzing || !filtered.length}
+                  className="flex items-center gap-1.5 h-9 px-3 text-[11px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40 rounded-none font-mono"
+                  style={{ backgroundColor:insightsOpen?"rgba(167,139,250,0.15)":"transparent", borderColor:insightsOpen?"#a78bfa":"rgb(30,41,59)", color:insightsOpen?"#a78bfa":"rgb(148,163,184)" }}
+                  onMouseEnter={e=>{ e.currentTarget.style.borderColor="#a78bfa"; e.currentTarget.style.color="#a78bfa"; }}
+                  onMouseLeave={e=>{ if(!insightsOpen){ e.currentTarget.style.borderColor="rgb(30,41,59)"; e.currentTarget.style.color="rgb(148,163,184)"; } }}>
+                  {isAnalyzing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                  AI Insights
+                </button>
 
                 {selectedIds.size>0 && (
                   <>
@@ -751,7 +845,8 @@ export default function AccountPage() {
             <AuditDialog open={showAuditDialog} onOpenChange={setShowAuditDialog} customers={customers} onConfirmAudit={(result)=>{ setAudited(result.allAffectedCustomers); setDuplicateIds(result.duplicateIds); setIsAuditView(true); }} />
 
             {/* ── Table ── */}
-            <div className="flex-1 mt-2 overflow-auto min-h-0 border border-orange-500/10 bg-[#0a0d14]">
+            <div className="flex flex-1 overflow-hidden min-h-0 mt-2 gap-0">
+            <div className="flex-1 overflow-auto min-h-0 border border-orange-500/10 bg-[#0a0d14]">
               {isFetching ? (
                 <div className="py-16 flex flex-col items-center gap-3 text-slate-600">
                   <Loader2 className="size-5 animate-spin text-orange-500/60" />
@@ -899,7 +994,170 @@ export default function AccountPage() {
                   <p className="text-[10px] font-mono uppercase tracking-widest text-orange-500/30">No records found</p>
                 </div>
               )}
-            </div>
+            </div>{/* end table */}
+
+            {/* ── AI Insights Panel ── */}
+            {insightsOpen && (
+              <div className="w-80 shrink-0 flex flex-col border-l overflow-hidden"
+                style={{ borderColor:"#a78bfa40", backgroundColor:"#0d1117" }}>
+                <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b"
+                  style={{ borderColor:"#a78bfa30", backgroundColor:"#0d0f1a" }}>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="size-3.5" style={{ color:"#a78bfa" }} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest font-mono" style={{ color:"#a78bfa" }}>AI Insights</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={handleAnalyze} disabled={isAnalyzing} title="Re-analyze"
+                      className="h-5 w-5 flex items-center justify-center border transition-colors disabled:opacity-40"
+                      style={{ borderColor:"#a78bfa40", color:"#a78bfa", backgroundColor:"transparent" }}
+                      onMouseEnter={e=>(e.currentTarget.style.backgroundColor="rgba(167,139,250,0.1)")}
+                      onMouseLeave={e=>(e.currentTarget.style.backgroundColor="transparent")}>
+                      <RotateCcw className="size-2.5" />
+                    </button>
+                    <button onClick={()=>setInsightsOpen(false)}
+                      className="h-5 w-5 flex items-center justify-center border transition-colors"
+                      style={{ borderColor:"rgb(30,41,59)", color:"rgb(100,116,139)", backgroundColor:"transparent" }}
+                      onMouseEnter={e=>{ e.currentTarget.style.borderColor="#f87171"; e.currentTarget.style.color="#f87171"; }}
+                      onMouseLeave={e=>{ e.currentTarget.style.borderColor="rgb(30,41,59)"; e.currentTarget.style.color="rgb(100,116,139)"; }}>
+                      <X className="size-2.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {isAnalyzing ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-4 px-4">
+                      <div className="relative">
+                        <div className="h-10 w-10 rounded-full border-2 border-t-transparent animate-spin"
+                          style={{ borderColor:"#a78bfa", borderTopColor:"transparent" }} />
+                        <Sparkles className="absolute inset-0 m-auto size-4" style={{ color:"#a78bfa" }} />
+                      </div>
+                      <p className="text-[10px] font-mono uppercase tracking-widest animate-pulse text-center" style={{ color:"#a78bfa" }}>
+                        Groq analyzing {analyzedCount || filtered.length} customers…
+                      </p>
+                    </div>
+                  ) : !analysis ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-3 px-4 text-center">
+                      <Sparkles className="size-8 opacity-20" style={{ color:"#a78bfa" }} />
+                      <p className="text-[10px] font-mono" style={{ color:"rgb(71,85,105)" }}>No analysis yet</p>
+                    </div>
+                  ) : (
+                    <div className="p-4 space-y-3">
+                      {/* Overview */}
+                      <div className="p-3 border" style={{ borderColor:"#a78bfa30", backgroundColor:"rgba(167,139,250,0.05)" }}>
+                        <p className="text-[9px] font-bold uppercase tracking-widest mb-1.5 font-mono" style={{ color:"#a78bfa" }}>Overview</p>
+                        <p className="text-[11px] leading-relaxed font-mono" style={{ color:"rgb(203,213,225)" }}>{analysis.overview}</p>
+                      </div>
+                      {/* Metrics */}
+                      {analysis.metrics && Object.keys(analysis.metrics).length > 0 && (
+                        <div className="border" style={{ borderColor:"rgb(30,41,59)" }}>
+                          <div className="px-3 py-2 border-b" style={{ borderColor:"rgb(30,41,59)", backgroundColor:"#0a0d14" }}>
+                            <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 font-mono" style={{ color:"rgb(251,146,60)" }}>
+                              <BarChart3 className="size-3" /> Metrics
+                            </p>
+                          </div>
+                          <div className="divide-y" style={{ borderColor:"rgba(37,48,64,0.5)" }}>
+                            {Object.entries(analysis.metrics).filter(([,v])=>v).map(([k,v]) => (
+                              <div key={k} className="flex items-center justify-between px-3 py-1.5">
+                                <span className="text-[10px] capitalize font-mono" style={{ color:"rgb(100,116,139)" }}>{k.replace(/([A-Z])/g,' $1').trim()}</span>
+                                <span className="text-[10px] font-bold font-mono" style={{ color:"rgb(203,213,225)" }}>{String(v)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Problems */}
+                      {(analysis.problems?.length??0) > 0 && (
+                        <div className="border" style={{ borderColor:"#f8717130" }}>
+                          <button onClick={()=>setExpandedSection(s=>s==="problems"?null:"problems")}
+                            className="w-full flex items-center justify-between px-3 py-2 border-b"
+                            style={{ borderColor:"#f8717130", backgroundColor:"rgba(248,113,113,0.05)" }}>
+                            <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 font-mono" style={{ color:"#f87171" }}>
+                              <AlertTriangle className="size-3" /> Problems ({analysis.problems.length})
+                            </p>
+                            {expandedSection==="problems" ? <ChevronUp className="size-3" style={{ color:"#f87171" }}/> : <ChevronDown className="size-3" style={{ color:"#f87171" }}/>}
+                          </button>
+                          {expandedSection==="problems" && (
+                            <div className="divide-y" style={{ borderColor:"rgba(37,48,64,0.3)" }}>
+                              {analysis.problems.map((p,i) => {
+                                const sev = SEVERITY_STYLE[p.severity] ?? SEVERITY_STYLE.medium;
+                                return (
+                                  <div key={i} className="px-3 py-2.5">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                      <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 border font-mono"
+                                        style={{ borderColor:sev.color+"40", color:sev.color, backgroundColor:sev.bg }}>{p.severity}</span>
+                                      {p.count && <span className="text-[9px] font-mono" style={{ color:"rgb(71,85,105)" }}>×{p.count}</span>}
+                                    </div>
+                                    <p className="text-[10px] font-bold font-mono" style={{ color:"rgb(203,213,225)" }}>{p.title}</p>
+                                    <p className="text-[10px] mt-0.5 leading-relaxed font-mono" style={{ color:"rgb(100,116,139)" }}>{p.description}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Patterns */}
+                      {(analysis.patterns?.length??0) > 0 && (
+                        <div className="border" style={{ borderColor:"#60a5fa30" }}>
+                          <button onClick={()=>setExpandedSection(s=>s==="patterns"?null:"patterns")}
+                            className="w-full flex items-center justify-between px-3 py-2 border-b"
+                            style={{ borderColor:"#60a5fa30", backgroundColor:"rgba(96,165,250,0.05)" }}>
+                            <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 font-mono" style={{ color:"#60a5fa" }}>
+                              <TrendingUp className="size-3" /> Patterns ({analysis.patterns.length})
+                            </p>
+                            {expandedSection==="patterns" ? <ChevronUp className="size-3" style={{ color:"#60a5fa" }}/> : <ChevronDown className="size-3" style={{ color:"#60a5fa" }}/>}
+                          </button>
+                          {expandedSection==="patterns" && (
+                            <div className="divide-y" style={{ borderColor:"rgba(37,48,64,0.3)" }}>
+                              {analysis.patterns.map((p,i) => (
+                                <div key={i} className="px-3 py-2.5">
+                                  <p className="text-[10px] font-bold font-mono" style={{ color:"rgb(203,213,225)" }}>{p.title}</p>
+                                  <p className="text-[10px] mt-0.5 leading-relaxed font-mono" style={{ color:"rgb(100,116,139)" }}>{p.description}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Recommendations */}
+                      {(analysis.recommendations?.length??0) > 0 && (
+                        <div className="border" style={{ borderColor:"#34d39930" }}>
+                          <button onClick={()=>setExpandedSection(s=>s==="recs"?null:"recs")}
+                            className="w-full flex items-center justify-between px-3 py-2 border-b"
+                            style={{ borderColor:"#34d39930", backgroundColor:"rgba(52,211,153,0.05)" }}>
+                            <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5 font-mono" style={{ color:"#34d399" }}>
+                              <Lightbulb className="size-3" /> Recommendations ({analysis.recommendations.length})
+                            </p>
+                            {expandedSection==="recs" ? <ChevronUp className="size-3" style={{ color:"#34d399" }}/> : <ChevronDown className="size-3" style={{ color:"#34d399" }}/>}
+                          </button>
+                          {expandedSection==="recs" && (
+                            <div className="divide-y" style={{ borderColor:"rgba(37,48,64,0.3)" }}>
+                              {analysis.recommendations.map((r,i) => {
+                                const pc = PRIORITY_COLOR[r.priority] ?? "#60a5fa";
+                                return (
+                                  <div key={i} className="px-3 py-2.5">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                      <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 border font-mono"
+                                        style={{ borderColor:pc+"40", color:pc, backgroundColor:pc+"10" }}>{r.priority}</span>
+                                    </div>
+                                    <p className="text-[10px] font-bold font-mono" style={{ color:"rgb(203,213,225)" }}>{r.title}</p>
+                                    <p className="text-[10px] mt-0.5 leading-relaxed font-mono" style={{ color:"rgb(100,116,139)" }}>{r.description}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <p className="text-[9px] text-center pb-2 font-mono" style={{ color:"rgb(71,85,105)" }}>
+                        Groq · llama-3.3-70b · {analyzedCount} customers analyzed
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            </div>{/* end flex row */}
           </div>
         </SidebarInset>
       </SidebarProvider>

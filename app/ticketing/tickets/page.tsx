@@ -19,9 +19,30 @@ import { Calendar } from "@/components/ui/calendar"
 import {
   Loader2, Search, RefreshCw, Download, TicketCheck,
   ChevronLeft, ChevronRight, X, CalendarRange,
+  Sparkles, AlertTriangle, Lightbulb, TrendingUp,
+  BarChart3, ChevronDown, ChevronUp, AlertCircle,
+  CheckCircle2, Clock, Zap,
 } from "lucide-react"
 import { toast } from "sonner"
 import ProtectedPageWrapper from "@/components/protected-page-wrapper"
+
+// ─── AI Analysis types ────────────────────────────────────────────────────────
+interface AnalysisProblem      { title: string; description: string; severity: string; count?: number }
+interface AnalysisPattern      { title: string; description: string }
+interface AnalysisRecommendation { title: string; description: string; priority: string }
+interface TicketAnalysis {
+  overview:        string
+  problems:        AnalysisProblem[]
+  patterns:        AnalysisPattern[]
+  recommendations: AnalysisRecommendation[]
+  metrics: {
+    resolutionRate?:     string
+    criticalBacklog?:    string
+    topDepartment?:      string
+    topRequestType?:     string
+    busiestTechnician?:  string
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Ticket {
@@ -210,6 +231,64 @@ export default function TicketsPage() {
 
   const startRow = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const endRow   = Math.min(page * PAGE_SIZE, total)
+
+  // ── AI Insights state ──────────────────────────────────────────────────────
+  const [insightsOpen,   setInsightsOpen]   = useState(false)
+  const [isAnalyzing,    setIsAnalyzing]    = useState(false)
+  const [analysis,       setAnalysis]       = useState<TicketAnalysis | null>(null)
+  const [expandedSection,setExpandedSection]= useState<string | null>("problems")
+  const [analyzedCount,  setAnalyzedCount]  = useState(0)
+
+  const handleAnalyze = async () => {
+    if (total === 0) { toast.error("No tickets to analyze"); return }
+    setIsAnalyzing(true)
+    setInsightsOpen(true)
+    setAnalysis(null)
+    try {
+      // Fetch ALL tickets (not just current page) for a complete analysis
+      const params = new URLSearchParams({ page: "1", pageSize: "9999" })
+      if (debouncedSearch)          params.set("search",   debouncedSearch)
+      if (statusFilter   !== "all") params.set("status",   statusFilter)
+      if (priorityFilter !== "all") params.set("priority", priorityFilter)
+      if (dateRange?.from)          params.set("dateFrom", dateRange.from.toISOString())
+      if (dateRange?.to) {
+        const end = new Date(dateRange.to)
+        end.setHours(23, 59, 59, 999)
+        params.set("dateTo", end.toISOString())
+      }
+
+      const allRes  = await fetch(`/api/ticketing/tickets?${params}`, { cache: "no-store" })
+      const allJson = await allRes.json()
+      const allTickets = allJson.success ? (allJson.data ?? []) : tickets
+
+      const res  = await fetch("/api/ticketing/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tickets: allTickets }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error || "Analysis failed")
+      setAnalysis(json.analysis)
+      setAnalyzedCount(allTickets.length)
+    } catch (err: any) {
+      toast.error(err.message ?? "AI analysis failed")
+      setInsightsOpen(false)
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const SEVERITY_STYLE: Record<string, { color: string; bg: string }> = {
+    critical: { color: "#f87171", bg: "rgba(248,113,113,0.1)" },
+    high:     { color: "#fb923c", bg: "rgba(251,146,60,0.1)"  },
+    medium:   { color: "#fbbf24", bg: "rgba(251,191,36,0.1)"  },
+    low:      { color: "#34d399", bg: "rgba(52,211,153,0.1)"  },
+  }
+  const PRIORITY_COLOR: Record<string, string> = {
+    immediate:   "#f87171",
+    "short-term":"#fbbf24",
+    "long-term": "#60a5fa",
+  }
 
   return (
     <ProtectedPageWrapper>
@@ -402,10 +481,25 @@ export default function TicketsPage() {
             >
               <Download className="size-3" /> Export
             </button>
+
+            {/* AI Insights */}
+            <button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing || total === 0}
+              className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+              style={{ backgroundColor: insightsOpen ? "rgba(167,139,250,0.15)" : "transparent", borderColor: insightsOpen ? "#a78bfa" : C.border, color: insightsOpen ? "#a78bfa" : C.dim }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#a78bfa"; e.currentTarget.style.color = "#a78bfa" }}
+              onMouseLeave={(e) => { if (!insightsOpen) { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim } }}
+            >
+              {isAnalyzing ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+              AI Insights
+            </button>
           </div>
 
-          {/* ── Table ── */}
-          <div className="relative z-10 flex-1 overflow-auto">
+          {/* ── Table + AI Insights side panel ── */}
+          <div className="relative z-10 flex flex-1 overflow-hidden">
+            {/* Table */}
+            <div className="flex-1 overflow-auto">
             {isFetching ? (
               <div className="flex items-center justify-center h-full gap-3">
                 <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
@@ -478,9 +572,172 @@ export default function TicketsPage() {
                 </tbody>
               </table>
             )}
-          </div>
+            </div>{/* end table */}
 
-          {/* ── Footer / Pagination ── */}
+            {/* ── AI Insights Panel ── */}
+            {insightsOpen && (
+              <div className="w-80 shrink-0 flex flex-col border-l overflow-hidden"
+                style={{ borderColor: "#a78bfa40", backgroundColor: C.panel }}>
+                {/* Panel header */}
+                <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b"
+                  style={{ borderColor: "#a78bfa30", backgroundColor: "#0d0f1a" }}>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="size-3.5" style={{ color: "#a78bfa" }} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#a78bfa" }}>AI Insights</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={handleAnalyze} disabled={isAnalyzing} title="Re-analyze"
+                      className="h-5 w-5 flex items-center justify-center border transition-colors disabled:opacity-40"
+                      style={{ borderColor: "#a78bfa40", color: "#a78bfa", backgroundColor: "transparent" }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(167,139,250,0.1)")}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+                      <RefreshCw className="size-2.5" />
+                    </button>
+                    <button onClick={() => setInsightsOpen(false)}
+                      className="h-5 w-5 flex items-center justify-center border transition-colors"
+                      style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#f87171"; e.currentTarget.style.color = "#f87171"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                      <X className="size-2.5" />
+                    </button>
+                  </div>
+                </div>
+                {/* Panel body */}
+                <div className="flex-1 overflow-y-auto">
+                  {isAnalyzing ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-4 px-4">
+                      <div className="relative">
+                        <div className="h-10 w-10 rounded-full border-2 border-t-transparent animate-spin"
+                          style={{ borderColor: "#a78bfa", borderTopColor: "transparent" }} />
+                        <Sparkles className="absolute inset-0 m-auto size-4" style={{ color: "#a78bfa" }} />
+                      </div>
+                      <p className="text-[10px] uppercase tracking-widest animate-pulse text-center" style={{ color: "#a78bfa" }}>
+                        Groq analyzing {total} tickets…
+                      </p>
+                    </div>
+                  ) : !analysis ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-3 px-4 text-center">
+                      <Sparkles className="size-8 opacity-20" style={{ color: "#a78bfa" }} />
+                      <p className="text-[10px]" style={{ color: C.muted }}>No analysis yet</p>
+                    </div>
+                  ) : (
+                    <div className="p-4 space-y-3">
+                      {/* Overview */}
+                      <div className="p-3 border" style={{ borderColor: "#a78bfa30", backgroundColor: "rgba(167,139,250,0.05)" }}>
+                        <p className="text-[9px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "#a78bfa" }}>Overview</p>
+                        <p className="text-[11px] leading-relaxed" style={{ color: C.text }}>{analysis.overview}</p>
+                      </div>
+                      {/* Metrics */}
+                      {analysis.metrics && Object.keys(analysis.metrics).length > 0 && (
+                        <div className="border" style={{ borderColor: C.border }}>
+                          <div className="px-3 py-2 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                            <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: C.accent }}>
+                              <BarChart3 className="size-3" /> Metrics
+                            </p>
+                          </div>
+                          <div className="divide-y" style={{ borderColor: C.muted + "30" }}>
+                            {Object.entries(analysis.metrics).filter(([,v]) => v).map(([k, v]) => (
+                              <div key={k} className="flex items-center justify-between px-3 py-1.5">
+                                <span className="text-[10px] capitalize" style={{ color: C.dim }}>{k.replace(/([A-Z])/g,' $1').trim()}</span>
+                                <span className="text-[10px] font-bold" style={{ color: C.text }}>{String(v)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Problems */}
+                      {(analysis.problems?.length ?? 0) > 0 && (
+                        <div className="border" style={{ borderColor: "#f8717130" }}>
+                          <button onClick={() => setExpandedSection(s => s==="problems"?null:"problems")}
+                            className="w-full flex items-center justify-between px-3 py-2 border-b"
+                            style={{ borderColor: "#f8717130", backgroundColor: "rgba(248,113,113,0.05)" }}>
+                            <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#f87171" }}>
+                              <AlertTriangle className="size-3" /> Problems ({analysis.problems.length})
+                            </p>
+                            {expandedSection==="problems" ? <ChevronUp className="size-3" style={{ color:"#f87171" }}/> : <ChevronDown className="size-3" style={{ color:"#f87171" }}/>}
+                          </button>
+                          {expandedSection==="problems" && (
+                            <div className="divide-y" style={{ borderColor: C.muted+"20" }}>
+                              {analysis.problems.map((p, i) => {
+                                const sev = SEVERITY_STYLE[p.severity] ?? SEVERITY_STYLE.medium
+                                return (
+                                  <div key={i} className="px-3 py-2.5">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                      <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 border"
+                                        style={{ borderColor: sev.color+"40", color: sev.color, backgroundColor: sev.bg }}>{p.severity}</span>
+                                      {p.count && <span className="text-[9px]" style={{ color: C.muted }}>×{p.count}</span>}
+                                    </div>
+                                    <p className="text-[10px] font-bold" style={{ color: C.text }}>{p.title}</p>
+                                    <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: C.dim }}>{p.description}</p>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Patterns */}
+                      {(analysis.patterns?.length ?? 0) > 0 && (
+                        <div className="border" style={{ borderColor: "#60a5fa30" }}>
+                          <button onClick={() => setExpandedSection(s => s==="patterns"?null:"patterns")}
+                            className="w-full flex items-center justify-between px-3 py-2 border-b"
+                            style={{ borderColor: "#60a5fa30", backgroundColor: "rgba(96,165,250,0.05)" }}>
+                            <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#60a5fa" }}>
+                              <TrendingUp className="size-3" /> Patterns ({analysis.patterns.length})
+                            </p>
+                            {expandedSection==="patterns" ? <ChevronUp className="size-3" style={{ color:"#60a5fa" }}/> : <ChevronDown className="size-3" style={{ color:"#60a5fa" }}/>}
+                          </button>
+                          {expandedSection==="patterns" && (
+                            <div className="divide-y" style={{ borderColor: C.muted+"20" }}>
+                              {analysis.patterns.map((p, i) => (
+                                <div key={i} className="px-3 py-2.5">
+                                  <p className="text-[10px] font-bold" style={{ color: C.text }}>{p.title}</p>
+                                  <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: C.dim }}>{p.description}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Recommendations */}
+                      {(analysis.recommendations?.length ?? 0) > 0 && (
+                        <div className="border" style={{ borderColor: "#34d39930" }}>
+                          <button onClick={() => setExpandedSection(s => s==="recs"?null:"recs")}
+                            className="w-full flex items-center justify-between px-3 py-2 border-b"
+                            style={{ borderColor: "#34d39930", backgroundColor: "rgba(52,211,153,0.05)" }}>
+                            <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#34d399" }}>
+                              <Lightbulb className="size-3" /> Recommendations ({analysis.recommendations.length})
+                            </p>
+                            {expandedSection==="recs" ? <ChevronUp className="size-3" style={{ color:"#34d399" }}/> : <ChevronDown className="size-3" style={{ color:"#34d399" }}/>}
+                          </button>
+                          {expandedSection==="recs" && (
+                            <div className="divide-y" style={{ borderColor: C.muted+"20" }}>
+                              {analysis.recommendations.map((r, i) => {
+                                const pc = PRIORITY_COLOR[r.priority] ?? "#60a5fa"
+                                return (
+                                  <div key={i} className="px-3 py-2.5">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                      <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 border"
+                                        style={{ borderColor: pc+"40", color: pc, backgroundColor: pc+"10" }}>{r.priority}</span>
+                                    </div>
+                                    <p className="text-[10px] font-bold" style={{ color: C.text }}>{r.title}</p>
+                                    <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: C.dim }}>{r.description}</p>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <p className="text-[9px] text-center pb-2" style={{ color: C.muted }}>
+                        Groq · llama-3.3-70b · {analyzedCount} tickets analyzed
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>{/* end flex row */}
           <div className="relative z-10 shrink-0 flex items-center justify-between px-4 py-2 border-t"
             style={{ borderColor: C.border, backgroundColor: C.panel }}>
             <span className="text-[10px]" style={{ color: C.muted }}>

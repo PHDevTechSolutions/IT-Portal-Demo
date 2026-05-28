@@ -164,8 +164,9 @@ const DEFAULT_SIDEBAR_MODULES = [
     icon: "Settings2",
     description: "System settings",
     items: [
-      { title: "General", url: "/settings/general" },
-      { title: "Database Backup", url: "/admin/backup-database" },
+      { title: "General",        url: "/settings/general" },
+      { title: "AI Credentials", url: "/settings/ai-credentials" },
+      { title: "Database Backup",url: "/admin/backup-database" },
     ],
   },
   // 8. REPORTS & ANALYTICS

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getGroqKey } from "@/lib/ai/getGroqKey";
 
 export const dynamic    = "force-dynamic";
 export const maxDuration = 60;
 
-const GROQ_API_KEY   = process.env.GROQ_API_KEY!;
 const SERPER_API_KEY = process.env.SERPER_API_KEY!;
 
 export interface ScrapedLead {
@@ -67,6 +67,7 @@ async function serperSearch(query: string, num = 10): Promise<string> {
 
 // ── Groq: extract structured leads from raw search text ──────────────────────
 async function extractLeads(
+  groqKey: string,
   rawText: string,
   industry: string,
   location: string,
@@ -102,7 +103,7 @@ ${rawText.slice(0, 10000)}`;
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROQ_API_KEY}`,
+      "Authorization": `Bearer ${groqKey}`,
     },
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
@@ -124,6 +125,7 @@ ${rawText.slice(0, 10000)}`;
 
 // ── Groq: generate leads from knowledge (no web search) ──────────────────────
 async function generateLeads(
+  groqKey: string,
   query: string,
   industry: string,
   location: string,
@@ -156,7 +158,7 @@ Return ONLY a valid JSON array, no other text.`;
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROQ_API_KEY}`,
+      "Authorization": `Bearer ${groqKey}`,
     },
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
@@ -194,6 +196,7 @@ function parseJsonLeads(content: string, limit: number): ScrapedLead[] {
 // ── Main handler ──────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const GROQ_API_KEY = await getGroqKey();
     const { query, industry, location, limit = 10, mode = "web" } = await req.json();
 
     if (!query?.trim()) {
@@ -204,7 +207,7 @@ export async function POST(req: NextRequest) {
     let leads: ScrapedLead[] = [];
 
     if (mode === "ai") {
-      leads = await generateLeads(query, industry, location, cap);
+      leads = await generateLeads(GROQ_API_KEY, query, industry, location, cap);
     } else {
       // Build a targeted Google search query
       const searchQuery = [
@@ -215,11 +218,11 @@ export async function POST(req: NextRequest) {
       ].filter(Boolean).join(" ");
 
       const rawText = await serperSearch(searchQuery, Math.min(cap * 2, 20));
-      leads = await extractLeads(rawText, industry, location, cap);
+      leads = await extractLeads(GROQ_API_KEY, rawText, industry, location, cap);
 
       // If Groq found nothing from snippets, fall back to AI generation
       if (leads.length === 0) {
-        leads = await generateLeads(query, industry, location, cap);
+        leads = await generateLeads(GROQ_API_KEY, query, industry, location, cap);
         leads = leads.map(l => ({ ...l, confidence: "low" as const, source: "AI fallback — no web results extracted" }));
       }
     }
