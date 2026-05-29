@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
       examToken,
       jobTitle,
       questions,
-      totalPoints: questions.reduce((sum, q) => sum + (q.points ?? 0), 0),
+      totalPoints: questions.reduce((sum: number, q: ExamQuestion) => sum + (q.points ?? 0), 0 as number),
       createdAt:   serverTimestamp(),
     });
 
