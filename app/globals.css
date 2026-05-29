@@ -342,3 +342,7 @@
     --sidebar-ring: 24 95% 53%;
   }
 }
+
+.custom-scrollbar {
+    scrollbar-width: none;
+  }

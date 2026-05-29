@@ -29,7 +29,7 @@ const DEFAULT_SIDEBAR_MODULES = [
       { title: "Progress Logs",    url: "/taskflow/progress-logs" },
       { title: "Endorsed Tickets", url: "/taskflow/csr-inquiries" },
       { title: "Data Checking",    url: "/taskflow/data-checking" },
-      { title: "Scrapping",        url: "/taskflow/scrapping" },
+      { title: "Leads Generation",  url: "/taskflow/leads-generation" },
       { title: "Customize",        url: "/taskflow/customize" },
     ],
   },
@@ -62,7 +62,7 @@ const DEFAULT_SIDEBAR_MODULES = [
     description: "Customer relationship management",
     items: [
       { title: "Customer List", url: "/crm/customers" },
-      { title: "Leads & Opportunities", url: "/crm/leads" },
+      { title: "Leads & Opportunities", url: "/taskflow/leads-generation" },
       { title: "Communications", url: "/crm/communications" },
       { title: "Contracts", url: "/crm/contracts" },
     ],
@@ -129,11 +129,12 @@ const DEFAULT_SIDEBAR_MODULES = [
     key: "recruitment",
     title: "Recruitment",
     icon: "UserPlus",
-    description: "Hiring and recruitment",
+    description: "Job postings and applicant tracking",
     items: [
-      { title: "Job Postings", url: "/recruitment/jobs" },
-      { title: "Applicants", url: "/recruitment/applicants" },
-      { title: "Interviews", url: "/recruitment/interviews" },
+      { title: "Job Postings",         url: "/recruitment/jobs" },
+      { title: "Applicants",           url: "/recruitment/applicants" },
+      { title: "Interviews",           url: "/recruitment/interviews" },
+      { title: "Firebase Credentials", url: "/recruitment/credentials" },
     ],
   },
   // 7. ADMINISTRATION
@@ -218,7 +219,8 @@ const DEFAULT_SIDEBAR_MODULES = [
     description: "DNS management",
     items: [{ title: "DNS", url: "/cloudflare/dns" }],
   },
-  // 11. ACCULOG (HRIS)
+  // 11. RECRUITMENT — removed duplicate, kept below
+  // 12. ACCULOG (HRIS)
   {
     key: "acculog",
     title: "Acculog",
@@ -247,10 +249,16 @@ export async function GET(req: NextRequest) {
     const existingKeys = modules.map((m: any) => m.key);
     const hasAllModules = requiredKeys.every(key => existingKeys.includes(key));
 
-    // Also check if any module's item count has changed
+    // Also check if any module's items have changed (count OR content)
     const itemsChanged = DEFAULT_SIDEBAR_MODULES.some((defaultMod) => {
       const existing = modules.find((m: any) => m.key === defaultMod.key);
-      return existing && existing.items?.length !== defaultMod.items.length;
+      if (!existing) return false;
+      if (existing.items?.length !== defaultMod.items.length) return true;
+      // Check if any URL or title differs
+      return defaultMod.items.some((item, idx) => {
+        const exItem = existing.items?.[idx];
+        return !exItem || exItem.url !== item.url || exItem.title !== item.title;
+      });
     });
 
     if (!hasAllModules || modules.length === 0 || itemsChanged) {

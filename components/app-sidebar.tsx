@@ -178,7 +178,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       {/* ── Content ── */}
-      <SidebarContent className="bg-[#0d1117] px-0">
+      <SidebarContent className="bg-[#0d1117] px-0 custom-scrollbar">
         <NavMain items={sidebarData.navMain} />
         <NavSecondary items={sidebarData.navSecondary} className="mt-auto" />
       </SidebarContent>

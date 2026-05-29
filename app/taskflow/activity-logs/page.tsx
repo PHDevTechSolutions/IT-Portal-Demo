@@ -1,932 +1,882 @@
 "use client";
-
-import React, { useEffect, useState, useMemo, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { toast } from "sonner";
-import { Loader2, Search, AlertCircle, CheckCircle2, Activity as ActivityIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import {
+  Loader2, Search, X, RefreshCw, Activity as ActivityIcon,
+  ChevronDown, AlertCircle, CheckCircle2, Clock, XCircle, Zap,
+} from "lucide-react";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink,
   BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { supabase } from "@/utils/supabase";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-import { cn } from "@/lib/utils";
+import { supabase } from "@/utils/supabase";
 import { Calendar } from "@/components/taskflow/customer-database/calendar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Activity {
-  id: string; referenceid: string; tsm: string; manager: string; status: string;
-  date_created: string | null; ticket_reference_number: string; scheduled_date: string | null;
-  agent: string; company_name: string; contact_person: string; contact_number: string;
-  email_address: string; address: string; type_client: string;
-  activity_reference_number: string; ticket_remarks: string; cancellation_remarks: string;
+  id: string;
+  referenceid: string;
+  tsm: string;
+  manager: string;
+  status: string;
+  date_created: string | null;
+  ticket_reference_number: string;
+  scheduled_date: string | null;
+  agent: string;
+  company_name: string;
+  contact_person: string;
+  contact_number: string;
+  email_address: string;
+  address: string;
+  type_client: string;
+  activity_reference_number: string;
+  ticket_remarks: string;
+  cancellation_remarks: string;
 }
-interface Agent { ReferenceID: string; Firstname: string; Lastname: string; profilePicture?: string; }
-interface TicketSourceData {
-  referenceid: string; date_created: string; company_name: string; contact_person: string;
-  contact_number: string; email_address: string; address: string;
-  inquiry: string; agent: string; wrap_up: string; status: string;
+
+// ─── All known statuses (for select dropdown) ────────────────────────────────
+const ALL_STATUSES = [
+  "Open", "Pending", "New", "Received", "Endorsed", "For Follow-up", "Follow-up",
+  "In Progress", "On-Progress", "Ongoing", "Processing",
+  "Approval for TSM", "For Approval", "Waiting Approval", "For TSM Approval",
+  "Quote-Done", "SO-Done", "Delivered / Closed Transaction",
+  "Completed", "Done", "Resolved", "Closed",
+  "Cancelled", "Canceled", "Rejected", "Declined",
+] as const;
+
+// ─── Kanban column config ─────────────────────────────────────────────────────
+const COLUMNS = [
+  {
+    key: "open" as const,
+    label: "Open / Pending",
+    icon: Clock,
+    color: "#fbbf24",
+    border: "#fbbf2440",
+    bg: "rgba(251,191,36,0.05)",
+    statuses: ["open", "pending", "new", "received", "endorsed", "for follow-up", "follow-up"],
+  },
+  {
+    key: "in_progress" as const,
+    label: "In Progress",
+    icon: Zap,
+    color: "#60a5fa",
+    border: "#60a5fa40",
+    bg: "rgba(96,165,250,0.05)",
+    statuses: ["in progress", "on progress", "on-progress", "ongoing", "processing"]
+  },
+  {
+    key: "approval" as const,
+    label: "Approval for TSM",
+    icon: AlertCircle,
+    color: "#a78bfa",
+    border: "#a78bfa40",
+    bg: "rgba(167,139,250,0.05)",
+    statuses: ["approval for tsm", "for approval", "waiting approval", "for tsm approval"],
+  },
+  {
+    key: "done" as const,
+    label: "Completed / Done",
+    icon: CheckCircle2,
+    color: "#34d399",
+    border: "#34d39940",
+    bg: "rgba(52,211,153,0.05)",
+    statuses: [
+      "quote-done", "so-done", "delivered / closed transaction",
+      "completed", "done", "resolved", "closed",
+    ],
+  },
+  {
+    key: "cancelled" as const,
+    label: "Cancelled",
+    icon: XCircle,
+    color: "#f87171",
+    border: "#f8717140",
+    bg: "rgba(248,113,113,0.05)",
+    statuses: ["cancelled", "canceled", "rejected", "declined"],
+  },
+] as const;
+
+type ColumnKey = typeof COLUMNS[number]["key"];
+
+// ─── Helper: normalize status for matching ────────────────────────────────────
+const normalizeStatus = (s: string) =>
+  (s ?? "").toLowerCase().replace(/_/g, "-").trim();
+
+// ─── Helper: find column key for a status ────────────────────────────────────
+const getColumnForStatus = (status: string): ColumnKey | null => {
+  const normalized = normalizeStatus(status);
+  const col = COLUMNS.find(c => c.statuses.some(s => s === normalized));
+  return col?.key ?? null;
+};
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  text:   "#c8d8e8",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+};
+
+const PAGE_SIZE = 10;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatDate(d: string | null) {
+  if (!d) return "—";
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return "—";
+  return dt.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 }
-interface HistoryRecord {
-  id: string; company_name: string; status: string;
-  date_created: string; ticket_reference_number: string;
+
+function statusBadge(status: string) {
+  const s = normalizeStatus(status);
+
+  if (["quote-done", "so-done", "delivered / closed transaction", "completed", "done", "resolved", "closed"].some(x => s.includes(x)))
+    return "text-emerald-400 border-emerald-500/30 bg-emerald-500/10";
+  if (["on-progress", "in-progress", "in progress", "on progress", "ongoing", "processing"].some(x => s.includes(x)))
+    return "text-sky-400 border-sky-500/30 bg-sky-500/10";
+  if (["approval for tsm", "for approval", "for tsm approval", "waiting approval"].some(x => s.includes(x)))
+    return "text-violet-400 border-violet-500/30 bg-violet-500/10";
+  if (["cancelled", "canceled", "rejected", "declined"].some(x => s.includes(x)))
+    return "text-red-400 border-red-500/30 bg-red-500/10";
+  if (["pending", "open", "new", "received", "endorsed", "follow-up"].some(x => s.includes(x)))
+    return "text-amber-400 border-amber-500/30 bg-amber-500/10";
+
+  return "text-slate-400 border-slate-500/30 bg-slate-500/10";
+}
+
+// ─── Kanban Card ──────────────────────────────────────────────────────────────
+function KanbanCard({ act, onClick }: { act: Activity; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      className="border cursor-pointer transition-colors"
+      style={{ borderColor: C.border, backgroundColor: C.bg }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = C.accent)}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
+    >
+      <div
+        className="flex items-center justify-between px-3 py-1.5 border-b"
+        style={{ borderColor: C.muted + "30", backgroundColor: C.panel }}
+      >
+        <span className="text-[9px] font-bold font-mono" style={{ color: C.accent }}>
+          {act.activity_reference_number || "—"}
+        </span>
+        <span className="text-[9px] font-mono" style={{ color: C.muted }}>
+          {formatDate(act.date_created)}
+        </span>
+      </div>
+      <div className="px-3 py-2.5 space-y-1.5">
+        <p className="text-[11px] font-bold uppercase truncate" style={{ color: C.text }}>
+          {act.company_name || "—"}
+        </p>
+        {act.contact_person && (
+          <p className="text-[10px] truncate" style={{ color: C.dim }}>{act.contact_person}</p>
+        )}
+        <div className="flex items-center justify-between pt-1">
+          <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 border ${statusBadge(act.status)}`}>
+            {act.status || "—"}
+          </span>
+          {act.agent && (
+            <span className="text-[9px] font-mono truncate max-w-[80px]" style={{ color: C.muted }}>
+              {act.agent}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Kanban Column ────────────────────────────────────────────────────────────
+function KanbanColumn({
+  col, cards, total, isLoading, onViewMore, onCardClick, hasMore,
+}: {
+  col: typeof COLUMNS[number];
+  cards: Activity[];
+  total: number;
+  isLoading: boolean;
+  onViewMore: () => void;
+  onCardClick: (act: Activity) => void;
+  hasMore: boolean;
+}) {
+  const Icon = col.icon;
+  return (
+    <div
+      className="flex flex-col min-w-[260px] max-w-[300px] flex-1 border"
+      style={{ borderColor: col.border, backgroundColor: col.bg }}
+    >
+      <div
+        className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b"
+        style={{ borderColor: col.border, backgroundColor: C.panel }}
+      >
+        <Icon className="size-3.5 shrink-0" style={{ color: col.color }} />
+        <span className="text-[10px] font-bold uppercase tracking-wider flex-1" style={{ color: col.color }}>
+          {col.label}
+        </span>
+        <span
+          className="text-[10px] font-bold px-1.5 py-0.5 border"
+          style={{ borderColor: col.border, color: col.color, backgroundColor: col.color + "15" }}
+        >
+          {total}
+        </span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2 min-h-[200px]">
+        {isLoading && cards.length === 0 ? (
+          <div className="flex items-center justify-center py-8 gap-2">
+            <Loader2 className="size-3.5 animate-spin" style={{ color: col.color }} />
+            <span className="text-[10px] uppercase tracking-widest" style={{ color: C.muted }}>Loading…</span>
+          </div>
+        ) : cards.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <span className="text-[10px] uppercase tracking-widest" style={{ color: C.muted }}>No records</span>
+          </div>
+        ) : (
+          cards.map(act => (
+            <KanbanCard key={`${col.key}-${act.id}`} act={act} onClick={() => onCardClick(act)} />
+          ))
+        )}
+
+        {hasMore && (
+          <button
+            onClick={onViewMore}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-1.5 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+            style={{ borderColor: col.border, color: col.color, backgroundColor: "transparent" }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = col.color + "10"; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; }}
+          >
+            {isLoading ? <Loader2 className="size-3 animate-spin" /> : <ChevronDown className="size-3" />}
+            {isLoading ? "Loading…" : `View More (${total - cards.length} remaining)`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ActivityLogsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [userId] = useState<string | null>(searchParams?.get("userId") ?? null);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [isFetching, setIsFetching] = useState(false);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [referenceIdFilter, setReferenceIdFilter] = useState("");
-  const [referenceIdOptions, setReferenceIdOptions] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [statusOptions, setStatusOptions] = useState<string[]>([]);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [showFilterDialog, setShowFilterDialog] = useState(false);
-  const [sortColumn, setSortColumn] = useState<string>("date_created");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
-    referenceid: true, tsm: true, manager: true, company_name: true, contact_person: true,
-    contact_number: true, email_address: true, address: true, type_client: true, agent: true,
-    status: true, ticket_reference_number: true, scheduled_date: true, ticket_remarks: true,
-    cancellation_remarks: true, activity_reference_number: true, date_created: true,
+
+  const [colCards, setColCards] = useState<Record<ColumnKey, Activity[]>>({
+    open: [], in_progress: [], approval: [], done: [], cancelled: [],
   });
-  const [focusedCell, setFocusedCell] = useState<{ rowId: string; field: string } | null>(null);
-  const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
-  const [bulkEditField, setBulkEditField] = useState<string>("");
-  const [bulkEditValue, setBulkEditValue] = useState("");
-  const [unsavedChanges, setUnsavedChanges] = useState<Set<string>>(new Set());
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [editFormData, setEditFormData] = useState<Partial<Activity>>({});
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [ticketSourceData, setTicketSourceData] = useState<TicketSourceData | null>(null);
-  const [isLoadingTicketSource, setIsLoadingTicketSource] = useState(false);
-  const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [auditErrors, setAuditErrors] = useState<string[]>([]);
-  const [showAuditPanel, setShowAuditPanel] = useState(true);
-  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
-  const [deleteHoldProgress, setDeleteHoldProgress] = useState(0);
-  const [isHoldingDelete, setIsHoldingDelete] = useState(false);
-  const deleteHoldTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const DELETE_HOLD_DURATION = 2000;
-  const [fetchLimit, setFetchLimit] = useState(100);
-  const [totalDbRows, setTotalDbRows] = useState(0);
-  const [showFetchMoreAlert, setShowFetchMoreAlert] = useState(false);
-  const BATCH_SIZE = 1000;
+  const [colTotals, setColTotals] = useState<Record<ColumnKey, number>>({
+    open: 0, in_progress: 0, approval: 0, done: 0, cancelled: 0,
+  });
+  const [colPages, setColPages] = useState<Record<ColumnKey, number>>({
+    open: 1, in_progress: 1, approval: 1, done: 1, cancelled: 1,
+  });
+  const [colLoading, setColLoading] = useState<Record<ColumnKey, boolean>>({
+    open: false, in_progress: false, approval: false, done: false, cancelled: false,
+  });
 
-  // ── Fetch helpers ─────────────────────────────────────────────────────────
-  const fetchTotalCount = async () => {
-    let q = supabase.from("activity").select("*", { count: "exact", head: true });
-    if (dateFrom) q = q.gte("date_created", dateFrom);
-    if (dateTo) q = q.lte("date_created", dateTo);
-    const { count, error } = await q;
-    if (!error && count !== null) setTotalDbRows(count);
-  };
+  const [search, setSearch]               = useState("");
+  const [searchResults, setSearchResults] = useState<Activity[]>([]);
+  const [searchTotal, setSearchTotal]     = useState(0);
+  const [searchPage, setSearchPage]       = useState(1);
+  const [isSearching, setIsSearching]     = useState(false);
+  const [isSearchMode, setIsSearchMode]   = useState(false);
 
-  const fetchActivities = async (limit?: number) => {
-    const maxRows = limit || fetchLimit;
-    setIsFetching(true);
-    await fetchTotalCount();
-    let allData: any[] = [];
-    let hasMore = true; let start = 0;
-    while (hasMore && allData.length < maxRows) {
-      let q = supabase.from("activity").select(`id,referenceid,tsm,manager,status,date_created,ticket_reference_number,scheduled_date,agent,company_name,contact_person,contact_number,email_address,address,type_client,activity_reference_number,ticket_remarks,cancellation_remarks`);
-      if (dateFrom) q = q.gte("date_created", dateFrom);
-      if (dateTo) q = q.lte("date_created", dateTo);
-      const remaining = maxRows - allData.length;
-      const batchSize = Math.min(BATCH_SIZE, remaining);
-      const { data, error } = await q.order("date_created", { ascending: false }).range(start, start + batchSize - 1);
-      if (error) { toast.error(`Error fetching activities: ${error.message}`); setActivities([]); setIsFetching(false); return; }
-      if (data && data.length > 0) {
-        allData = allData.concat(data);
-        if (data.length < batchSize || allData.length >= maxRows) hasMore = false;
-        else start += batchSize;
-      } else { hasMore = false; }
-    }
-    setActivities(allData);
-    setIsFetching(false);
-    setShowFetchMoreAlert(allData.length < totalDbRows);
-  };
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo]     = useState("");
 
-  const handleFetchMore = () => {
-    const next = fetchLimit === 100 ? 2100 : fetchLimit === 2100 ? 7100 : fetchLimit + 5000;
-    setFetchLimit(next);
-    fetchActivities(next);
-    toast.success(`Fetching up to ${next.toLocaleString()} rows…`);
-  };
+  const [selectedAct, setSelectedAct]       = useState<Activity | null>(null);
+  const [editForm, setEditForm]             = useState<Partial<Activity>>({});
+  const [isSaving, setIsSaving]             = useState(false);
+  const [ticketSource, setTicketSource]     = useState<any>(null);
+  const [historyRecs, setHistoryRecs]       = useState<any[]>([]);
+  const [loadingTicket, setLoadingTicket]   = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
-  useEffect(() => { fetchActivities(100); }, []);
-  useEffect(() => { setFetchLimit(100); fetchActivities(100); }, [dateFrom, dateTo]);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const agentMap = useMemo(() => {
-    const map: Record<string, { name: string; profilePicture?: string }> = {};
-    agents.forEach((a) => { if (a.ReferenceID) map[a.ReferenceID.toLowerCase()] = { name: `${a.Firstname} ${a.Lastname}`, profilePicture: a.profilePicture }; });
-    return map;
-  }, [agents]);
-
+  // ── Cleanup debounce on unmount ──────────────────────────────────────────
   useEffect(() => {
-    setReferenceIdOptions([...new Set(activities.map((a) => a.referenceid).filter(Boolean))].sort());
-    setStatusOptions([...new Set(activities.map((a) => a.status).filter(Boolean))].sort());
-  }, [activities]);
-
-  const filteredActivities = useMemo(() => {
-    let r = activities;
-    if (referenceIdFilter) r = r.filter((a) => a.referenceid === referenceIdFilter);
-    if (statusFilter) r = r.filter((a) => a.status?.toLowerCase() === statusFilter.toLowerCase());
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      r = r.filter((a) => [a.id, a.referenceid, a.tsm, a.manager, a.ticket_reference_number, a.agent, a.company_name, a.contact_person, a.contact_number, a.email_address, a.address, a.type_client, a.activity_reference_number, a.ticket_remarks, a.cancellation_remarks, a.status, a.scheduled_date, a.date_created].filter(Boolean).some((f) => String(f).toLowerCase().includes(q)));
-    }
-    return r;
-  }, [activities, search, referenceIdFilter, statusFilter]);
-
-  const sortedActivities = useMemo(() => {
-    if (!sortColumn) return filteredActivities;
-    return [...filteredActivities].sort((a, b) => {
-      const av = a[sortColumn as keyof Activity] || ""; const bv = b[sortColumn as keyof Activity] || "";
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortDirection === "asc" ? cmp : -cmp;
-    });
-  }, [filteredActivities, sortColumn, sortDirection]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedActivities.length / rowsPerPage));
-  const paginatedActivities = useMemo(() => sortedActivities.slice((page - 1) * rowsPerPage, page * rowsPerPage), [sortedActivities, page, rowsPerPage]);
-
-  useEffect(() => { setPage(1); }, [search, referenceIdFilter, statusFilter, rowsPerPage]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!focusedCell) return;
-      const ci = paginatedActivities.findIndex((a) => a.id === focusedCell.rowId);
-      const fields = Object.keys(columnVisibility).filter((k) => columnVisibility[k]);
-      const fi = fields.indexOf(focusedCell.field);
-      if (e.key === "ArrowDown" && ci < paginatedActivities.length - 1) { e.preventDefault(); setFocusedCell({ rowId: paginatedActivities[ci + 1].id, field: focusedCell.field }); }
-      else if (e.key === "ArrowUp" && ci > 0) { e.preventDefault(); setFocusedCell({ rowId: paginatedActivities[ci - 1].id, field: focusedCell.field }); }
-      else if (e.key === "ArrowRight" && fi < fields.length - 1) { e.preventDefault(); setFocusedCell({ rowId: focusedCell.rowId, field: fields[fi + 1] }); }
-      else if (e.key === "ArrowLeft" && fi > 0) { e.preventDefault(); setFocusedCell({ rowId: focusedCell.rowId, field: fields[fi - 1] }); }
-      else if (e.key === "Escape") setFocusedCell(null);
+    return () => {
+      if (searchDebounce.current) clearTimeout(searchDebounce.current);
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [focusedCell, paginatedActivities, columnVisibility]);
+  }, []);
 
-  const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString() : "N/A";
+  // ── Fetch a single column ────────────────────────────────────────────────
+  const fetchColumn = useCallback(async (col: ColumnKey, page = 1, append = false) => {
+    setColLoading(prev => ({ ...prev, [col]: true }));
+    try {
+      const params = new URLSearchParams({
+        column: col, page: String(page), pageSize: String(PAGE_SIZE),
+      });
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo)   params.set("dateTo", dateTo);
 
-  const handleInlineUpdate = async (id: string, field: keyof Activity, value: string) => {
-    const { error } = await supabase.from("activity").update({ [field]: value }).eq("id", id);
-    if (error) { toast.error(`Failed to update ${field}`); return; }
-    toast.success(`${field} updated`);
-    setUnsavedChanges((prev) => { const s = new Set(prev); s.delete(`${id}-${field}`); return s; });
-    await fetchActivities();
+      const res  = await fetch(`/api/taskflow/activity-logs?${params}`, { cache: "no-store" });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+
+      setColCards(prev => ({
+        ...prev,
+        [col]: append ? [...prev[col], ...(json.data ?? [])] : (json.data ?? []),
+      }));
+      setColTotals(prev => ({ ...prev, [col]: json.total ?? 0 }));
+      setColPages(prev => ({ ...prev, [col]: page }));
+    } catch (err: any) {
+      toast.error(`Failed to load ${col}: ${err.message}`);
+    } finally {
+      setColLoading(prev => ({ ...prev, [col]: false }));
+    }
+  }, [dateFrom, dateTo]);
+
+  // ── Load all columns ─────────────────────────────────────────────────────
+  const loadAll = useCallback(() => {
+    setIsSearchMode(false);
+    setSearch("");
+    COLUMNS.forEach(col => fetchColumn(col.key, 1, false));
+  }, [fetchColumn]);
+
+  // FIX: depend on loadAll only (not dateFrom/dateTo directly) to avoid double-fire
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // ── Search ───────────────────────────────────────────────────────────────
+  const doSearch = useCallback(async (q: string, page = 1) => {
+    if (!q.trim()) { setIsSearchMode(false); setSearchResults([]); return; }
+    setIsSearching(true);
+    setIsSearchMode(true);
+    try {
+      const params = new URLSearchParams({
+        search: q, page: String(page), pageSize: String(PAGE_SIZE),
+      });
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo)   params.set("dateTo", dateTo);
+
+      const res  = await fetch(`/api/taskflow/activity-logs?${params}`, { cache: "no-store" });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+
+      // FIX: split value vs updater — no mixed forms
+      if (page === 1) {
+        setSearchResults(json.data ?? []);
+      } else {
+        setSearchResults(prev => [...prev, ...(json.data ?? [])]);
+      }
+      setSearchTotal(json.total ?? 0);
+      setSearchPage(page);
+    } catch (err: any) {
+      toast.error("Search failed: " + err.message);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [dateFrom, dateTo]);
+
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (!val.trim()) { setIsSearchMode(false); setSearchResults([]); return; }
+    searchDebounce.current = setTimeout(() => doSearch(val, 1), 600);
   };
 
-  const isFieldIncomplete = (field: keyof Activity, value: string | null | number | undefined): boolean => {
-    const v = value != null ? String(value) : "";
-    if (!v || v.trim() === "" || v === "null" || v === "undefined") return true;
-    switch (field) {
-      case "email_address": { const emails = v.split(",").map((e) => e.trim()).filter((e) => e.length > 0); return emails.length === 0 || !emails.every((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)); }
-      case "contact_number": { const nums = v.replace(/,/g, "/").split("/").map((n) => n.trim()).filter((n) => n.length > 0); return nums.length === 0 || !nums.every((n) => n.length >= 7 && /^[0-9+\-\s()]*$/.test(n)); }
-      case "company_name": return v.trim().length < 2;
-      case "contact_person": { const ps = v.split("/").map((p) => p.trim()).filter((p) => p.length > 0); return ps.length === 0 || !ps.every((p) => p.length >= 2); }
-      default: return false;
+  const clearSearch = () => {
+    setSearch(""); setIsSearchMode(false); setSearchResults([]);
+  };
+
+  // ── View More per column ─────────────────────────────────────────────────
+  const handleViewMore = (col: ColumnKey) => {
+    fetchColumn(col, colPages[col] + 1, true);
+  };
+
+  // ── Edit dialog ──────────────────────────────────────────────────────────
+  const openEdit = async (act: Activity) => {
+    setSelectedAct(act);
+    setEditForm({ ...act });
+    setTicketSource(null);
+    setHistoryRecs([]);
+
+    if (act.ticket_reference_number) {
+      setLoadingTicket(true);
+      try {
+        const res  = await fetch(`/api/fetch-ticket-source?ticket_reference_number=${encodeURIComponent(act.ticket_reference_number)}`);
+        const json = await res.json();
+        setTicketSource(json.ticketSource?.[0] ?? null);
+      } catch {
+        /* silent — no ticket source is valid */
+      } finally {
+        setLoadingTicket(false);
+      }
+    }
+
+    if (act.activity_reference_number) {
+      setLoadingHistory(true);
+      try {
+        const res  = await fetch(`/api/fetch-history?activity_reference_number=${encodeURIComponent(act.activity_reference_number)}`);
+        const json = await res.json();
+        setHistoryRecs(Array.isArray(json.history) ? json.history : []);
+      } catch {
+        /* silent */
+      } finally {
+        setLoadingHistory(false);
+      }
     }
   };
 
-  const fetchTicketSourceData = async (ticketRef: string) => {
-    if (!ticketRef?.trim()) { setTicketSourceData(null); return; }
-    setIsLoadingTicketSource(true);
+  const handleSave = async () => {
+    if (!selectedAct) return;
+    setIsSaving(true);
     try {
-      const res = await fetch(`/api/fetch-ticket-source?ticket_reference_number=${encodeURIComponent(ticketRef)}`);
-      if (!res.ok) { setTicketSourceData(null); return; }
-      const result = await res.json();
-      if (result.ticketSource?.length > 0) {
-        const t = result.ticketSource[0];
-        setTicketSourceData({ referenceid: t.referenceid || "", date_created: t.date_created || "", company_name: t.company_name || "", contact_person: t.contact_person || "", contact_number: t.contact_number || "", email_address: t.email_address || "", address: t.address || "", inquiry: t.inquiry || "", agent: t.agent || "", wrap_up: t.wrap_up || "", status: t.status || "" });
-      } else { setTicketSourceData(null); }
-    } catch { setTicketSourceData(null); }
-    finally { setIsLoadingTicketSource(false); }
+      const { error } = await supabase.from("activity").update(editForm).eq("id", selectedAct.id);
+      if (error) throw new Error(error.message);
+      toast.success("Activity updated");
+      setSelectedAct(null);
+
+      // FIX: case-insensitive column matching after save
+      const colKey = getColumnForStatus(editForm.status ?? "");
+      if (colKey) fetchColumn(colKey, 1, false);
+      else loadAll();
+    } catch (err: any) {
+      toast.error(err.message ?? "Save failed");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const fetchHistoryData = async (actRef: string) => {
-    if (!actRef?.trim()) { setHistoryRecords([]); return; }
-    setIsLoadingHistory(true);
-    try {
-      const res = await fetch(`/api/fetch-history?activity_reference_number=${encodeURIComponent(actRef)}`);
-      if (!res.ok) { setHistoryRecords([]); return; }
-      const result = await res.json();
-      setHistoryRecords(Array.isArray(result.history) ? result.history.map((h: any) => ({ id: h.id || "", company_name: h.company_name || "", status: h.status || "", date_created: h.date_created || "", ticket_reference_number: h.ticket_reference_number || "" })) : []);
-    } catch { setHistoryRecords([]); }
-    finally { setIsLoadingHistory(false); }
-  };
-
-  const handleEditClick = (activity: Activity) => {
-    setEditingActivity(activity); setEditFormData({ ...activity });
-    setTicketSourceData(null); setHistoryRecords([]); setShowEditDialog(true);
-    if (activity.ticket_reference_number) fetchTicketSourceData(activity.ticket_reference_number);
-    if (activity.activity_reference_number) fetchHistoryData(activity.activity_reference_number);
-  };
-
-  const handleEditFormChange = (field: keyof Activity, value: string) => setEditFormData((prev) => ({ ...prev, [field]: value }));
-
-  const handleSaveEdit = async () => {
-    if (!editingActivity || !editFormData) return;
-    const { error } = await supabase.from("activity").update(editFormData).eq("id", editingActivity.id);
-    if (error) { toast.error("Failed to update activity"); return; }
-    toast.success("Activity updated"); setShowEditDialog(false); setEditingActivity(null); await fetchActivities();
-  };
-
-  const activityStats = useMemo(() => {
-    const total = activities.length;
-    const completed = activities.filter((a) => ["completed", "resolved", "done"].includes(a.status?.toLowerCase())).length;
-    const received = activities.filter((a) => ["received", "pending", "new"].includes(a.status?.toLowerCase())).length;
-    const endorsed = activities.filter((a) => ["endorsed", "in_progress"].includes(a.status?.toLowerCase())).length;
-    const incomplete = activities.filter((a) => ["company_name", "contact_person", "contact_number", "email_address", "address", "ticket_reference_number", "agent", "status"].some((f) => isFieldIncomplete(f as keyof Activity, a[f as keyof Activity] as string))).length;
-    return { total, completed, received, endorsed, incomplete };
-  }, [activities]);
-
-  const exportToCSV = () => {
-    const headers = Object.keys(columnVisibility).filter((k) => columnVisibility[k]);
-    const csv = [headers.join(","), ...paginatedActivities.map((row) => headers.map((h) => { const v = String(row[h as keyof Activity] || ""); return v.includes(",") || v.includes('"') || v.includes("\n") ? `"${v.replace(/"/g, '""')}"` : v; }).join(","))].join("\n");
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-    a.download = `activity-logs-${new Date().toISOString().split("T")[0]}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  };
-
-  const handleSort = (col: string) => { if (sortColumn === col) setSortDirection((d) => d === "asc" ? "desc" : "asc"); else { setSortColumn(col); setSortDirection("asc"); } };
-  const toggleColumnVisibility = (col: string) => setColumnVisibility((prev) => ({ ...prev, [col]: !prev[col] }));
-
-  const handleBulkEdit = async () => {
-    if (selectedIds.length === 0 || !bulkEditField) return;
-    const { error } = await supabase.from("activity").update({ [bulkEditField]: bulkEditValue }).in("id", selectedIds);
-    if (error) { toast.error("Failed to bulk update"); return; }
-    toast.success(`Updated ${selectedIds.length} rows`);
-    setShowBulkEditDialog(false); setBulkEditField(""); setBulkEditValue(""); setSelectedIds([]); await fetchActivities();
-  };
-
-  const toggleSelect = (id: string) => setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-  const toggleSelectAll = () => {
-    const ids = paginatedActivities.map((a) => a.id);
-    const allSel = ids.every((id) => selectedIds.includes(id));
-    setSelectedIds(allSel ? selectedIds.filter((id) => !ids.includes(id)) : [...new Set([...selectedIds, ...ids])]);
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    const { error } = await supabase.from("activity").delete().in("id", selectedIds);
-    if (error) { toast.error("Failed to delete selected activities"); return; }
-    toast.success(`${selectedIds.length} activities deleted`);
-    setSelectedIds([]); setShowDeleteConfirm(false); setDeleteHoldProgress(0); setIsHoldingDelete(false); fetchActivities();
-  };
-
-  const startDeleteHold = () => {
-    setIsHoldingDelete(true); setDeleteHoldProgress(0);
-    const start = Date.now();
-    deleteHoldTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const progress = Math.min((elapsed / DELETE_HOLD_DURATION) * 100, 100);
-      setDeleteHoldProgress(progress);
-      if (elapsed >= DELETE_HOLD_DURATION) { clearInterval(deleteHoldTimerRef.current!); deleteHoldTimerRef.current = null; handleBulkDelete(); }
-    }, 50);
-  };
-  const stopDeleteHold = () => {
-    setIsHoldingDelete(false); setDeleteHoldProgress(0);
-    if (deleteHoldTimerRef.current) { clearInterval(deleteHoldTimerRef.current); deleteHoldTimerRef.current = null; }
-  };
-  const handleDeleteDialogClose = (open: boolean) => { if (!open) stopDeleteHold(); setShowDeleteConfirm(open); };
-
-  // ─── Render ──────────────────────────────────────────────────────────────────
-  const incompleteFieldKeys = ["company_name","contact_person","contact_number","email_address","address","ticket_reference_number","agent","status"] as const;
+  const totalAll = Object.values(colTotals).reduce((a, b) => a + b, 0);
 
   return (
     <ProtectedPageWrapper>
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset className="bg-[#0a0d14] text-slate-100 flex flex-col h-svh overflow-hidden">
+        <SidebarInset
+          className="flex flex-col h-svh overflow-hidden bg-[#080d12]"
+          style={{ fontFamily: C.font, color: C.text }}
+        >
+          {/* Dot grid background */}
+          <div className="fixed inset-0 pointer-events-none" style={{
+            backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`,
+            backgroundSize: "24px 24px", opacity: 0.15, zIndex: 0,
+          }} />
 
           {/* ── Header ── */}
-          <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-orange-500/20 bg-[#0d1117]/90 backdrop-blur-sm overflow-hidden">
-            <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/40 to-transparent" />
-            <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-            <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-            <div className="flex items-center gap-2 px-4 relative z-10">
-              <SidebarTrigger className="-ml-1 text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/10" />
-              <Separator orientation="vertical" className="h-4 bg-orange-500/20" />
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbLink href="#" className="text-slate-500 hover:text-orange-400 font-mono uppercase tracking-wider text-xs">Taskflow</BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator className="text-slate-700" />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage className="text-orange-400 font-mono tracking-widest uppercase text-xs">Activity Logs</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
+          <header
+            className="relative z-10 flex h-11 shrink-0 items-center gap-2 px-4 border-b bg-[#080d12]"
+            style={{ borderColor: C.border }}
+          >
+            <SidebarTrigger className="-ml-1 hover:bg-transparent" style={{ color: C.dim }} />
+            <div className="w-px h-4" style={{ backgroundColor: C.border }} />
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="hidden sm:flex h-7 px-2 text-[10px] uppercase tracking-widest"
+              style={{ color: C.dim, background: "none", border: "none", cursor: "pointer" }}
+              onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
+              onMouseLeave={e => (e.currentTarget.style.color = C.dim)}
+            >
+              Home
+            </button>
+            <div className="w-px h-4 hidden sm:block" style={{ backgroundColor: C.border }} />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="#" className="text-[10px] uppercase tracking-widest hidden sm:block" style={{ color: C.dim }}>
+                    Taskflow
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden sm:block" style={{ color: C.muted }} />
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="text-[10px] uppercase tracking-widest font-bold" style={{ color: C.accent }}>
+                    Activity Logs
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <div className="ml-auto flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Supabase</span>
             </div>
           </header>
 
-          {/* ── Page title bar ── */}
-          <div className="shrink-0 px-4 sm:px-6 pt-3 pb-2 border-b border-slate-800/60">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="relative p-2 bg-orange-500/10 border border-orange-500/30">
-                  <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-orange-500/50" />
-                  <div className="absolute top-0 right-0 w-2 h-2 border-r border-t border-orange-500/50" />
-                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/50" />
-                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/50" />
-                  <ActivityIcon className="w-4 h-4 text-orange-400" />
-                </div>
-                <div>
-                  <h1 className="text-sm font-bold tracking-widest uppercase text-orange-400 font-mono leading-tight">Activity Logs</h1>
-                  <p className="text-[10px] text-slate-600 font-mono mt-0.5 tracking-wider">
-                    {isFetching ? "Loading…" : <><span className="text-slate-300 font-semibold">{sortedActivities.length}</span> records</>}
-                  </p>
-                </div>
-              </div>
-              <div className="hidden md:flex items-center gap-4 text-[10px] font-mono text-slate-600 uppercase tracking-widest">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
-                  <span className="text-orange-400/60">Supabase Sync</span>
-                </div>
-              </div>
+          {/* ── Title bar ── */}
+          <div
+            className="relative z-10 shrink-0 flex items-center gap-3 px-4 py-3 border-b"
+            style={{ borderColor: C.border, backgroundColor: C.panel }}
+          >
+            <div
+              className="flex h-8 w-8 items-center justify-center border"
+              style={{ borderColor: C.border, backgroundColor: "#0f1923" }}
+            >
+              <ActivityIcon className="size-4" style={{ color: C.accent }} />
             </div>
-          </div>
-
-          {/* ── Toolbar ── */}
-          <div className="shrink-0 px-4 sm:px-6 py-2 border-b border-slate-800/60">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Search */}
-              <div className="relative min-w-[200px] max-w-xs flex-1">
-                <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-slate-600" />
-                <Input placeholder="Search all fields…" value={search} onChange={(e) => setSearch(e.target.value)}
-                  className="pl-7 h-9 text-xs bg-[#0d1117] border-slate-800 text-slate-300 placeholder:text-slate-700 focus:border-orange-500/40 rounded-none font-mono" />
-                {isFetching && <Loader2 className="absolute right-2 top-2.5 h-3.5 w-3.5 animate-spin text-orange-500/50" />}
-              </div>
-
-              {/* Date range — Calendar picker */}
+            <div>
+              <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>Activity Logs</h1>
+              <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>
+                Kanban · {totalAll.toLocaleString()} total records
+              </p>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
               <Calendar
-                startDate={dateFrom}
-                endDate={dateTo}
-                setStartDateAction={setDateFrom}
-                setEndDateAction={setDateTo}
+                startDate={dateFrom} endDate={dateTo}
+                setStartDateAction={setDateFrom} setEndDateAction={setDateTo}
               />
-
-              {/* Filters */}
-              <button onClick={() => setShowFilterDialog(true)}
-                className={cn("inline-flex items-center gap-1.5 h-9 px-3 text-[10px] font-mono uppercase tracking-widest border transition-colors",
-                  referenceIdFilter || statusFilter
-                    ? "border-orange-500/40 bg-orange-500/5 text-orange-400"
-                    : "border-slate-800 bg-[#0d1117] text-slate-400 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-300")}>
-                Filters {(referenceIdFilter || statusFilter) && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
+              <button
+                onClick={loadAll}
+                className="flex items-center gap-1.5 h-7 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
+              >
+                <RefreshCw className="size-3" /> Refresh
               </button>
-
-              {/* Export */}
-              <button onClick={exportToCSV}
-                className="inline-flex items-center gap-1.5 h-9 px-3 text-[10px] font-mono uppercase tracking-widest border border-slate-800 bg-[#0d1117] text-slate-400 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-300 transition-colors">
-                Export CSV
-              </button>
-
-              {/* Selection actions */}
-              {selectedIds.length > 0 && (<>
-                <button onClick={() => setShowBulkEditDialog(true)}
-                  className="inline-flex items-center gap-1.5 h-9 px-3 text-[10px] font-mono uppercase tracking-widest border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors">
-                  Bulk Edit ({selectedIds.length})
-                </button>
-                <button onClick={() => setShowDeleteConfirm(true)}
-                  className="inline-flex items-center gap-1.5 h-9 px-3 text-[10px] font-mono uppercase tracking-widest border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
-                  Delete ({selectedIds.length})
-                </button>
-              </>)}
-
-              {/* Pagination */}
-              <div className="ml-auto flex items-center gap-1.5">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                  className="h-8 w-8 flex items-center justify-center border border-orange-500/20 text-orange-500/50 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors font-mono text-xs">←</button>
-                <div className="flex items-center gap-1 px-3 h-8 border border-orange-500/20 bg-orange-500/5">
-                  <span className="text-[11px] font-mono text-orange-400">{page}</span>
-                  <span className="text-[11px] font-mono text-orange-500/30">/</span>
-                  <span className="text-[11px] font-mono text-orange-500/40">{totalPages}</span>
-                </div>
-                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                  className="h-8 w-8 flex items-center justify-center border border-orange-500/20 text-orange-500/50 hover:border-orange-500/40 hover:bg-orange-500/10 hover:text-orange-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors font-mono text-xs">→</button>
-              </div>
             </div>
           </div>
 
-          {/* ── Card Grid ── */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
-            <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: `linear-gradient(rgba(251,146,60,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(251,146,60,0.03) 1px, transparent 1px)`, backgroundSize: "40px 40px" }} />
-            <div className="relative z-10 p-4">
-              {/* Select-all bar */}
-              <div className="flex items-center gap-3 mb-3 px-1">
-                <input type="checkbox" checked={paginatedActivities.length > 0 && paginatedActivities.every((a) => selectedIds.includes(a.id))} onChange={toggleSelectAll} className="accent-orange-500" />
-                <span className="text-[9px] font-mono uppercase tracking-widest text-orange-500/40">{paginatedActivities.length} records on this page</span>
+          {/* ── Stats bar ── */}
+          <div className="relative z-10 shrink-0 grid grid-cols-5 border-b" style={{ borderColor: C.border }}>
+            {COLUMNS.map((col, i) => (
+              <div
+                key={col.key}
+                className="flex flex-col items-center justify-center py-2.5"
+                style={{
+                  borderColor: C.border,
+                  backgroundColor: C.panel,
+                  borderRight: i < COLUMNS.length - 1 ? `1px solid ${C.border}` : "none",
+                }}
+              >
+                <span className="text-base font-bold leading-none" style={{ color: col.color }}>
+                  {colTotals[col.key]}
+                </span>
+                <span className="text-[9px] uppercase tracking-widest mt-1" style={{ color: C.muted }}>
+                  {col.label.split(" / ")[0]}
+                </span>
               </div>
+            ))}
+          </div>
 
-              {isFetching ? (
-                <div className="py-16 flex flex-col items-center gap-3">
-                  <Loader2 className="size-5 animate-spin text-orange-500/40" />
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-orange-500/30">Loading activities…</span>
-                </div>
-              ) : paginatedActivities.length === 0 ? (
-                <div className="py-16 flex flex-col items-center gap-3">
-                  <div className="relative p-3 border border-orange-500/20 bg-orange-500/5">
-                    <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-orange-500/30" />
-                    <div className="absolute top-0 right-0 w-2 h-2 border-r border-t border-orange-500/30" />
-                    <div className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-orange-500/30" />
-                    <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-orange-500/30" />
-                    <ActivityIcon className="size-5 text-orange-500/30" />
-                  </div>
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-orange-500/30">No activities found.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {paginatedActivities.map((act, index) => {
-                    const incompleteCount = incompleteFieldKeys.filter((f) => isFieldIncomplete(f, act[f])).length;
-                    const isSelected = selectedIds.includes(act.id);
-                    return (
-                      <div key={act.id} onClick={() => handleEditClick(act)}
-                        className={cn("border transition-colors cursor-pointer group relative",
-                          isSelected ? "border-orange-500/40 bg-orange-500/[0.06]" : "border-orange-500/10 bg-[#0d1117] hover:border-orange-500/30 hover:bg-orange-500/[0.03]",
-                          incompleteCount > 0 && "border-l-2 border-l-red-500/50")}>
-                        {/* Card header */}
-                        <div className="flex items-center justify-between px-3 py-2 border-b border-orange-500/10 bg-[#0a0d14]">
-                          <div className="flex items-center gap-2">
-                            <input type="checkbox" checked={isSelected} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); toggleSelect(act.id); }} className="accent-orange-500" />
-                            <span className="text-[9px] font-mono text-orange-500/30">#{(page - 1) * rowsPerPage + index + 1}</span>
-                          </div>
-                          {incompleteCount > 0 && (
-                            <div className="flex items-center gap-1 text-red-400">
-                              <AlertCircle className="h-3 w-3" />
-                              <span className="text-[9px] font-mono font-bold">{incompleteCount}</span>
-                            </div>
-                          )}
-                        </div>
-                        {/* Card body */}
-                        <div className="p-3 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-mono uppercase text-orange-500/40">Activity Ref</span>
-                            <span className="text-[10px] font-mono text-orange-400 font-semibold">{act.activity_reference_number || "—"}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-mono uppercase text-orange-500/40">Ticket Ref</span>
-                            <span className="text-[10px] font-mono text-slate-400">{act.ticket_reference_number || "—"}</span>
-                          </div>
-                          {columnVisibility.company_name && (
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-[9px] font-mono uppercase text-orange-500/40 shrink-0">Company</span>
-                              <span className={cn("text-[10px] font-mono text-right truncate max-w-[160px]", isFieldIncomplete("company_name", act.company_name) ? "text-red-400" : "text-slate-200 font-semibold uppercase")}>{act.company_name || "—"}</span>
-                            </div>
-                          )}
-                          {columnVisibility.contact_person && (
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-[9px] font-mono uppercase text-orange-500/40 shrink-0">Contact</span>
-                              <span className={cn("text-[10px] font-mono text-right", isFieldIncomplete("contact_person", act.contact_person) ? "text-red-400" : "text-slate-300")}>{act.contact_person || "—"}</span>
-                            </div>
-                          )}
-                          {columnVisibility.contact_number && (
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-[9px] font-mono uppercase text-orange-500/40 shrink-0">Phone</span>
-                              <span className={cn("text-[10px] font-mono text-right", isFieldIncomplete("contact_number", act.contact_number) ? "text-red-400" : "text-slate-400")}>{act.contact_number || "—"}</span>
-                            </div>
-                          )}
-                          {columnVisibility.email_address && (
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-[9px] font-mono uppercase text-orange-500/40 shrink-0">Email</span>
-                              <span className={cn("text-[10px] font-mono text-right truncate max-w-[160px]", isFieldIncomplete("email_address", act.email_address) ? "text-red-400" : "text-slate-500")}>{act.email_address || "—"}</span>
-                            </div>
-                          )}
-                          {columnVisibility.type_client && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-mono uppercase text-orange-500/40">Type</span>
-                              <span className="text-[10px] font-mono text-slate-400">{act.type_client || "—"}</span>
-                            </div>
-                          )}
-                          {columnVisibility.status && (
-                            <div className="flex items-center justify-between pt-1.5 border-t border-orange-500/10">
-                              <span className="text-[9px] font-mono uppercase text-orange-500/40">Status</span>
-                              <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 uppercase tracking-widest border",
-                                ["completed","resolved","done"].includes(act.status?.toLowerCase()) ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                : ["pending","open","new"].includes(act.status?.toLowerCase()) ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                                : ["cancelled","closed"].includes(act.status?.toLowerCase()) ? "bg-red-500/10 text-red-400 border-red-500/30"
-                                : "bg-slate-800 text-slate-400 border-slate-700")}>
-                                {act.status || "N/A"}
-                              </span>
-                            </div>
-                          )}
-                          {columnVisibility.agent && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-mono uppercase text-orange-500/40">Agent</span>
-                              <span className={cn("text-[10px] font-mono", isFieldIncomplete("agent", act.agent) ? "text-red-400" : "text-slate-400")}>{act.agent || "—"}</span>
-                            </div>
-                          )}
-                          {columnVisibility.date_created && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-mono uppercase text-orange-500/40">Date</span>
-                              <span className="text-[10px] font-mono text-slate-500">{formatDate(act.date_created)}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+          {/* ── Search bar ── */}
+          <div
+            className="relative z-10 shrink-0 flex items-center gap-2 px-4 py-2 border-b"
+            style={{ borderColor: C.border, backgroundColor: C.bg }}
+          >
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3" style={{ color: C.dim }} />
+              <input
+                placeholder="Search by activity ref no. or company name…"
+                value={search}
+                onChange={e => handleSearchChange(e.target.value)}
+                className="w-full pl-8 pr-8 h-8 text-[11px] focus:outline-none"
+                style={{
+                  backgroundColor: C.panel, border: `1px solid ${C.border}`,
+                  color: C.text, fontFamily: C.font,
+                }}
+                onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+              />
+              {search && (
+                <button onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <X className="size-3" style={{ color: C.dim }} />
+                </button>
               )}
             </div>
+            {isSearchMode && (
+              <span className="text-[10px]" style={{ color: C.muted }}>
+                {isSearching
+                  ? "Searching…"
+                  : <><span style={{ color: C.text }}>{searchTotal}</span> results</>}
+              </span>
+            )}
+            {isSearchMode && (
+              <button
+                onClick={clearSearch}
+                className="text-[10px] font-bold uppercase tracking-wider transition-colors"
+                style={{ color: C.dim }}
+                onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
+                onMouseLeave={e => (e.currentTarget.style.color = C.dim)}
+              >
+                ← Back to board
+              </button>
+            )}
           </div>
 
-          {/* ── Audit Panel ── */}
-          {showAuditPanel ? (
-            <div className="fixed right-4 bottom-4 z-50 w-60 border border-orange-500/20 bg-[#0d1117] shadow-2xl">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-orange-500/10 bg-slate-800/60">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
-                  <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-orange-400">Audit Panel</span>
-                </div>
-                <button onClick={() => setShowAuditPanel(false)} className="text-slate-600 hover:text-red-400 text-sm leading-none">×</button>
+          {/* ── Board / Search results ── */}
+          <div className="relative z-10 flex-1 overflow-hidden">
+            {isSearchMode ? (
+              <div className="h-full overflow-y-auto custom-scrollbar px-4 py-4">
+                {isSearching && searchResults.length === 0 ? (
+                  <div className="flex items-center justify-center h-full gap-3">
+                    <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
+                    <span className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>Searching…</span>
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <span className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>No results found</span>
+                  </div>
+                ) : (
+                  <div className="max-w-4xl mx-auto space-y-2">
+                    <p className="text-[10px] uppercase tracking-widest mb-3" style={{ color: C.muted }}>
+                      Showing {searchResults.length} of {searchTotal} results for &ldquo;{search}&rdquo;
+                    </p>
+                    {searchResults.map(act => (
+                      <div
+                        key={act.id}
+                        onClick={() => openEdit(act)}
+                        className="flex items-center gap-4 px-4 py-3 border cursor-pointer transition-colors"
+                        style={{ borderColor: C.border, backgroundColor: C.panel }}
+                        onMouseEnter={e => (e.currentTarget.style.borderColor = C.accent)}
+                        onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
+                      >
+                        <span className="text-[10px] font-bold font-mono shrink-0" style={{ color: C.accent }}>
+                          {act.activity_reference_number || "—"}
+                        </span>
+                        <span className="flex-1 text-[11px] font-bold uppercase truncate" style={{ color: C.text }}>
+                          {act.company_name || "—"}
+                        </span>
+                        <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 border shrink-0 ${statusBadge(act.status)}`}>
+                          {act.status || "—"}
+                        </span>
+                        <span className="text-[10px] font-mono shrink-0" style={{ color: C.muted }}>
+                          {formatDate(act.date_created)}
+                        </span>
+                      </div>
+                    ))}
+                    {searchResults.length < searchTotal && (
+                      <button
+                        onClick={() => doSearch(search, searchPage + 1)}
+                        disabled={isSearching}
+                        className="w-full flex items-center justify-center gap-2 py-3 border transition-colors disabled:opacity-40"
+                        style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
+                      >
+                        {isSearching ? <Loader2 className="size-3 animate-spin" /> : <ChevronDown className="size-3" />}
+                        Load more ({searchTotal - searchResults.length} remaining)
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="p-3 space-y-2">
-                <div className="grid grid-cols-2 gap-1.5">
-                  {[
-                    { label: "Total", value: activityStats.total, color: "text-orange-400" },
-                    { label: "Completed", value: activityStats.completed, color: "text-emerald-400" },
-                    { label: "Received", value: activityStats.received, color: "text-amber-400" },
-                    { label: "Endorsed", value: activityStats.endorsed, color: "text-blue-400" },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="border border-orange-500/10 bg-[#0a0d14] p-2 text-center">
-                      <div className={cn("text-base font-mono font-bold", color)}>{value}</div>
-                      <div className="text-[8px] font-mono uppercase tracking-widest text-orange-500/40">{label}</div>
-                    </div>
+            ) : (
+              <div className="h-full overflow-x-auto custom-scrollbar overflow-y-hidden">
+                <div className="flex gap-3 h-full px-4 py-4 min-w-max">
+                  {COLUMNS.map(col => (
+                    <KanbanColumn
+                      key={col.key}
+                      col={col}
+                      cards={colCards[col.key]}
+                      total={colTotals[col.key]}
+                      isLoading={colLoading[col.key]}
+                      hasMore={colCards[col.key].length < colTotals[col.key]}
+                      onViewMore={() => handleViewMore(col.key)}
+                      onCardClick={openEdit}
+                    />
                   ))}
                 </div>
-                {activityStats.incomplete > 0 && (
-                  <button onClick={() => setShowIncompleteOnly(!showIncompleteOnly)}
-                    className={cn("w-full p-2 text-left border transition-colors", showIncompleteOnly ? "border-red-500/50 bg-red-500/20" : "border-red-500/20 bg-red-500/5 hover:bg-red-500/10")}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-mono uppercase tracking-widest text-red-400">Incomplete</span>
-                      <span className="text-sm font-mono font-bold text-red-400">{activityStats.incomplete}</span>
-                    </div>
-                    <div className="text-[8px] font-mono text-red-400/50 mt-0.5">{showIncompleteOnly ? "Click to show all" : "Click to filter"}</div>
-                  </button>
-                )}
-                <div className="text-[8px] font-mono text-orange-500/20 text-center border-t border-orange-500/10 pt-2">
-                  {new Date().toLocaleTimeString()}
-                </div>
               </div>
-            </div>
-          ) : (
-            <button onClick={() => setShowAuditPanel(true)}
-              className="fixed right-4 bottom-4 z-50 w-11 h-11 border border-orange-500/20 bg-[#0d1117] hover:border-orange-500/40 shadow-lg flex items-center justify-center relative">
-              <AlertCircle className="h-4 w-4 text-orange-400" />
-              {activityStats.incomplete > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-mono font-bold flex items-center justify-center">
-                  {activityStats.incomplete > 9 ? "9+" : activityStats.incomplete}
-                </span>
-              )}
-            </button>
-          )}
+            )}
+          </div>
         </SidebarInset>
       </SidebarProvider>
 
-      {/* ── Hold-to-Delete Dialog ── */}
-      <Dialog open={showDeleteConfirm} onOpenChange={handleDeleteDialogClose}>
-        <DialogContent className="max-w-md bg-[#0d1117] border-red-500/20 text-slate-100 rounded-none p-0 gap-0">
-          <DialogHeader className="px-5 py-4 border-b border-slate-700/60 bg-slate-800/60">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-500/10 border border-red-500/20"><AlertCircle className="w-4 h-4 text-red-400" /></div>
-              <div>
-                <DialogTitle className="text-sm font-bold uppercase tracking-widest font-mono text-red-400">Hold to Delete</DialogTitle>
-                <p className="text-[11px] text-slate-500 mt-0.5">This action cannot be undone</p>
-              </div>
-            </div>
-          </DialogHeader>
-          <div className="px-5 py-4 space-y-4">
-            <p className="text-[11px] font-mono text-slate-400 leading-relaxed">
-              You are about to delete <span className="text-red-400 font-bold">{selectedIds.length}</span> selected activities.
-            </p>
-            <div className="space-y-2">
-              <div className="h-1.5 border border-slate-700 bg-[#0a0d14] overflow-hidden">
-                <div className="h-full bg-red-500 transition-all duration-75 ease-linear" style={{ width: `${deleteHoldProgress}%` }} />
-              </div>
-              <p className="text-[9px] font-mono text-slate-600 text-center uppercase tracking-widest">
-                {isHoldingDelete ? `Holding… ${Math.round(deleteHoldProgress)}%` : `Press and hold for ${DELETE_HOLD_DURATION / 1000}s to confirm`}
-              </p>
-            </div>
-          </div>
-          <div className="px-5 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-end gap-2">
-            <button onClick={() => handleDeleteDialogClose(false)}
-              className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors">
-              Cancel
-            </button>
-            <button onMouseDown={startDeleteHold} onMouseUp={stopDeleteHold} onMouseLeave={stopDeleteHold} onTouchStart={startDeleteHold} onTouchEnd={stopDeleteHold} onTouchCancel={stopDeleteHold}
-              style={{ userSelect: "none", WebkitUserSelect: "none" }}
-              className={cn("px-4 py-1.5 text-[9px] font-mono uppercase tracking-widest border transition-colors select-none",
-                isHoldingDelete ? "bg-red-500 text-white border-red-500" : "bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20")}>
-              {isHoldingDelete ? <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Deleting… {Math.round(deleteHoldProgress)}%</span> : `Hold to Delete (${selectedIds.length})`}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── 4-Column Edit Dialog ── */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-[95vw] w-full bg-[#0d1117] border-orange-500/20 text-slate-100 rounded-none max-h-[90vh] overflow-y-auto p-0 gap-0">
-          <DialogHeader className="px-5 py-4 border-b border-slate-700/60 bg-slate-800/60 sticky top-0 z-10">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-500/10 border border-orange-500/20"><ActivityIcon className="w-4 h-4 text-orange-400" /></div>
-              <div>
-                <DialogTitle className="text-sm font-bold uppercase tracking-widest font-mono text-orange-400">Edit Activity</DialogTitle>
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate max-w-[400px]">{editingActivity?.company_name || editingActivity?.id}</p>
-              </div>
-            </div>
-          </DialogHeader>
-
-          {editingActivity && (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0 divide-x divide-orange-500/10">
-
-              {/* Col 1 — Incomplete fields */}
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-red-500/20">
-                  <AlertCircle className="h-4 w-4 text-red-400" />
-                  <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-red-400">Counter Checking</h3>
-                  <span className="ml-auto text-[9px] font-mono text-slate-600">
-                    {incompleteFieldKeys.filter((f) => isFieldIncomplete(f, editingActivity[f])).length} issues
-                  </span>
+      {/* ── Edit Dialog ── */}
+      {selectedAct && (
+        <Dialog open={!!selectedAct} onOpenChange={() => setSelectedAct(null)}>
+          <DialogContent
+            className="max-w-5xl w-full rounded-none p-0 gap-0 max-h-[90vh] overflow-y-auto"
+            style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, fontFamily: C.font }}
+          >
+            <DialogHeader
+              className="px-5 py-4 border-b sticky top-0 z-10"
+              style={{ borderColor: C.border, backgroundColor: C.bg }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-7 w-7 items-center justify-center border"
+                  style={{ borderColor: C.border, backgroundColor: "#0f1923" }}
+                >
+                  <ActivityIcon className="size-3.5" style={{ color: C.accent }} />
                 </div>
-                {incompleteFieldKeys.filter((f) => isFieldIncomplete(f, editingActivity[f])).length === 0 ? (
-                  <div className="flex items-center gap-2 text-emerald-400 text-[11px] font-mono">
-                    <CheckCircle2 className="h-4 w-4" /> All fields complete
-                  </div>
-                ) : (
-                  incompleteFieldKeys.filter((f) => isFieldIncomplete(f, editingActivity[f])).map((f) => (
-                    <div key={f} className="space-y-1">
-                      <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-red-400 flex items-center gap-1">
-                        {f.replace(/_/g, " ")} <span className="text-red-500">*</span>
-                      </label>
-                      <Input value={(editFormData as any)[f] || ""} onChange={(e) => handleEditFormChange(f as keyof Activity, e.target.value)}
-                        className="h-8 text-xs font-mono bg-slate-800 border-red-500/30 text-slate-200 focus:border-red-400 rounded-none placeholder:text-slate-600"
-                        placeholder={`Enter ${f.replace(/_/g, " ")}…`} />
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Col 2 — Complete fields */}
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-emerald-500/20">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">Complete Data</h3>
+                <div>
+                  <DialogTitle className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>
+                    Edit Activity
+                  </DialogTitle>
+                  <p className="text-[10px] mt-0.5 truncate max-w-[400px]" style={{ color: C.muted }}>
+                    {selectedAct.company_name || selectedAct.activity_reference_number}
+                  </p>
                 </div>
-                {incompleteFieldKeys.filter((f) => !isFieldIncomplete(f, editingActivity[f])).map((f) => (
+              </div>
+            </DialogHeader>
+
+            {/* FIX: use border-r via inline style per column instead of divide-x */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
+              {/* Col 1: Core fields */}
+              <div className="p-4 space-y-3" style={{ borderRight: `1px solid ${C.border}` }}>
+                <p className="text-[9px] font-bold uppercase tracking-widest pb-2 border-b" style={{ color: C.accent, borderColor: C.border }}>
+                  Core Info
+                </p>
+                {(["company_name", "contact_person", "contact_number", "email_address", "address", "type_client", "agent", "ticket_reference_number", "activity_reference_number"] as const).map(f => (
                   <div key={f} className="space-y-1">
-                    <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-emerald-400/70 flex items-center gap-1">
-                      {f.replace(/_/g, " ")} <CheckCircle2 className="h-2.5 w-2.5" />
+                    <label className="text-[9px] font-bold uppercase tracking-widest" style={{ color: C.dim }}>
+                      {f.replace(/_/g, " ")}
                     </label>
-                    <Input value={(editFormData as any)[f] || ""} onChange={(e) => handleEditFormChange(f as keyof Activity, e.target.value)}
-                      className="h-8 text-xs font-mono bg-slate-800 border-emerald-500/20 text-slate-200 focus:border-emerald-400 rounded-none" />
+                    <input
+                      value={(editForm as any)[f] ?? ""}
+                      onChange={e => setEditForm(p => ({ ...p, [f]: e.target.value }))}
+                      className="w-full h-8 px-3 text-[11px] focus:outline-none"
+                      style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                      onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                      onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                    />
+                  </div>
+                ))}
+
+                {/* FIX: Status as select dropdown — prevents typos and wrong column routing */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase tracking-widest" style={{ color: C.dim }}>
+                    Status
+                  </label>
+                  <select
+                    value={editForm.status ?? ""}
+                    onChange={e => setEditForm(p => ({ ...p, status: e.target.value }))}
+                    className="w-full h-8 px-3 text-[11px] focus:outline-none"
+                    style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                    onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                    onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                  >
+                    <option value="">— Select status —</option>
+                    {ALL_STATUSES.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Col 2: Remarks */}
+              <div className="p-4 space-y-3" style={{ borderRight: `1px solid ${C.border}` }}>
+                <p className="text-[9px] font-bold uppercase tracking-widest pb-2 border-b" style={{ color: C.accent, borderColor: C.border }}>
+                  Remarks
+                </p>
+                {(["ticket_remarks", "cancellation_remarks", "tsm", "manager", "referenceid"] as const).map(f => (
+                  <div key={f} className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase tracking-widest" style={{ color: C.dim }}>
+                      {f.replace(/_/g, " ")}
+                    </label>
+                    <input
+                      value={(editForm as any)[f] ?? ""}
+                      onChange={e => setEditForm(p => ({ ...p, [f]: e.target.value }))}
+                      className="w-full h-8 px-3 text-[11px] focus:outline-none"
+                      style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                      onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                      onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                    />
                   </div>
                 ))}
               </div>
 
-              {/* Col 3 — Ticket Source */}
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-orange-500/20">
-                  <AlertCircle className="h-4 w-4 text-orange-400" />
-                  <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-orange-400">Ticket Source</h3>
-                </div>
-                {isLoadingTicketSource ? (
-                  <div className="flex items-center gap-2 text-slate-500 text-[11px] font-mono"><Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500/40" /> Loading…</div>
-                ) : ticketSourceData ? (
-                  [["Reference ID", ticketSourceData.referenceid], ["Date Created", new Date(ticketSourceData.date_created).toLocaleString()], ["Company", ticketSourceData.company_name], ["Contact Person", ticketSourceData.contact_person], ["Contact Number", ticketSourceData.contact_number], ["Email", ticketSourceData.email_address], ["Address", ticketSourceData.address], ["Inquiry", ticketSourceData.inquiry], ["Agent", ticketSourceData.agent], ["Wrap Up", ticketSourceData.wrap_up], ["Status", ticketSourceData.status]].map(([label, value]) => (
-                    <div key={label} className="space-y-0.5">
-                      <label className="text-[9px] font-mono uppercase tracking-widest text-orange-500/50">{label}</label>
-                      <Input value={value} disabled className="h-8 text-[10px] font-mono bg-slate-800/40 border-slate-700/50 text-slate-400 rounded-none" />
+              {/* Col 3: Ticket source */}
+              <div className="p-4 space-y-3" style={{ borderRight: `1px solid ${C.border}` }}>
+                <p className="text-[9px] font-bold uppercase tracking-widest pb-2 border-b" style={{ color: "#fbbf24", borderColor: C.border }}>
+                  Ticket Source
+                </p>
+                {loadingTicket ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="size-3 animate-spin" style={{ color: C.accent }} />
+                    <span className="text-[10px]" style={{ color: C.muted }}>Loading…</span>
+                  </div>
+                ) : ticketSource ? (
+                  ([
+                    ["Reference ID", ticketSource.referenceid],
+                    ["Company",      ticketSource.company_name],
+                    ["Contact",      ticketSource.contact_person],
+                    ["Phone",        ticketSource.contact_number],
+                    ["Email",        ticketSource.email_address],
+                    ["Inquiry",      ticketSource.inquiry],
+                    ["Agent",        ticketSource.agent],
+                    ["Status",       ticketSource.status],
+                  ] as [string, string][]).map(([l, v]) => (
+                    <div key={l} className="space-y-0.5">
+                      <label className="text-[9px] uppercase tracking-widest" style={{ color: C.muted }}>{l}</label>
+                      <p className="text-[11px] font-mono break-all" style={{ color: C.text }}>{v || "—"}</p>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[10px] font-mono text-slate-600">No ticket source found.</p>
+                  <p className="text-[10px]" style={{ color: C.muted }}>No ticket source found.</p>
                 )}
               </div>
 
-              {/* Col 4 — History */}
+              {/* Col 4: History */}
               <div className="p-4 space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-purple-500/20">
-                  <AlertCircle className="h-4 w-4 text-purple-400" />
-                  <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-purple-400">History</h3>
-                  <span className="ml-auto text-[9px] font-mono text-slate-600">{historyRecords.length} records</span>
-                </div>
-                {isLoadingHistory ? (
-                  <div className="flex items-center gap-2 text-slate-500 text-[11px] font-mono"><Loader2 className="h-3.5 w-3.5 animate-spin text-purple-500/40" /> Loading…</div>
-                ) : historyRecords.length > 0 ? (
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                    {historyRecords.map((r) => (
-                      <div key={r.id} className="border border-purple-500/10 bg-[#0a0d14] p-2.5 space-y-1.5">
+                <p
+                  className="text-[9px] font-bold uppercase tracking-widest pb-2 border-b flex items-center justify-between"
+                  style={{ color: "#a78bfa", borderColor: C.border }}
+                >
+                  History
+                  <span style={{ color: C.muted }}>{historyRecs.length} records</span>
+                </p>
+                {loadingHistory ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="size-3 animate-spin" style={{ color: "#a78bfa" }} />
+                    <span className="text-[10px]" style={{ color: C.muted }}>Loading…</span>
+                  </div>
+                ) : historyRecs.length === 0 ? (
+                  <p className="text-[10px]" style={{ color: C.muted }}>No history records.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {historyRecs.map((r: any, i: number) => (
+                      <div
+                        key={r.id ?? i}
+                        className="p-2.5 border space-y-1"
+                        style={{ borderColor: "#a78bfa30", backgroundColor: "rgba(167,139,250,0.04)" }}
+                      >
+                        <p className="text-[10px] font-bold truncate" style={{ color: C.text }}>
+                          {r.company_name || "—"}
+                        </p>
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-mono uppercase text-purple-500/40">Company</span>
-                          <span className="text-[10px] font-mono text-slate-300 truncate max-w-[120px]">{r.company_name}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-mono uppercase text-purple-500/40">Status</span>
-                          <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 border",
-                            r.status?.toLowerCase() === "completed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                            : r.status?.toLowerCase() === "pending" ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                            : "bg-slate-800 text-slate-400 border-slate-700")}>{r.status || "N/A"}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-mono uppercase text-purple-500/40">Date</span>
-                          <span className="text-[9px] font-mono text-slate-500">{new Date(r.date_created).toLocaleString()}</span>
+                          <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 border ${statusBadge(r.status)}`}>
+                            {r.status || "—"}
+                          </span>
+                          <span className="text-[9px] font-mono" style={{ color: C.muted }}>
+                            {formatDate(r.date_created)}
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-[10px] font-mono text-slate-600">No history records found.</p>
                 )}
               </div>
             </div>
-          )}
 
-          <div className="px-5 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-end gap-2">
-            <button onClick={() => setShowEditDialog(false)}
-              className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors">
-              Cancel
-            </button>
-            <button onClick={handleSaveEdit}
-              className="px-5 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/30 bg-orange-600 text-white hover:bg-orange-500 transition-colors">
-              Save Changes
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Bulk Edit Dialog ── */}
-      <Dialog open={showBulkEditDialog} onOpenChange={setShowBulkEditDialog}>
-        <DialogContent className="max-w-md bg-[#0d1117] border-orange-500/20 text-slate-100 rounded-none p-0 gap-0">
-          <DialogHeader className="px-5 py-4 border-b border-slate-700/60 bg-slate-800/60">
-            <DialogTitle className="text-sm font-bold uppercase tracking-widest font-mono text-orange-400">Bulk Edit</DialogTitle>
-            <p className="text-[11px] text-slate-500 mt-0.5">{selectedIds.length} rows selected</p>
-          </DialogHeader>
-          <div className="px-5 py-4 space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/50">Field to Edit</label>
-              <select value={bulkEditField} onChange={(e) => setBulkEditField(e.target.value)}
-                className="w-full h-9 text-xs font-mono bg-[#0d1117] border border-slate-800 text-slate-300 px-2 focus:border-orange-500/50 focus:outline-none">
-                <option value="">Select a field…</option>
-                <option value="tsm">TSM</option>
-                <option value="manager">Manager</option>
-                <option value="status">Status</option>
-                <option value="agent">Agent</option>
-                <option value="type_client">Type Client</option>
-              </select>
+            {/* Footer */}
+            <div
+              className="flex items-center justify-end gap-2 px-5 py-3 border-t sticky bottom-0"
+              style={{ borderColor: C.border, backgroundColor: C.bg }}
+            >
+              <button
+                onClick={() => setSelectedAct(null)}
+                className="h-8 px-4 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 h-8 px-5 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+                style={{ backgroundColor: "rgba(232,99,10,0.15)", borderColor: C.accent, color: C.accent }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.25)"; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.15)"; }}
+              >
+                {isSaving && <Loader2 className="size-3 animate-spin" />}
+                {isSaving ? "Saving…" : "Save Changes"}
+              </button>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/50">New Value</label>
-              <Input value={bulkEditValue} onChange={(e) => setBulkEditValue(e.target.value)} placeholder="Enter new value…"
-                className="h-9 text-xs font-mono bg-[#0d1117] border-slate-800 text-slate-300 placeholder:text-slate-700 focus:border-orange-500/40 rounded-none" />
-            </div>
-          </div>
-          <div className="px-5 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-end gap-2">
-            <button onClick={() => setShowBulkEditDialog(false)}
-              className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors">
-              Cancel
-            </button>
-            <button onClick={handleBulkEdit} disabled={!bulkEditField || !bulkEditValue}
-              className="px-5 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/30 bg-orange-600 text-white hover:bg-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-              Update {selectedIds.length} Rows
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Filter Dialog ── */}
-      <Dialog open={showFilterDialog} onOpenChange={setShowFilterDialog}>
-        <DialogContent className="max-w-2xl bg-[#0d1117] border-orange-500/20 text-slate-100 rounded-none max-h-[80vh] overflow-y-auto p-0 gap-0">
-          <DialogHeader className="px-5 py-4 border-b border-slate-700/60 bg-slate-800/60 sticky top-0 z-10">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-500/10 border border-orange-500/20"><AlertCircle className="w-4 h-4 text-orange-400" /></div>
-              <DialogTitle className="text-sm font-bold uppercase tracking-widest font-mono text-orange-400">Filters & Options</DialogTitle>
-            </div>
-          </DialogHeader>
-
-          <div className="px-5 py-4 space-y-5">
-            {/* Fetch more banner */}
-            {activities.length < totalDbRows && (
-              <div className="border border-orange-500/20 bg-orange-500/5 p-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-mono text-orange-400">Showing {activities.length.toLocaleString()} of {totalDbRows.toLocaleString()} records</p>
-                  <p className="text-[9px] font-mono text-slate-600 mt-0.5">{activities.length === 100 ? "Initial load: 100 records" : `Fetched ${fetchLimit.toLocaleString()} rows`}</p>
-                </div>
-                <button onClick={() => { handleFetchMore(); setShowFilterDialog(false); }}
-                  className="px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors shrink-0">
-                  {activities.length === 100 ? "Fetch 2K" : "Fetch 5K more"}
-                </button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Left — Filters */}
-              <div className="space-y-4">
-                <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/50 border-b border-orange-500/10 pb-2">Filters</p>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-mono uppercase tracking-widest text-orange-500/40">Reference ID</label>
-                  <select value={referenceIdFilter} onChange={(e) => setReferenceIdFilter(e.target.value)}
-                    className="w-full h-9 text-xs font-mono bg-[#0a0d14] border border-slate-800 text-slate-300 px-2 focus:border-orange-500/50 focus:outline-none">
-                    <option value="">All Reference IDs</option>
-                    {referenceIdOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-mono uppercase tracking-widest text-orange-500/40">Status</label>
-                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full h-9 text-xs font-mono bg-[#0a0d14] border border-slate-800 text-slate-300 px-2 focus:border-orange-500/50 focus:outline-none">
-                    <option value="">All Statuses</option>
-                    {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                {(referenceIdFilter || statusFilter) && (
-                  <button onClick={() => { setReferenceIdFilter(""); setStatusFilter(""); }}
-                    className="w-full h-9 text-[9px] font-mono uppercase tracking-widest border border-slate-700 text-slate-500 hover:border-orange-500/30 hover:text-orange-400 transition-colors">
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-
-              {/* Right — Sort & Display */}
-              <div className="space-y-4">
-                <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/50 border-b border-orange-500/10 pb-2">Sort & Display</p>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-mono uppercase tracking-widest text-orange-500/40">Sort By</label>
-                  <select value={sortColumn} onChange={(e) => setSortColumn(e.target.value)}
-                    className="w-full h-9 text-xs font-mono bg-[#0a0d14] border border-slate-800 text-slate-300 px-2 focus:border-orange-500/50 focus:outline-none">
-                    {["date_created","referenceid","company_name","contact_person","status","agent","ticket_reference_number","activity_reference_number"].map((c) => (
-                      <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-mono uppercase tracking-widest text-orange-500/40">Direction</label>
-                  <div className="flex gap-2">
-                    {(["asc","desc"] as const).map((d) => (
-                      <button key={d} onClick={() => setSortDirection(d)}
-                        className={cn("flex-1 h-9 text-[9px] font-mono uppercase tracking-widest border transition-colors",
-                          sortDirection === d ? "border-orange-500/40 bg-orange-500/10 text-orange-400" : "border-slate-800 bg-[#0a0d14] text-slate-500 hover:border-orange-500/30 hover:text-orange-400")}>
-                        {d === "asc" ? "ASC ↑" : "DESC ↓"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-mono uppercase tracking-widest text-orange-500/40">Rows Per Page</label>
-                  <div className="flex gap-2">
-                    {[10, 20, 100, 500].map((n) => (
-                      <button key={n} onClick={() => setRowsPerPage(n)}
-                        className={cn("flex-1 h-9 text-[9px] font-mono uppercase tracking-widest border transition-colors",
-                          rowsPerPage === n ? "border-orange-500/40 bg-orange-500/10 text-orange-400" : "border-slate-800 bg-[#0a0d14] text-slate-500 hover:border-orange-500/30 hover:text-orange-400")}>
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Column visibility */}
-            <div className="space-y-3 border-t border-orange-500/10 pt-4">
-              <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/50">Column Visibility</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {Object.keys(columnVisibility).map((col) => (
-                  <label key={col} className="flex items-center gap-2 cursor-pointer group">
-                    <input type="checkbox" checked={columnVisibility[col]} onChange={() => toggleColumnVisibility(col)} className="accent-orange-500" />
-                    <span className="text-[10px] font-mono text-slate-400 group-hover:text-orange-400 capitalize transition-colors">{col.replace(/_/g, " ")}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="px-5 py-3 border-t border-slate-700/60 bg-slate-800/60 flex justify-end">
-            <button onClick={() => setShowFilterDialog(false)}
-              className="px-5 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/30 bg-orange-600 text-white hover:bg-orange-500 transition-colors">
-              Close
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
     </ProtectedPageWrapper>
   );
 }
