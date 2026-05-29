@@ -62,7 +62,7 @@ const DEFAULT_SIDEBAR_MODULES = [
     description: "Customer relationship management",
     items: [
       { title: "Customer List", url: "/crm/customers" },
-      { title: "Leads & Opportunities", url: "/taskflow/leads-generation" },
+      { title: "Leads & Opportunities", url: "/crm/leads" },
       { title: "Communications", url: "/crm/communications" },
       { title: "Contracts", url: "/crm/contracts" },
     ],
@@ -134,6 +134,9 @@ const DEFAULT_SIDEBAR_MODULES = [
       { title: "Job Postings",         url: "/recruitment/jobs" },
       { title: "Applicants",           url: "/recruitment/applicants" },
       { title: "Interviews",           url: "/recruitment/interviews" },
+      { title: "Test Results",         url: "/recruitment/test-results" },
+      { title: "Candidates",           url: "/recruitment/candidates" },
+      { title: "Onboarding",           url: "/recruitment/onboarding" },
       { title: "Firebase Credentials", url: "/recruitment/credentials" },
     ],
   },
