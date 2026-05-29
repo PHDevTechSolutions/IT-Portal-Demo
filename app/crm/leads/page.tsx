@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -13,9 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import {
   Loader2, Search, Download, X, ChevronLeft, ChevronRight,
-  Zap, Globe, Building2, Phone, Mail, MapPin, User,
+  Globe, Building2, Phone, Mail, MapPin, User,
   ExternalLink, CheckCircle2, AlertTriangle, Info,
-  Import, Sparkles, Send, Eye, MousePointerClick, Ban, Clock, Monitor,
+  Import, Sparkles, Send, Eye, MousePointerClick, Ban, Clock,
 } from "lucide-react";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import type { ScrapedLead } from "@/app/api/taskflow/leads-generation/route";
@@ -101,8 +101,6 @@ function ComposeDialog({ open, onClose, onSent, prefillTo, prefillCompany, prefi
   const [body,    setBody]    = useState("");
   const [sending, setSending] = useState(false);
 
-  useEffect(() => { if (open) { setSubject(""); setBody(""); } }, [open]);
-
   const handleSend = async () => {
     if (!prefillTo || !subject.trim() || !body.trim()) { toast.error("Subject and message are required"); return; }
     setSending(true);
@@ -180,15 +178,6 @@ function ComposeDialog({ open, onClose, onSent, prefillTo, prefillCompany, prefi
   );
 }
 
-// ─── Mode config ──────────────────────────────────────────────────────────────
-const MODES = [
-  { value: "web",        label: "Web + AI",   icon: Globe,   hint: "Serper Google search → Groq extracts contacts",         badge: null },
-  { value: "ai",         label: "AI Generate",icon: Zap,     hint: "Groq generates prospects from knowledge base",          badge: "verify" },
-  { value: "playwright", label: "Browser",    icon: Monitor, hint: "Real browser scrapes Google & Yellow Pages Philippines", badge: "slow" },
-] as const;
-
-type SearchMode = typeof MODES[number]["value"];
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function LeadsGenerationPage() {
   const router = useRouter();
@@ -197,7 +186,6 @@ export default function LeadsGenerationPage() {
   const [industry, setIndustry] = useState("");
   const [location, setLocation] = useState("");
   const [limit,    setLimit]    = useState(10);
-  const [mode,     setMode]     = useState<SearchMode>("web");
 
   const [leads,       setLeads]       = useState<ScrapedLead[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -207,8 +195,8 @@ export default function LeadsGenerationPage() {
   const [selectedIdx, setSelectedIdx] = useState<Set<number>>(new Set());
   const [isImporting, setIsImporting] = useState(false);
 
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [composeLead, setComposeLead] = useState<ScrapedLead | null>(null);
+  const [composeOpen,   setComposeOpen]   = useState(false);
+  const [composeLead,   setComposeLead]   = useState<ScrapedLead | null>(null);
   const [emailStatuses, setEmailStatuses] = useState<Record<string, string>>({});
 
   const paginated  = leads.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -246,18 +234,17 @@ export default function LeadsGenerationPage() {
   const handleSearch = async () => {
     if (!query.trim()) { toast.error("Enter a search query"); return; }
     setIsSearching(true); setLeads([]); setSelectedIdx(new Set()); setPage(1); setHasSearched(false);
-    const loadingMsg = mode === "playwright" ? "Browser scraping in progress… (may take 30–60s)" : mode === "ai" ? "Generating prospects with AI…" : "Searching the web…";
-    const tid = toast.loading(loadingMsg);
+    const tid = toast.loading("AI planning scrape targets… (may take up to 90s)");
     try {
       const res  = await fetch("/api/taskflow/leads-generation", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, industry, location, limit, mode }),
+        body: JSON.stringify({ query, industry, location, limit }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Search failed");
       setLeads(json.leads ?? []);
       setHasSearched(true);
-      toast.success(`Found ${json.leads?.length ?? 0} prospects`, { id: tid });
+      toast.success(`Found ${json.leads?.length ?? 0} real prospects`, { id: tid });
       fetchEmailStatuses(json.leads ?? []);
     } catch (err: any) {
       toast.error(err.message ?? "Search failed", { id: tid });
@@ -277,7 +264,7 @@ export default function LeadsGenerationPage() {
         body: JSON.stringify({
           leads:        toImport,
           search_query: query,
-          search_mode:  mode,
+          search_mode:  "agentic",
           region:       location || "",
         }),
       });
@@ -307,7 +294,6 @@ export default function LeadsGenerationPage() {
 
   const pageIdxs    = paginated.map((_, i) => (page - 1) * PAGE_SIZE + i);
   const allSelected = pageIdxs.length > 0 && pageIdxs.every(i => selectedIdx.has(i));
-  const currentMode = MODES.find(m => m.value === mode)!;
 
   return (
     <ProtectedPageWrapper>
@@ -334,7 +320,7 @@ export default function LeadsGenerationPage() {
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>AI Powered</span>
+              <span className="text-[10px] uppercase tracking-wider hidden sm:block" style={{ color: C.dim }}>Agentic AI</span>
             </div>
           </header>
 
@@ -346,41 +332,25 @@ export default function LeadsGenerationPage() {
             <div>
               <h1 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.accent }}>Leads Generation / Prospects</h1>
               <p className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: C.muted }}>
-                Discover prospects · Import to Customer Database (Supabase)
+                AI plans scrape targets · Browser fetches real data · Import to Customer Database
               </p>
+            </div>
+            {/* Agentic flow badge */}
+            <div className="ml-auto hidden sm:flex items-center gap-2">
+              {(["AI Planner", "→", "Browser Scrape", "→", "AI Extract"] as const).map((step, i) => (
+                <span key={i} className="text-[9px] font-bold uppercase tracking-wider"
+                  style={{ color: step === "→" ? C.muted : C.dim }}>
+                  {step === "→" ? step : (
+                    <span className="px-1.5 py-0.5 border" style={{ borderColor: C.border }}>{step}</span>
+                  )}
+                </span>
+              ))}
             </div>
           </div>
 
           {/* ── Search panel ── */}
           <div className="relative z-10 shrink-0 border-b" style={{ borderColor: C.border, backgroundColor: C.panel }}>
             <div className="px-4 py-4 space-y-3">
-
-              {/* ── Mode toggle ── */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.dim }}>Mode:</span>
-                {MODES.map(m => (
-                  <button key={m.value} onClick={() => setMode(m.value)} title={m.hint}
-                    className="flex items-center gap-1.5 h-7 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
-                    style={{
-                      borderColor:     mode === m.value ? C.accent : C.border,
-                      backgroundColor: mode === m.value ? "rgba(232,99,10,0.1)" : "transparent",
-                      color:           mode === m.value ? C.accent : C.dim,
-                    }}>
-                    <m.icon className="size-3" />{m.label}
-                    {m.badge && (
-                      <span className="ml-1 text-[8px] px-1 py-0.5 border"
-                        style={{
-                          borderColor: m.badge === "slow" ? "#fbbf2440" : "#f8717140",
-                          color:       m.badge === "slow" ? "#fbbf24"   : "#f87171",
-                          backgroundColor: m.badge === "slow" ? "rgba(251,191,36,0.08)" : "rgba(248,113,113,0.08)",
-                        }}>
-                        {m.badge === "slow" ? "~60s" : "verify"}
-                      </span>
-                    )}
-                  </button>
-                ))}
-                <span className="text-[9px] hidden sm:block" style={{ color: C.muted }}>{currentMode.hint}</span>
-              </div>
 
               {/* ── Query + Search button ── */}
               <div className="flex gap-2">
@@ -464,15 +434,16 @@ export default function LeadsGenerationPage() {
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 <div className="relative">
                   <div className="h-12 w-12 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: C.accent, borderTopColor: "transparent" }} />
-                  {mode === "playwright" ? <Monitor className="absolute inset-0 m-auto size-5" style={{ color: C.accent }} /> : <Sparkles className="absolute inset-0 m-auto size-5" style={{ color: C.accent }} />}
+                  <Globe className="absolute inset-0 m-auto size-5" style={{ color: C.accent }} />
                 </div>
-                <div className="text-center">
+                <div className="text-center space-y-1">
                   <p className="text-[11px] font-bold uppercase tracking-widest animate-pulse" style={{ color: C.accent }}>
-                    {mode === "playwright" ? "Browser scraping Google & Yellow Pages…" : mode === "ai" ? "Generating prospects with AI…" : "Searching the web…"}
+                    Agentic AI scraping in progress…
                   </p>
-                  <p className="text-[10px] mt-1" style={{ color: C.muted }}>
-                    {mode === "playwright" ? "Playwright headless Chrome · may take up to 60s" : mode === "ai" ? "Groq llama-3.3-70b generating" : "Serper (Google) searching · Groq extracting"}
-                  </p>
+                  <p className="text-[10px]" style={{ color: C.muted }}>Step 1 — AI planning scrape targets</p>
+                  <p className="text-[10px]" style={{ color: C.muted }}>Step 2 — Playwright browser fetching real data</p>
+                  <p className="text-[10px]" style={{ color: C.muted }}>Step 3 — AI extracting &amp; validating leads</p>
+                  <p className="text-[10px] mt-2" style={{ color: C.dim }}>May take up to 90s · No hallucinations · Real businesses only</p>
                 </div>
               </div>
             ) : !hasSearched ? (
@@ -481,9 +452,9 @@ export default function LeadsGenerationPage() {
                   <Sparkles className="size-8 opacity-40" style={{ color: C.accent }} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold uppercase tracking-widest" style={{ color: C.text }}>AI Leads Generation &amp; Prospect Discovery</p>
+                  <p className="text-sm font-bold uppercase tracking-widest" style={{ color: C.text }}>Agentic AI Leads Discovery</p>
                   <p className="text-[11px] mt-2 max-w-md" style={{ color: C.muted }}>
-                    Three modes: Web+AI (fast), AI Generate (creative), or Browser (real scraping via Playwright).
+                    AI decides where to look → Playwright scrapes real PH business directories → AI validates and structures the results. No hallucinations.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]" style={{ color: C.dim }}>
@@ -501,7 +472,7 @@ export default function LeadsGenerationPage() {
             ) : leads.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-3">
                 <Search className="size-8 opacity-20" style={{ color: C.dim }} />
-                <p className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>No prospects found. Try a different query or mode.</p>
+                <p className="text-[11px] uppercase tracking-widest" style={{ color: C.muted }}>No prospects found. Try a different query or broaden your filters.</p>
               </div>
             ) : (
               <div className="space-y-0">
@@ -555,16 +526,24 @@ export default function LeadsGenerationPage() {
                         )}
                       </div>
                       <div className="w-36 hidden md:block">
-                        {lead.contact_person ? <div className="flex items-center gap-1"><User className="size-3 shrink-0" style={{ color: C.dim }} /><span className="text-[11px]" style={{ color: C.text }}>{lead.contact_person}</span></div> : <span style={{ color: C.muted }}>—</span>}
+                        {lead.contact_person
+                          ? <div className="flex items-center gap-1"><User className="size-3 shrink-0" style={{ color: C.dim }} /><span className="text-[11px]" style={{ color: C.text }}>{lead.contact_person}</span></div>
+                          : <span style={{ color: C.muted }}>—</span>}
                       </div>
                       <div className="w-36 hidden lg:block">
-                        {lead.contact_number ? <div className="flex items-center gap-1"><Phone className="size-3 shrink-0" style={{ color: C.dim }} /><span className="text-[11px] font-mono" style={{ color: C.text }}>{lead.contact_number}</span></div> : <span style={{ color: C.muted }}>—</span>}
+                        {lead.contact_number
+                          ? <div className="flex items-center gap-1"><Phone className="size-3 shrink-0" style={{ color: C.dim }} /><span className="text-[11px] font-mono" style={{ color: C.text }}>{lead.contact_number}</span></div>
+                          : <span style={{ color: C.muted }}>—</span>}
                       </div>
                       <div className="w-44 hidden lg:block">
-                        {lead.email_address ? <div className="flex items-center gap-1"><Mail className="size-3 shrink-0" style={{ color: C.dim }} /><span className="text-[11px] truncate" style={{ color: C.text }}>{lead.email_address}</span></div> : <span style={{ color: C.muted }}>—</span>}
+                        {lead.email_address
+                          ? <div className="flex items-center gap-1"><Mail className="size-3 shrink-0" style={{ color: C.dim }} /><span className="text-[11px] truncate" style={{ color: C.text }}>{lead.email_address}</span></div>
+                          : <span style={{ color: C.muted }}>—</span>}
                       </div>
                       <div className="flex-1 hidden xl:block">
-                        {lead.address ? <div className="flex items-start gap-1"><MapPin className="size-3 shrink-0 mt-0.5" style={{ color: C.dim }} /><span className="text-[11px]" style={{ color: C.dim }}>{lead.address}</span></div> : <span style={{ color: C.muted }}>—</span>}
+                        {lead.address
+                          ? <div className="flex items-start gap-1"><MapPin className="size-3 shrink-0 mt-0.5" style={{ color: C.dim }} /><span className="text-[11px]" style={{ color: C.dim }}>{lead.address}</span></div>
+                          : <span style={{ color: C.muted }}>—</span>}
                       </div>
                       <div className="w-24 hidden md:block"><span className="text-[10px]" style={{ color: C.dim }}>{lead.industry || "—"}</span></div>
                       <div className="w-20"><ConfidenceBadge level={lead.confidence} /></div>
@@ -586,13 +565,11 @@ export default function LeadsGenerationPage() {
                                 : lead.source.includes("yellowpages") ? "#fbbf2440"
                                 : lead.source.includes("companyhouse") ? "#a78bfa40"
                                 : lead.source.includes("google") ? "#60a5fa40"
-                                : lead.source.includes("AI") ? "#f8717140"
                                 : C.border,
                               color: lead.source.includes("businesslist") ? "#34d399"
                                 : lead.source.includes("yellowpages") ? "#fbbf24"
                                 : lead.source.includes("companyhouse") ? "#a78bfa"
                                 : lead.source.includes("google") ? "#60a5fa"
-                                : lead.source.includes("AI") ? "#f87171"
                                 : C.dim,
                               backgroundColor: "transparent",
                             }}
