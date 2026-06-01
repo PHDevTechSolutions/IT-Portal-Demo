@@ -614,7 +614,7 @@ export async function POST(req: NextRequest) {
       text: `Company: ${l.company_name} | Phone: ${l.contact_number} | Email: ${l.email_address} | Address: ${l.address} | Website: ${l.website}`,
     }));
 
-    const extracted1 = await aiExtractLeads(groqKey, structuredText1, industry, location, cap, []);
+    const extracted1 = await aiExtractLeads(groqKey ?? "", structuredText1, industry, location, cap, []);
     allLeads = dedup([...raw1, ...extracted1]);
     console.log(`[Agentic] After loop 1 extraction: ${allLeads.length} leads`);
 
@@ -623,7 +623,7 @@ export async function POST(req: NextRequest) {
       const stillNeed = cap - allLeads.length;
       console.log(`[Agentic] Loop 2 — need ${stillNeed} more leads, refining plan...`);
 
-      const plan2   = await aiRefinePlan(groqKey, query, industry, location, allLeads, stillNeed);
+      const plan2   = await aiRefinePlan(groqKey ?? "", query, industry, location, allLeads, stillNeed);
       console.log(`[Agentic] Refined plan: ${plan2.additional_targets.length} new targets. Reasoning: ${plan2.reasoning}`);
 
       if (plan2.additional_targets.length > 0) {
@@ -638,7 +638,7 @@ export async function POST(req: NextRequest) {
           text: `Company: ${l.company_name} | Phone: ${l.contact_number} | Email: ${l.email_address} | Address: ${l.address} | Website: ${l.website}`,
         }));
 
-        const extracted2 = await aiExtractLeads(groqKey, structuredText2, industry, location, stillNeed, allLeads);
+        const extracted2 = await aiExtractLeads(groqKey ?? "", structuredText2, industry, location, stillNeed, allLeads);
         allLeads = dedup([...allLeads, ...newRaw2, ...extracted2]);
         console.log(`[Agentic] After loop 2: ${allLeads.length} leads total`);
       }
