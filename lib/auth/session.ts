@@ -26,6 +26,7 @@ export interface SessionUser {
   department: string;
   status: string;
   profilePicture: string | null;
+  totpEnabled: boolean;
 }
 
 // ─── Core helpers ─────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ export async function getSession(): Promise<SessionUser | null> {
       department: user.Department ?? "",
       status: user.Status ?? "",
       profilePicture: user.profilePicture ?? null,
+      totpEnabled: !!user.totpEnabled,
     };
   } catch {
     return null;

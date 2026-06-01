@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
 import { BiometricSettings } from "@/components/account/BiometricSettings"
+import { TwoFactorSetup } from "@/components/account/TwoFactorSetup"
 
 // ShadCN Field + Select
 import { Field, FieldLabel, FieldDescription, FieldGroup, FieldSet } from "@/components/ui/field"
@@ -377,6 +378,9 @@ export default function AccountPage() {
                                     userName={user.Email} 
                                     userDisplayName={`${user.Firstname} ${user.Lastname}`} 
                                 />
+                            </div>
+                            <div className="mt-4">
+                                <TwoFactorSetup />
                             </div>
                             <Field orientation="horizontal" className="pt-4">
                                 <Button type="submit" disabled={loading}>{loading ? "Saving..." : "Save Changes"}</Button>

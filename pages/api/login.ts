@@ -5,6 +5,7 @@ import { serialize } from "cookie";
 import nodemailer from "nodemailer";
 import { UAParser } from "ua-parser-js";
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
+import { issueTempToken } from "@/lib/auth/tempToken";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -150,15 +151,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const userId = result.user._id.toString();
 
-  // Log successful login audit
+  // ── If TOTP is enabled, issue a temp token and require 2FA ──────────────────
+  if (user.totpEnabled && user.totpSecret) {
+    const tempToken = issueTempToken(userId, user.Email);
+    return res.status(200).json({
+      requiresTOTP: true,
+      tempToken,
+      message: "TOTP verification required.",
+    });
+  }
+
+  // ── No TOTP — set session cookie directly ───────────────────────────────────
   const actor: AuditActor = {
     uid: userId,
     email: user.Email,
     role: user.Role,
     department: user.Department,
   };
-  
-  // Use existing userAgent, parser, deviceType from earlier in the function
+
   await logSystemAudit({
     action: "login",
     module: "Authentication",
@@ -170,12 +180,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ipAddress: req.headers["x-forwarded-for"]?.toString().split(",")[0] || req.socket.remoteAddress || null,
     userAgent,
     source: "LoginAPI",
-    metadata: {
-      deviceId,
-      deviceType,
-      browser: parser.getBrowser().name || "Unknown",
-      os: parser.getOS().name || "Unknown",
-    },
+    metadata: { deviceId, deviceType, browser: parser.getBrowser().name || "Unknown", os: parser.getOS().name || "Unknown" },
   });
 
   res.setHeader(
@@ -184,7 +189,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       httpOnly: true,
       secure: process.env.NODE_ENV !== "development",
       sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 24,
       path: "/",
     })
   );
@@ -196,6 +201,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     Department: user.Department,
     Status: user.Status,
     ReferenceID: user.ReferenceID,
-
   });
 }
