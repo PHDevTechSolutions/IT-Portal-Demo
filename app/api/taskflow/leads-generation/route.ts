@@ -601,7 +601,7 @@ export async function POST(req: NextRequest) {
 
     // ── Loop 1 ───────────────────────────────────────────────────────────────
     console.log("[Agentic] Loop 1 — AI planning scrape...");
-    const plan1   = await aiPlanScraping(groqKey, query, industry, location, cap);
+    const plan1   = await aiPlanScraping(groqKey ?? "", query, industry, location, cap);
     console.log(`[Agentic] Plan: ${plan1.scrape_targets.length} targets. Reasoning: ${plan1.reasoning}`);
 
     const raw1    = await executeScrapePlan(plan1.scrape_targets, industry, cap);
