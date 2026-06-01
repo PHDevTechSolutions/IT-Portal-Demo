@@ -128,48 +128,36 @@ async function aiPlanScraping(
   location: string,
   limit:    number,
 ): Promise<AIPlan> {
+  const locationStr = location || "Philippines";
   const prompt = `You are an expert lead researcher for the Philippine B2B market.
 
 A user wants to find ${limit} real business leads with the following criteria:
 - Query: "${query}"
 - Industry: "${industry || "any"}"
-- Location: "${location || "Philippines"}"
+- Location: "${locationStr}" ← THIS IS CRITICAL. Only find businesses physically located in ${locationStr}.
 
-Your job is to plan a web scraping strategy to find REAL businesses with real contact info.
+IMPORTANT: The location filter is STRICT. Every search query and scrape target MUST include "${locationStr}" to ensure results are from that specific area only.
 
 Generate a JSON plan with:
-1. "search_queries": 4-6 targeted Google search queries (strings) that would surface real PH business listings with contact details. Be specific — include city, industry terms, and contact-intent words like "contact", "email", "phone number", "address".
-2. "scrape_targets": 4-8 direct URLs to scrape. Use these PH business directories:
-   - BusinessList.ph: use format https://www.businesslist.ph/companies/{keyword} or https://www.businesslist.ph/companies/{keyword}/location/{city-slug}
-   - Yellow Pages PH: use format https://www.yellowpages.com.ph/search?q={keyword}+{location}
-   - Google search: use https://www.google.com/search?q={encoded+query}&num=20
-   - If you know of a specific industry association or directory site in PH relevant to the query, include it as "direct" type
-   Each target has: { "type": "businesslist"|"yellowpages"|"google"|"direct", "url": "...", "reason": "why this URL" }
-3. "reasoning": brief explanation of your strategy
+1. "search_queries": 4-6 targeted Google search queries that MUST include "${locationStr}" in every query. Format: "{industry/query} in ${locationStr} contact email phone"
+2. "scrape_targets": 4-8 direct URLs. For BusinessList.ph use the location slug. For Yellow Pages include the location in the query param. For Google always include "${locationStr}" in the q param.
+   Each target: { "type": "businesslist"|"yellowpages"|"google"|"direct", "url": "...", "reason": "..." }
+3. "reasoning": brief explanation
 
-Return ONLY valid JSON. No markdown, no extra text.
-
-Example output shape:
-{
-  "search_queries": ["query 1", "query 2"],
-  "scrape_targets": [
-    { "type": "businesslist", "url": "https://www.businesslist.ph/companies/...", "reason": "..." }
-  ],
-  "reasoning": "..."
-}`;
+Return ONLY valid JSON. No markdown.`;
 
   const raw  = await aiCall(prompt, 0.2, 1500, groqKey);
   const plan = parseJson<AIPlan>(raw);
 
-  // Fallback plan if AI fails to parse
   if (!plan || !Array.isArray(plan.scrape_targets)) {
     const slug = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const kw   = slug(industry || query);
     const loc  = location ? slug(location.replace(/^metro\s+/i, "")) : "";
+    const locQ = location || "Philippines";
     return {
       search_queries: [
-        `${industry || query} ${location || "Philippines"} contact email phone`,
-        `${industry || query} company ${location || "Philippines"} address`,
+        `${industry || query} in ${locQ} contact email phone`,
+        `${industry || query} company ${locQ} address`,
       ],
       scrape_targets: [
         {
@@ -181,12 +169,12 @@ Example output shape:
         },
         {
           type:   "yellowpages",
-          url:    `https://www.yellowpages.com.ph/search?q=${encodeURIComponent((industry || query) + " " + (location || ""))}`,
+          url:    `https://www.yellowpages.com.ph/search?q=${encodeURIComponent((industry || query) + " " + locQ)}`,
           reason: "fallback",
         },
         {
           type:   "google",
-          url:    `https://www.google.com/search?q=${encodeURIComponent(`${industry || query} ${location || "Philippines"} contact email phone`)}&num=20`,
+          url:    `https://www.google.com/search?q=${encodeURIComponent(`${industry || query} in ${locQ} contact email phone`)}&num=20`,
           reason: "fallback",
         },
       ],
@@ -494,6 +482,7 @@ async function aiExtractLeads(
   existing:    ScrapedLead[],
 ): Promise<ScrapedLead[]> {
   const existingNames = existing.map(l => l.company_name).join(", ");
+  const locationStr   = location || "Philippines";
   const rawBlock = scrapedData
     .map(d => `\n=== SOURCE: ${d.source} ===\n${d.text.slice(0, 3000)}`)
     .join("\n");
@@ -502,16 +491,18 @@ async function aiExtractLeads(
 
 Analyze the scraped website content below and extract up to ${limit} REAL, distinct business leads.
 Industry focus: "${industry || "any"}"
-Location focus: "${location || "Philippines"}"
+Location filter: "${locationStr}" — STRICT. Only include businesses whose address is in ${locationStr}. If the address is in a different city or region, SKIP that lead entirely.
 ${existingNames ? `Already found (skip these): ${existingNames}` : ""}
 
 Rules:
-- Only extract businesses that are EXPLICITLY mentioned in the text — do NOT invent or hallucinate
-- If a field is not found in the text, use "" — never guess
-- Assign confidence: "high" if phone + email + address all found, "medium" if any 2, "low" if name only
-- source = the URL/site where this specific lead came from
+- Only extract businesses EXPLICITLY mentioned in the text — do NOT invent or hallucinate
+- SKIP any lead whose address does not mention "${locationStr}" or a known barangay/street within it
+- If address field is empty, only include if the source URL or company name strongly implies ${locationStr}
+- If a field is not found, use "" — never guess
+- confidence: "high" if phone + email + address all found, "medium" if any 2, "low" if name only
+- source = the URL where this lead came from
 
-Return ONLY a valid JSON array of objects with these fields:
+Return ONLY a valid JSON array:
 company_name, contact_person, contact_number, email_address, address, website, industry, source, confidence
 
 Scraped content:
@@ -519,7 +510,24 @@ ${rawBlock.slice(0, 14000)}`;
 
   const raw   = await aiCall(prompt, 0.05, 4096, groqKey);
   const leads = parseJson<ScrapedLead[]>(raw);
-  return Array.isArray(leads) ? leads.slice(0, limit) : [];
+  if (!Array.isArray(leads)) return [];
+
+  // Hard post-filter: if location was specified, drop leads whose address
+  // doesn't contain the location string (case-insensitive)
+  if (location) {
+    const locLower = location.toLowerCase();
+    return leads
+      .filter(l => {
+        const addr = (l.address ?? "").toLowerCase();
+        // Keep if address contains the location, or address is empty (AI already filtered)
+        return !addr || addr.includes(locLower) ||
+          // Also accept common aliases (e.g. "Mandaluyong" matches "Mandaluyong City")
+          locLower.split(/\s+/).some(word => word.length > 3 && addr.includes(word));
+      })
+      .slice(0, limit);
+  }
+
+  return leads.slice(0, limit);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -567,9 +575,19 @@ Return ONLY valid JSON:
   return plan ?? { additional_queries: [], additional_targets: [], reasoning: "parse failed" };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Dedup helper
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Location filter ─────────────────────────────────────────────────────────
+function filterByLocation(leads: ScrapedLead[], location: string): ScrapedLead[] {
+  if (!location) return leads;
+  const locLower = location.toLowerCase();
+  const locWords = locLower.split(/\s+/).filter(w => w.length > 3);
+  return leads.filter(l => {
+    const addr = (l.address ?? "").toLowerCase();
+    if (!addr) return true; // no address — keep, let AI decide
+    return addr.includes(locLower) || locWords.some(w => addr.includes(w));
+  });
+}
+
+// ─── Dedup helper ─────────────────────────────────────────────────────────────
 
 function dedup(leads: ScrapedLead[]): ScrapedLead[] {
   const seen = new Set<string>();
@@ -607,15 +625,14 @@ export async function POST(req: NextRequest) {
     const raw1    = await executeScrapePlan(plan1.scrape_targets, industry, cap);
     console.log(`[Agentic] Playwright found ${raw1.length} leads from targets`);
 
-    // Collect raw text per source for AI extraction
-    // (we pass the scraped leads themselves as structured text for AI to re-validate)
-    const structuredText1 = raw1.map(l => ({
+    const filteredRaw1 = filterByLocation(raw1, location);
+    const structuredText1 = filteredRaw1.map(l => ({
       source: l.source ?? "unknown",
       text: `Company: ${l.company_name} | Phone: ${l.contact_number} | Email: ${l.email_address} | Address: ${l.address} | Website: ${l.website}`,
     }));
 
     const extracted1 = await aiExtractLeads(groqKey ?? "", structuredText1, industry, location, cap, []);
-    allLeads = dedup([...raw1, ...extracted1]);
+    allLeads = dedup([...filteredRaw1, ...extracted1]);
     console.log(`[Agentic] After loop 1 extraction: ${allLeads.length} leads`);
 
     // ── Loop 2 (if needed) ───────────────────────────────────────────────────
@@ -631,15 +648,16 @@ export async function POST(req: NextRequest) {
         console.log(`[Agentic] Playwright loop 2 found ${raw2.length} new leads`);
 
         const existingNames = new Set(allLeads.map(l => l.company_name.toLowerCase().trim()));
-        const newRaw2 = raw2.filter(l => !existingNames.has(l.company_name.toLowerCase().trim()));
+        const filteredRaw2  = filterByLocation(raw2, location)
+          .filter(l => !existingNames.has(l.company_name.toLowerCase().trim()));
 
-        const structuredText2 = newRaw2.map(l => ({
+        const structuredText2 = filteredRaw2.map(l => ({
           source: l.source ?? "unknown",
           text: `Company: ${l.company_name} | Phone: ${l.contact_number} | Email: ${l.email_address} | Address: ${l.address} | Website: ${l.website}`,
         }));
 
         const extracted2 = await aiExtractLeads(groqKey ?? "", structuredText2, industry, location, stillNeed, allLeads);
-        allLeads = dedup([...allLeads, ...newRaw2, ...extracted2]);
+        allLeads = dedup([...allLeads, ...filteredRaw2, ...extracted2]);
         console.log(`[Agentic] After loop 2: ${allLeads.length} leads total`);
       }
     }

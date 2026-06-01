@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  serverExternalPackages: ["playwright-core", "@sparticuz/chromium", "playwright"],
   env: {
     NEXT_PUBLIC_VERCEL_URL: "https://it-portal.devtech-erp-solutions.cloud",
     VERCEL_URL: "https://it-portal.devtech-erp-solutions.cloud",
