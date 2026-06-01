@@ -7,6 +7,7 @@
 
 import { NextRequest } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { launchBrowser } from "@/lib/browser/launcher";
 
 export const dynamic     = "force-dynamic";
 export const maxDuration = 300;
@@ -106,7 +107,6 @@ async function scrapeCompany(
   companyName: string,
   existingAddress: string,
 ): Promise<EnrichedFields & { log: string[] }> {
-  const { chromium } = await import("playwright");
 
   const logs: string[] = [];
   const log = (msg: string) => { logs.push(msg); console.log(`[Enrich] ${msg}`); };
@@ -121,7 +121,7 @@ async function scrapeCompany(
     log:            logs,
   };
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchBrowser();
   const ctx     = await browser.newContext({
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     locale:    "en-PH",

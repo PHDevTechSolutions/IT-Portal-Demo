@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGroqKey } from "@/lib/ai/getGroqKey";
+import { launchBrowser } from "@/lib/browser/launcher";
 
 export const dynamic     = "force-dynamic";
 export const maxDuration = 120;
@@ -210,8 +211,7 @@ async function executeScrapePlan(
   industry: string,
   limit:    number,
 ): Promise<ScrapedLead[]> {
-  const { chromium } = await import("playwright");
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchBrowser();
   const context = await browser.newContext({
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     locale: "en-PH",
