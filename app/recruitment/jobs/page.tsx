@@ -6,7 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { toast } from "sonner";
 import {
   Loader2, Search, X, RefreshCw, Briefcase,
-  MapPin, ChevronDown, ChevronUp, Plus, Pencil, Trash2, ArrowRightLeft,
+  MapPin, ChevronDown, ChevronUp, Plus, Pencil, Trash2, ArrowRightLeft, Sparkles,
 } from "lucide-react";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink,
@@ -78,6 +78,24 @@ function JobFormDialog({
 }) {
   const [form,    setForm]    = useState({ ...EMPTY_FORM });
   const [saving,  setSaving]  = useState(false);
+  const [genning, setGenning] = useState(false);
+
+  const generateQualifications = async () => {
+    if (!form.title.trim()) { toast.error("Enter a job title first"); return; }
+    setGenning(true);
+    try {
+      const res  = await fetch("/api/recruitment/jobs/generate-qualifications", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: form.title, category: form.category, jobType: form.jobType }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setForm(p => ({ ...p, qualifications: json.qualifications }));
+      toast.success(`Generated ${json.qualifications.length} qualifications`);
+    } catch (err: any) {
+      toast.error(err.message ?? "Generation failed");
+    } finally { setGenning(false); }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -191,13 +209,23 @@ function JobFormDialog({
               <label className="text-[9px] font-mono uppercase tracking-widest" style={{ color: C.accent + "80" }}>
                 Qualifications
               </label>
-              <button onClick={addQual}
-                className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider transition-colors"
-                style={{ color: C.dim }}
-                onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
-                onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
-                <Plus className="size-3" /> Add
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={generateQualifications} disabled={genning}
+                  className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
+                  style={{ color: "#a78bfa" }}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
+                  onMouseLeave={e => (e.currentTarget.style.color = "#a78bfa")}>
+                  {genning ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                  {genning ? "Generating…" : "AI Generate"}
+                </button>
+                <button onClick={addQual}
+                  className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider transition-colors"
+                  style={{ color: C.dim }}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+                  <Plus className="size-3" /> Add
+                </button>
+              </div>
             </div>
             <div className="space-y-1.5">
               {form.qualifications.map((q, i) => (

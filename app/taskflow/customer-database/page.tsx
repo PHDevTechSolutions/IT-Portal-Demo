@@ -545,7 +545,7 @@ export default function AccountPage() {
 
   /* ── Filtered data ── */
   const filtered = useMemo(()=>customers
-    .filter(c=>[c.company_name,c.account_reference_number,c.contact_person,c.email_address,c.region,c.manager,c.tsm].some(f=>f?.toLowerCase().includes(search.toLowerCase())))
+    .filter(c=>[c.company_name,c.account_reference_number,c.contact_person,c.contact_number,c.email_address,c.region,c.manager,c.tsm].some(f=>f?.toLowerCase().includes(search.toLowerCase())))
     .filter(c=>filterType==="all"||c.type_client===filterType)
     .filter(c=>filterTSA==="all"||c.referenceid?.trim().toLowerCase()===filterTSA.trim().toLowerCase())
     .filter(c=>filterTSM==="all"||(c.tsm??"").trim().toLowerCase()===filterTSM.trim().toLowerCase())

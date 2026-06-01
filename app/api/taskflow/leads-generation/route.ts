@@ -42,9 +42,35 @@ interface AIRefinePlan {
 // Groq helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AI helpers — Ollama (local, no rate limits) with Groq fallback
+// ─────────────────────────────────────────────────────────────────────────────
+
+const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
+
+async function ollamaCall(
+  prompt:      string,
+  temperature = 0.1,
+): Promise<string> {
+  const res = await fetch(`${OLLAMA_BASE}/api/generate`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model:  OLLAMA_MODEL,
+      prompt,
+      stream: false,
+      options: { temperature, num_predict: 2048 },
+    }),
+  });
+  if (!res.ok) throw new Error(`Ollama call failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  return data.response ?? "";
+}
+
 async function groqCall(
-  groqKey: string,
-  prompt: string,
+  groqKey:    string,
+  prompt:     string,
   temperature = 0.1,
   maxTokens   = 2048,
 ): Promise<string> {
@@ -61,6 +87,22 @@ async function groqCall(
   if (!res.ok) throw new Error(`Groq call failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";
+}
+
+// Try Ollama first, fall back to Groq if Ollama is not running
+async function aiCall(
+  prompt:      string,
+  temperature = 0.1,
+  maxTokens   = 2048,
+  groqKey?:    string,
+): Promise<string> {
+  try {
+    return await ollamaCall(prompt, temperature);
+  } catch (ollamaErr: any) {
+    console.warn("[AI] Ollama unavailable, falling back to Groq:", ollamaErr.message);
+    if (!groqKey) throw new Error("Ollama unavailable and no Groq key provided");
+    return await groqCall(groqKey, prompt, temperature, maxTokens);
+  }
 }
 
 function parseJson<T>(content: string): T | null {
@@ -115,7 +157,7 @@ Example output shape:
   "reasoning": "..."
 }`;
 
-  const raw  = await groqCall(groqKey, prompt, 0.2, 1500);
+  const raw  = await aiCall(prompt, 0.2, 1500, groqKey);
   const plan = parseJson<AIPlan>(raw);
 
   // Fallback plan if AI fails to parse
@@ -202,8 +244,9 @@ async function executeScrapePlan(
     try {
       if (target.type === "businesslist") {
         // ── BusinessList.ph ────────────────────────────────────────────────
+        // Step 1: Get company list + profile URLs from the listing page
         await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: 25000 });
-        const rows = await page.evaluate(() => {
+        const listRows = await page.evaluate(() => {
           const results: any[] = [];
           document.querySelectorAll("h3").forEach(h3 => {
             const name = h3.textContent?.trim() ?? "";
@@ -231,12 +274,60 @@ async function executeScrapePlan(
             results.push({
               name, phone, email: "", address,
               website: websiteEl?.href ?? "",
+              profileUrl: profileHref ? `https://www.businesslist.ph${profileHref}` : "",
               source: profileHref ? `https://www.businesslist.ph${profileHref}` : target.url,
             });
           });
           return results;
         });
-        rows.forEach(addLead);
+
+        // Step 2: Visit each profile page to get email, contact person, phone
+        for (const row of listRows.slice(0, Math.min(listRows.length, limit - leads.length + 3))) {
+          if (leads.length >= limit) break;
+          if (row.profileUrl) {
+            try {
+              await page.goto(row.profileUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
+              const profile = await page.evaluate(() => {
+                const text = document.body.innerText;
+                // Email — look for mailto links first, then regex
+                const emailEl = document.querySelector("a[href^='mailto:']") as HTMLAnchorElement | null;
+                const email   = emailEl?.href?.replace("mailto:", "")
+                  ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
+                       ?.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test"))
+                  ?? "";
+                // Phone — look for tel links first
+                const telEl = document.querySelector("a[href^='tel:']") as HTMLAnchorElement | null;
+                const phone = telEl?.href?.replace("tel:", "").replace(/\s/g, "")
+                  ?? text.match(/(\+63[\d\s\-]{9,12}|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10}|[\d]{3,4}[-\s][\d]{4})/)?.[0]?.trim()
+                  ?? "";
+                // Contact person — look for "Manager", "Owner", "Contact" labels
+                const contactMatch = text.match(/(?:Manager|Owner|Contact Person|Director|President)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/);
+                const contactPerson = contactMatch?.[1] ?? "";
+                // Website
+                const websiteEl = document.querySelector("a[href^='http']:not([href*='businesslist'])") as HTMLAnchorElement | null;
+                const website   = websiteEl?.href ?? "";
+                return { email, phone, contactPerson, website };
+              });
+              addLead({
+                name:    row.name,
+                phone:   profile.phone || row.phone,
+                email:   profile.email,
+                address: row.address,
+                website: profile.website || row.website,
+                source:  row.profileUrl,
+              });
+              // Attach contact person if found
+              if (profile.contactPerson && leads.length > 0) {
+                leads[leads.length - 1].contact_person = profile.contactPerson;
+              }
+            } catch {
+              // Profile visit failed — use listing data
+              addLead(row);
+            }
+          } else {
+            addLead(row);
+          }
+        }
 
       } else if (target.type === "yellowpages") {
         // ── Yellow Pages PH ────────────────────────────────────────────────
@@ -274,11 +365,12 @@ async function executeScrapePlan(
         rows.forEach(addLead);
 
       } else if (target.type === "google") {
-        // ── Google Search ──────────────────────────────────────────────────
+        // ── Google Search — get URLs then visit each for contact details ───
         await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: 20000 });
-        const rows = await page.evaluate((sourceUrl: string) => {
+
+        // Extract local pack cards (have phone/address inline)
+        const localCards = await page.evaluate((sourceUrl: string) => {
           const results: any[] = [];
-          // Local pack cards
           document.querySelectorAll(".VkpGBb, .rllt__details, [data-cid]").forEach(card => {
             const el   = card as HTMLElement;
             const text = el.innerText ?? "";
@@ -287,38 +379,96 @@ async function executeScrapePlan(
             const addr  = el.querySelector("[data-dtype='d3adr'], .rllt__wrapped-text")?.textContent?.trim() ?? "";
             if (name) results.push({ name, phone, email: "", address: addr, website: "", source: sourceUrl });
           });
-          // Organic results
-          document.querySelectorAll(".g").forEach(g => {
-            const name  = g.querySelector("h3")?.textContent?.trim() ?? "";
-            const snip  = (g.querySelector(".VwiC3b, .s3v9rd") as HTMLElement)?.innerText ?? "";
-            const phone = snip.match(/(\+63|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10})/)?.[0] ?? "";
-            const email = snip.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/)?.[0] ?? "";
-            if (name && name.length > 3) results.push({ name, phone, email, address: "", website: "", source: sourceUrl });
-          });
           return results;
         }, target.url);
-        rows.forEach(r => addLead({ ...r, name: r.name.replace(/ [-|–].*$/, "").trim() }));
+        localCards.forEach(r => addLead({ ...r, name: r.name.replace(/ [-|–].*$/, "").trim() }));
+
+        // Extract organic result URLs and visit them for contact details
+        const resultUrls = await page.$$eval("a[href]", (anchors: any[]) =>
+          anchors.map(a => a.href as string)
+            .filter(href =>
+              href.startsWith("http") &&
+              !href.includes("google.com") &&
+              !href.includes("youtube.com") &&
+              !href.includes("facebook.com") &&
+              !href.includes("wikipedia.org") &&
+              !href.includes("businesslist.ph") &&
+              !href.includes("yellowpages.com.ph")
+            ).slice(0, 5)
+        );
+
+        for (const url of resultUrls) {
+          if (leads.length >= limit) break;
+          try {
+            await page.goto(url, { waitUntil: "domcontentloaded", timeout: 12000 });
+            const data = await page.evaluate(() => {
+              const text = document.body.innerText.slice(0, 5000);
+              const title = document.title;
+              const emailEl = document.querySelector("a[href^='mailto:']") as HTMLAnchorElement | null;
+              const email   = emailEl?.href?.replace("mailto:", "")
+                ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
+                     ?.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test"))
+                ?? "";
+              const telEl = document.querySelector("a[href^='tel:']") as HTMLAnchorElement | null;
+              const phone = telEl?.href?.replace("tel:", "").replace(/\s/g, "")
+                ?? text.match(/(\+63[\d\s\-]{9,12}|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10})/)?.[0]?.trim()
+                ?? "";
+              const contactMatch = text.match(/(?:Manager|Owner|Contact Person|Director|President)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/);
+              const contactPerson = contactMatch?.[1] ?? "";
+              const addrMatch = text.match(/\d+\s+[A-Z][a-z]+.*(?:Street|St\.|Avenue|Ave\.|Road|Rd\.|Blvd|Drive|Dr\.)[^,\n]*/i);
+              const address = addrMatch?.[0]?.trim() ?? "";
+              return { title, email, phone, contactPerson, address };
+            });
+            if (data.title && (data.email || data.phone)) {
+              const lead: RawLead = {
+                name:    data.title.replace(/ [-|–].*$/, "").trim(),
+                phone:   data.phone,
+                email:   data.email,
+                address: data.address,
+                website: url,
+                source:  url,
+              };
+              addLead(lead);
+              if (data.contactPerson && leads.length > 0) {
+                leads[leads.length - 1].contact_person = data.contactPerson;
+              }
+            }
+          } catch { /* skip */ }
+        }
 
       } else if (target.type === "direct") {
         // ── Direct page visit ──────────────────────────────────────────────
         await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: 15000 });
-        const raw = await page.evaluate(() => ({
-          title: document.title,
-          text:  document.body.innerText.slice(0, 5000),
-        }));
-        const emails = raw.text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g) ?? [];
-        const phones = raw.text.match(/(\+63[\d\s\-]{9,12}|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10})/g) ?? [];
-        const email  = emails.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test")) ?? "";
-        const phone  = phones[0]?.replace(/\s/g, "") ?? "";
-        if (raw.title && (email || phone)) {
+        const raw = await page.evaluate(() => {
+          const text  = document.body.innerText.slice(0, 5000);
+          const title = document.title;
+          const emailEl = document.querySelector("a[href^='mailto:']") as HTMLAnchorElement | null;
+          const email   = emailEl?.href?.replace("mailto:", "")
+            ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
+                 ?.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test"))
+            ?? "";
+          const telEl = document.querySelector("a[href^='tel:']") as HTMLAnchorElement | null;
+          const phone = telEl?.href?.replace("tel:", "").replace(/\s/g, "")
+            ?? text.match(/(\+63[\d\s\-]{9,12}|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10})/)?.[0]?.trim()
+            ?? "";
+          const contactMatch = text.match(/(?:Manager|Owner|Contact Person|Director|President)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/);
+          const contactPerson = contactMatch?.[1] ?? "";
+          const addrMatch = text.match(/\d+\s+[A-Z][a-z]+.*(?:Street|St\.|Avenue|Ave\.|Road|Rd\.|Blvd|Drive|Dr\.)[^,\n]*/i);
+          const address = addrMatch?.[0]?.trim() ?? "";
+          return { title, email, phone, contactPerson, address };
+        });
+        if (raw.title && (raw.email || raw.phone)) {
           addLead({
             name:    raw.title.replace(/ [-|–].*$/, "").trim(),
-            phone,
-            email,
-            address: "",
+            phone:   raw.phone,
+            email:   raw.email,
+            address: raw.address,
             website: target.url,
             source:  target.url,
           });
+          if (raw.contactPerson && leads.length > 0) {
+            leads[leads.length - 1].contact_person = raw.contactPerson;
+          }
         }
       }
     } catch (e: any) {
@@ -367,7 +517,7 @@ company_name, contact_person, contact_number, email_address, address, website, i
 Scraped content:
 ${rawBlock.slice(0, 14000)}`;
 
-  const raw   = await groqCall(groqKey, prompt, 0.05, 4096);
+  const raw   = await aiCall(prompt, 0.05, 4096, groqKey);
   const leads = parseJson<ScrapedLead[]>(raw);
   return Array.isArray(leads) ? leads.slice(0, limit) : [];
 }
@@ -412,7 +562,7 @@ Return ONLY valid JSON:
   "reasoning": "..."
 }`;
 
-  const raw  = await groqCall(groqKey, prompt, 0.2, 1200);
+  const raw  = await aiCall(prompt, 0.2, 1200, groqKey);
   const plan = parseJson<AIRefinePlan>(raw);
   return plan ?? { additional_queries: [], additional_targets: [], reasoning: "parse failed" };
 }
@@ -444,7 +594,9 @@ export async function POST(req: NextRequest) {
     }
 
     const cap      = Math.min(Number(limit), 50);
-    const groqKey  = await getGroqKey();
+    // Try to get Groq key for fallback — non-fatal if missing
+    let groqKey: string | undefined;
+    try { groqKey = await getGroqKey(); } catch { /* Ollama will be used */ }
     let allLeads: ScrapedLead[] = [];
 
     // ── Loop 1 ───────────────────────────────────────────────────────────────

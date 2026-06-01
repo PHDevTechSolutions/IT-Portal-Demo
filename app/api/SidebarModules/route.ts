@@ -85,9 +85,11 @@ const DEFAULT_SIDEBAR_MODULES = [
     icon: "Package",
     description: "Stock and warehouse management",
     items: [
-      { title: "Stock Levels", url: "/stock/levels" },
-      { title: "Purchase Orders", url: "/stock/purchase-orders" },
-      { title: "Suppliers", url: "/stock/suppliers" },
+      { title: "Stock Levels",         url: "/stock/levels" },
+      { title: "Purchase Orders",      url: "/stock/purchase-orders" },
+      { title: "Suppliers",            url: "/stock/suppliers" },
+      { title: "SPF Products",         url: "/stock/spf-products" },
+      { title: "Firebase Credentials", url: "/stock/credentials" },
     ],
   },
   // 5. FINANCE
@@ -231,7 +233,7 @@ const DEFAULT_SIDEBAR_MODULES = [
     description: "HRIS module for attendance and logs",
     items: [
       { title: "Activity Logs", url: "/acculog/activity-logs" },
-      { title: "Attendance", url: "/acculog/attendance" },
+      { title: "Attendance",    url: "/acculog/attendance" },
     ],
   },
 ];

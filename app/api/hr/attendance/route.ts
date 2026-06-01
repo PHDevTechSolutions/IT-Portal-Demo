@@ -31,11 +31,13 @@ export async function GET(req: NextRequest) {
     if (search) {
       const re = new RegExp(search, "i");
       filter.$or = [
-        { ReferenceID: re },
-        { Email:       re },
-        { Type:        re },
-        { Status:      re },
-        { Location:    re },
+        { ReferenceID:              re },
+        { Email:                    re },
+        { Type:                     re },
+        { Status:                   re },
+        { Location:                 re },
+        { SiteVisitAccount:         re },
+        { account_reference_number: re },
       ];
     }
 
