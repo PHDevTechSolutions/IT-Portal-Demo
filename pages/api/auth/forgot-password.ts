@@ -54,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const name     = `${user.Firstname ?? ""} ${user.Lastname ?? ""}`.trim() || user.Email;
 
     await resend.emails.send({
-      from:    "IT Portal <noreply@devtech-erp-solutions.cloud>",
+      from:    "IT Portal <crm@elev8solutions.cloud>",
       to:      user.Email,
       subject: "Reset Your IT Portal Password",
       html: `
