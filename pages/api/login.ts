@@ -17,6 +17,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Email, Password and deviceId are required." });
   }
 
+  // ── IP Whitelist check ────────────────────────────────────────────────────
+  const clientIp = (
+    req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
+    req.socket.remoteAddress ||
+    ""
+  ).trim();
+
+  try {
+    const checkRes = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/settings/ip-whitelist/check?ip=${encodeURIComponent(clientIp)}&deviceId=${encodeURIComponent(deviceId)}`,
+    );
+    const checkData = await checkRes.json();
+    if (!checkData.allowed) {
+      return res.status(403).json({
+        message: checkData.reason ?? "Access denied. Your IP or device is not whitelisted.",
+        blocked: true,
+      });
+    }
+  } catch {
+    // Fail open — don't block login if check itself errors
+  }
+
   const db = await connectToDatabase();
   const users = db.collection("users");
   const securityAlerts = db.collection("security_alerts"); // Collection for alerts
