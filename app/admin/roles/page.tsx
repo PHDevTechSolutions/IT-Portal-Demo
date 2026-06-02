@@ -410,6 +410,21 @@ function FormPanel({
                 onChange={e => setNewUser(prev => ({ ...prev, Position: e.target.value }))} />
             </div>
 
+            {/* Target Quota — Sales only */}
+            {newUser.Department === "Sales" && (
+              <div>
+                <OpsLabel>Target Quota</OpsLabel>
+                <OpsInput
+                  type="number"
+                  placeholder="e.g. 500000"
+                  value={newUser.TargetQuota || ""}
+                  disabled={isLoading}
+                  onChange={e => setNewUser(prev => ({ ...prev, TargetQuota: e.target.value }))}
+                />
+                <p className="text-[9px] font-mono text-slate-700 mt-1">Monthly sales quota (numeric)</p>
+              </div>
+            )}
+
             {/* Status */}
             <div>
               <OpsLabel>Status</OpsLabel>
