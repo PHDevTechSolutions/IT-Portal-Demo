@@ -24,6 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ""
   ).trim();
 
+  let ipAllowed = true;
   try {
     const checkRes = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/settings/ip-whitelist/check?ip=${encodeURIComponent(clientIp)}&deviceId=${encodeURIComponent(deviceId)}`,
@@ -36,9 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
   } catch {
-    // Fail open — don't block login if check itself errors
+    // Fail open on check error
   }
-
   const db = await connectToDatabase();
   const users = db.collection("users");
   const securityAlerts = db.collection("security_alerts"); // Collection for alerts
@@ -213,13 +213,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   res.setHeader(
     "Set-Cookie",
-    serialize("session", userId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV !== "development",
-      sameSite: "strict",
-      maxAge: 60 * 60 * 24,
-      path: "/",
-    })
+    [
+      serialize("session", userId, {
+        httpOnly: true,
+        secure:   process.env.NODE_ENV !== "development",
+        sameSite: "strict",
+        maxAge:   60 * 60 * 24,
+        path:     "/",
+      }),
+      serialize("ip-allowed", "1", {
+        httpOnly: false, // middleware needs to read this
+        secure:   process.env.NODE_ENV !== "development",
+        sameSite: "strict",
+        maxAge:   60 * 60 * 24,
+        path:     "/",
+      }),
+    ]
   );
 
   return res.status(200).json({

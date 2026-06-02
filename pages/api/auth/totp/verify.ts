@@ -69,13 +69,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   res.setHeader(
     "Set-Cookie",
-    serialize("session", entry.userId, {
-      httpOnly: true,
-      secure:   process.env.NODE_ENV !== "development",
-      sameSite: "strict",
-      maxAge:   60 * 60 * 24,
-      path:     "/",
-    })
+    [
+      serialize("session", entry.userId, {
+        httpOnly: true,
+        secure:   process.env.NODE_ENV !== "development",
+        sameSite: "strict",
+        maxAge:   60 * 60 * 24,
+        path:     "/",
+      }),
+      serialize("ip-allowed", "1", {
+        httpOnly: false,
+        secure:   process.env.NODE_ENV !== "development",
+        sameSite: "strict",
+        maxAge:   60 * 60 * 24,
+        path:     "/",
+      }),
+    ]
   );
 
   return res.status(200).json({
