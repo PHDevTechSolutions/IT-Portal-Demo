@@ -151,15 +151,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const userId = result.user._id.toString();
 
+  // Re-fetch user to get latest totpEnabled state (updateOne above doesn't refresh user var)
+  const freshUser = await users.findOne({ Email });
+
   // ── If TOTP is enabled, issue a temp token and require 2FA ──────────────────
-  if (user.totpEnabled && user.totpSecret) {
-    const tempToken = issueTempToken(userId, user.Email);
+  if (freshUser?.totpEnabled === true && freshUser?.totpSecret) {
+    console.log(`[Login] TOTP required for ${Email}`);
+    const tempToken = issueTempToken(userId, Email);
     return res.status(200).json({
       requiresTOTP: true,
       tempToken,
       message: "TOTP verification required.",
     });
   }
+
+  console.log(`[Login] No TOTP for ${Email} — totpEnabled:`, freshUser?.totpEnabled);
 
   // ── No TOTP — set session cookie directly ───────────────────────────────────
   const actor: AuditActor = {

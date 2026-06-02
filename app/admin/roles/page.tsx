@@ -13,7 +13,7 @@ import {
   Download, Eye, EyeOff, RotateCcw, UserPlus, SlidersHorizontal, Save,
   X as XIcon, ShieldOff, Zap, Fingerprint, LayoutGrid, Server, Database,
   Activity, AlertTriangle, Users, Lock, UserCheck, Building2, ChevronRight,
-  Plus, RefreshCw,
+  Plus, RefreshCw, ShieldCheck, ShieldAlert, KeyRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -199,6 +199,35 @@ function DeptBadge({ dept, position }: { dept: string; position: string }) {
     <span className={cn("inline-flex items-center px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wide border", cls)}>
       {label}
     </span>
+  );
+}
+
+/* ─── Security Badge ─────────────────────────────────────────────── */
+function SecurityBadge({ biometric, totp }: { biometric: boolean; totp: boolean }) {
+  if (!biometric && !totp) {
+    return (
+      <span className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-widest"
+        style={{ color: "#4a6070" }}>
+        <ShieldAlert className="size-3" />
+        None
+      </span>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      {biometric && (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wide border"
+          style={{ borderColor: "#34d39940", color: "#34d399", backgroundColor: "#34d39910" }}>
+          <Fingerprint className="size-2.5" /> Biometric
+        </span>
+      )}
+      {totp && (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wide border"
+          style={{ borderColor: "#60a5fa40", color: "#60a5fa", backgroundColor: "#60a5fa10" }}>
+          <KeyRound className="size-2.5" /> 2FA
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -532,15 +561,28 @@ export default function AccountPage() {
     Status: "Active", TargetQuota: "", Directories: [],
   });
 
+  /* ── Security status map { userId: { biometricEnabled, totpEnabled } } ── */
+  const [securityMap, setSecurityMap] = useState<Record<string, { biometricEnabled: boolean; totpEnabled: boolean }>>({});
+
   /* ── Fetch accounts ── */
   useEffect(() => {
     const load = async () => {
       setIsFetching(true);
       const tid = toast.loading("Syncing user database…");
       try {
-        const res = await fetch("/api/UserManagement/Fetch");
-        setAccounts(await res.json() || []);
+        const res  = await fetch("/api/UserManagement/Fetch");
+        const data = await res.json() || [];
+        setAccounts(data);
         toast.success("Database synchronized", { id: tid });
+
+        // Batch-fetch security status after accounts load
+        if (Array.isArray(data) && data.length > 0) {
+          const ids = data.map((u: UserAccount) => u._id).join(",");
+          fetch(`/api/UserManagement/SecurityStatus?userIds=${ids}`)
+            .then(r => r.json())
+            .then(d => setSecurityMap(d))
+            .catch(() => {});
+        }
       } catch { toast.error("Connection failed", { id: tid }); }
       finally { setIsFetching(false); }
     };
@@ -731,8 +773,13 @@ export default function AccountPage() {
     departments: new Set(accounts.map(a => a.Department).filter(Boolean)).size,
   }), [accounts]);
 
+  const MASTER_REF = "XLGR-GLOBAL-ERP-000000";
   const handleSort = (key: SortKey) => { if (sortKey === key) setSortAsc(!sortAsc); else { setSortKey(key); setSortAsc(true); } };
-  const toggleSelectAll = () => { if (selectedIds.size === current.length) setSelectedIds(new Set()); else setSelectedIds(new Set(current.map(u => u._id))); };
+  const toggleSelectAll = () => {
+    const selectable = current.filter(u => u.ReferenceID !== MASTER_REF).map(u => u._id);
+    if (selectedIds.size === selectable.length && selectable.length > 0) setSelectedIds(new Set());
+    else setSelectedIds(new Set(selectable));
+  };
   const toggleSelect = (id: string) => { setSelectedIds(prev => { const c = new Set(prev); c.has(id) ? c.delete(id) : c.add(id); return c; }); };
 
   const hasFilters = filterDepartment !== "all" || filterCompany !== "all" || filterRole !== "all" || filterStatus !== "all";
@@ -965,7 +1012,7 @@ export default function AccountPage() {
                       <thead className="sticky top-0 z-10">
                         <tr style={{ backgroundColor: C.panel, borderBottom: `1px solid ${C.border}` }}>
                           <th className="px-3 py-2.5 w-10" style={{ borderRight: `1px solid ${C.border}` }}>
-                            <Checkbox checked={selectedIds.size === current.length && current.length > 0}
+                            <Checkbox checked={selectedIds.size > 0 && selectedIds.size === current.filter(u => u.ReferenceID !== MASTER_REF).length}
                               onCheckedChange={toggleSelectAll}
                               className="border-orange-500/30 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-none h-3.5 w-3.5" />
                           </th>
@@ -983,6 +1030,8 @@ export default function AccountPage() {
                           ))}
                           <th className="text-left px-3 py-2.5 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
                             style={{ color: `${C.accent}99`, borderRight: `1px solid ${C.border}` }}>Status</th>
+                          <th className="text-left px-3 py-2.5 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
+                            style={{ color: `${C.accent}99`, borderRight: `1px solid ${C.border}` }}>Security</th>
                           <th className="text-right px-3 py-2.5 whitespace-nowrap font-bold uppercase tracking-widest text-[9px]"
                             style={{ color: `${C.accent}99` }}>Actions</th>
                         </tr>
@@ -990,14 +1039,17 @@ export default function AccountPage() {
                       <tbody>
                         {current.map((u, i) => (
                           <tr key={u._id}
-                            style={{ backgroundColor: i % 2 === 0 ? C.bg : C.panel, borderBottom: `1px solid ${C.border}`, cursor: "pointer" }}
-                            onClick={() => setViewingUser(u)}
+                            style={{ backgroundColor: i % 2 === 0 ? C.bg : C.panel, borderBottom: `1px solid ${C.border}`, cursor: u.ReferenceID === "XLGR-GLOBAL-ERP-000000" ? "default" : "pointer" }}
+                            onClick={() => u.ReferenceID !== "XLGR-GLOBAL-ERP-000000" && setViewingUser(u)}
                             onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)")}
                             onMouseLeave={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? C.bg : C.panel)}>
 
                             <td className="px-3 py-2" style={{ borderRight: `1px solid ${C.border}` }} onClick={e => e.stopPropagation()}>
-                              <Checkbox checked={selectedIds.has(u._id)} onCheckedChange={() => toggleSelect(u._id)}
-                                className="border-orange-500/30 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-none h-3.5 w-3.5" />
+                              <Checkbox
+                                checked={selectedIds.has(u._id)}
+                                onCheckedChange={() => toggleSelect(u._id)}
+                                disabled={u.ReferenceID === "XLGR-GLOBAL-ERP-000000"}
+                                className="border-orange-500/30 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 rounded-none h-3.5 w-3.5 disabled:opacity-20 disabled:cursor-not-allowed" />
                             </td>
 
                             <td className="px-3 py-2" style={{ borderRight: `1px solid ${C.border}` }} onClick={e => e.stopPropagation()}>
@@ -1041,7 +1093,23 @@ export default function AccountPage() {
                               )}
                             </td>
 
+                            {/* Security column */}
+                            <td className="px-3 py-2 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <SecurityBadge
+                                biometric={securityMap[u._id]?.biometricEnabled ?? false}
+                                totp={securityMap[u._id]?.totpEnabled ?? false}
+                              />
+                            </td>
+
                             <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                              {u.ReferenceID === "XLGR-GLOBAL-ERP-000000" ? (
+                                <div className="flex items-center justify-end">
+                                  <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 border"
+                                    style={{ borderColor: C.border, color: C.muted }}>
+                                    Protected
+                                  </span>
+                                </div>
+                              ) : (
                               <div className="flex items-center justify-end gap-1.5">
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -1080,6 +1148,7 @@ export default function AccountPage() {
                                   <TooltipContent side="left" className="text-[10px] font-mono bg-[#0d1117] border-orange-500/20">Delete</TooltipContent>
                                 </Tooltip>
                               </div>
+                              )}
                             </td>
                           </tr>
                         ))}

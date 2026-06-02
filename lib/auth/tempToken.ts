@@ -1,42 +1,42 @@
 /**
  * lib/auth/tempToken.ts
  *
- * Short-lived in-memory tokens issued after password verification,
+ * Short-lived signed JWT issued after password verification,
  * before TOTP is confirmed. Expires in 5 minutes.
  *
- * In-memory is fine here — tokens are single-use and very short-lived.
- * For multi-instance deployments, swap the Map for Redis.
+ * Using JWT instead of in-memory Map so it works correctly on
+ * Vercel serverless (each invocation is a fresh process).
  */
 
-interface TempEntry {
-  userId:    string;
-  email:     string;
-  expiresAt: number;
+import jwt from "jsonwebtoken";
+
+const SECRET = process.env.SECRET_KEY ?? process.env.API_KEY ?? "totp-fallback-secret";
+
+interface TempPayload {
+  userId: string;
+  email:  string;
+  totp:   true; // marks this as a totp-pending token
 }
 
-const store = new Map<string, TempEntry>();
-
-/** Issue a temp token valid for 5 minutes */
+/** Issue a signed temp token valid for 5 minutes */
 export function issueTempToken(userId: string, email: string): string {
-  const token     = crypto.randomUUID();
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min
-  store.set(token, { userId, email, expiresAt });
-  return token;
+  return jwt.sign(
+    { userId, email, totp: true } as TempPayload,
+    SECRET,
+    { expiresIn: "5m" },
+  );
 }
 
-/** Consume a temp token — returns the entry and deletes it (single-use) */
-export function consumeTempToken(token: string): TempEntry | null {
-  const entry = store.get(token);
-  if (!entry) return null;
-  store.delete(token); // single-use
-  if (Date.now() > entry.expiresAt) return null; // expired
-  return entry;
-}
-
-/** Cleanup expired tokens (call periodically if needed) */
-export function pruneExpiredTokens() {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (now > entry.expiresAt) store.delete(key);
+/** Verify and consume a temp token — returns payload or null if invalid/expired */
+export function consumeTempToken(token: string): { userId: string; email: string } | null {
+  try {
+    const payload = jwt.verify(token, SECRET) as TempPayload;
+    if (!payload.totp) return null;
+    return { userId: payload.userId, email: payload.email };
+  } catch {
+    return null; // expired or tampered
   }
 }
+
+/** @deprecated no-op — kept for compatibility */
+export function pruneExpiredTokens() {}

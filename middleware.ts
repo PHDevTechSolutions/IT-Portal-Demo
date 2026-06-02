@@ -27,6 +27,7 @@ const PROTECTED_PREFIXES = [
 
 /** Paths that are always public (no redirect even without a cookie). */
 const PUBLIC_PREFIXES = [
+  "/login",
   "/Login",
   "/Register",
   "/_next",
@@ -35,6 +36,8 @@ const PUBLIC_PREFIXES = [
   "/api/register",
   "/api/auto-login",
   "/api/check-session",
+  "/api/auth/totp/verify",
+  "/api/auth/biometric",
 ];
 
 // ─── Middleware ────────────────────────────────────────────────────────────────

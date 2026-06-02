@@ -36,6 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     { $set: { totpPending: secret } }
   );
 
+  console.log(`[TOTP Setup] userId=${sessionId} secret generated and pending saved`);
+
   return res.status(200).json({
     secret,  // show to user as backup code
     qrCode,  // base64 PNG — render as <img src={qrCode} />

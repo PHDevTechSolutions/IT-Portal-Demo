@@ -9,7 +9,7 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const { id, Firstname, Lastname, Email, Role, Department, Status, ContactNumber, Password, profilePicture, ImapHost, ImapPass, } = req.body;
+  const { id, Firstname, Lastname, Email, Role, Department, Company, Position, Status, ContactNumber, Password, profilePicture, ImapHost, ImapPass, } = req.body;
 
   if (!id) {
     return res.status(400).json({ error: "User ID is required" });
@@ -19,7 +19,7 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
     const db = await connectToDatabase();
     const userCollection = db.collection("users");
 
-    const updatedUser: any = { Firstname, Lastname, Email, Role, Department, Status, ContactNumber, updatedAt: new Date(),};
+    const updatedUser: any = { Firstname, Lastname, Email, Role, Department, Company, Position, Status, ContactNumber, updatedAt: new Date() };
 
     if (profilePicture) {
       updatedUser.profilePicture = profilePicture;

@@ -34,13 +34,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!valid) return res.status(401).json({ message: "Invalid code. Please try again." });
 
   // Activate TOTP
-  await db.collection("users").updateOne(
+  const updateResult = await db.collection("users").updateOne(
     { _id: new ObjectId(sessionId) },
     {
       $set:   { totpSecret: user.totpPending, totpEnabled: true },
       $unset: { totpPending: "" },
     }
   );
+
+  console.log(`[TOTP Confirm] userId=${sessionId} modifiedCount=${updateResult.modifiedCount}`);
+
+  if (updateResult.modifiedCount === 0) {
+    return res.status(500).json({ message: "Failed to save 2FA settings. Please try again." });
+  }
 
   return res.status(200).json({ success: true, message: "2FA enabled successfully." });
 }

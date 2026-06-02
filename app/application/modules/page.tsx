@@ -2,400 +2,519 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { SidebarProvider, SidebarInset, SidebarTrigger, } from "@/components/ui/sidebar";
+import {
+  SidebarProvider, SidebarInset, SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator, } from "@/components/ui/breadcrumb";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink,
+  BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle, } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-
 import { UserProvider } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import { Pagination } from "@/components/app-pagination";
-import { Star, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Star, ExternalLink, Search, ChevronRight,
+  Globe, Database, Server, ShoppingCart, Zap,
+  Plus, Pencil, Trash2, Loader2, X, Save,
+} from "lucide-react";
 
-interface Item {
-  id: number;
-  title: string;
+/* ─── Tokens ─────────────────────────────────────────────────────── */
+const C = {
+  bg:     "#080d12",
+  panel:  "#0d1117",
+  border: "#1a2535",
+  muted:  "#253040",
+  dim:    "#4a6070",
+  text:   "#c8d8e8",
+  accent: "#e8630a",
+  font:   "'JetBrains Mono','Fira Code',monospace",
+};
+
+/* ─── Types ──────────────────────────────────────────────────────── */
+interface Module {
+  _id:         string;
+  title:       string;
   description: string;
-  url: string;
+  url:         string;
+  category:    string;
+  order:       number;
 }
 
-export default function AccountPage() {
-  const [userId, setUserId] = useState<string | null>(null);
-  const [visitCounts, setVisitCounts] = useState<Record<string, number>>({});
-  const [lastVisitedUrl, setLastVisitedUrl] = useState<string | null>(null);
-  const router = useRouter();
+type FormData = Omit<Module, "_id" | "order"> & { order: string };
 
-  // Load userId, visit counts and last visited url from localStorage on mount
+const EMPTY_FORM: FormData = {
+  title: "", description: "", url: "", category: "Internal", order: "99",
+};
+
+const CATEGORIES = ["Internal","Company","E-Commerce","DevOps","Database"];
+
+const CAT_ICON: Record<string, React.ElementType> = {
+  Internal: Zap, Company: Globe, "E-Commerce": ShoppingCart,
+  DevOps: Server, Database: Database,
+};
+const CAT_COLOR: Record<string, string> = {
+  Internal: "#e8630a", Company: "#34d399", "E-Commerce": "#f59e0b",
+  DevOps: "#60a5fa", Database: "#a78bfa",
+};
+
+const ROWS = 12;
+const API  = "/api/Data/Applications/Modules";
+
+/* ─── Form Dialog ────────────────────────────────────────────────── */
+function ModuleForm({
+  open, onClose, initial, onSaved,
+}: {
+  open:     boolean;
+  onClose:  () => void;
+  initial:  (Module & { _id: string }) | null; // null = create
+  onSaved:  (m: Module) => void;
+}) {
+  const [form,    setForm]    = useState<FormData>(EMPTY_FORM);
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
-    const storedUserId = localStorage.getItem("userId");
-    setUserId(storedUserId);
-
-    const storedCounts = localStorage.getItem("visitCounts");
-    setVisitCounts(storedCounts ? JSON.parse(storedCounts) : {});
-
-    const lastUrl = localStorage.getItem("lastVisitedUrl");
-    setLastVisitedUrl(lastUrl);
-  }, []);
-
-  const items: Item[] = [
-    {
-      id: 1,
-      title: "Taskflow",
-      description: "Manage and track activity time and motion efficiently.",
-      url: "https://taskflow-crm.vercel.app/auth/login",
-    },
-    {
-      id: 2,
-      title: "Taskflow ( Demo )",
-      description: "Manage and track activity time and motion efficiently.",
-      url: "https://ecoshift-erp-system.vercel.app/Login",
-    },
-    {
-      id: 3,
-      title: "Taskflow V2 ( Internal Demo Server )",
-      description: "Manage and track activity time and motion efficiently.",
-      url: "https://taskflow-demo-v2.vercel.app/auth/login",
-    },
-    {
-      id: 4,
-      title: "Ecodesk",
-      description: "Customer support ticketing system for seamless issue tracking.",
-      url: "https://ecodesk-erp.vercel.app/login",
-    },
-    {
-      id: 5,
-      title: "Ecodesk ( OLD )",
-      description: "Customer support ticketing system for seamless issue tracking.",
-      url: "https://ecodesk-erp.vercel.app/login",
-    },
-    {
-      id: 6,
-      title: "Acculog ( Sales Only )",
-      description: "Attendance tracking system to monitor employee hours.",
-      url: "https://acculog-hris.vercel.app/Login",
-    },
-    {
-      id: 7,
-      title: "Acculog ( Regular User )",
-      description: "Attendance tracking system to monitor employee hours.",
-      url: "https://acculog.vercel.app/",
-    },
-    {
-      id: 8,
-      title: "Room Reservation",
-      description: "Reserve rooms and manage shift schedules easily.",
-      url: "https://shift-reservation.vercel.app/Book",
-    },
-    {
-      id: 10,
-      title: "Stash IT Asset",
-      description: "IT asset management system to track company equipment.",
-      url: "https://stash-demo.vercel.app/auth/login",
-    },
-    {
-      id: 11,
-      title: "Know My Employee",
-      description: "Employee analytics and HR insights platform.",
-      url: "https://kme-orcin.vercel.app/Home",
-    },
-    {
-      id: 12,
-      title: "Linker X",
-      description: "Platform to store and share links securely.",
-      url: "https://linker-x-delta.vercel.app/",
-    },
-    {
-      id: 13,
-      title: "Ecoshift Corporation",
-      description: "Official website of Ecoshift Corporation.",
-      url: "https://www.ecoshiftcorp.com/",
-    },
-    {
-      id: 14,
-      title: "Disruptive Solutions Inc",
-      description: "Disruptive Solutions Inc official site.",
-      url: "https://disruptivesolutionsinc.com/",
-    },
-    {
-      id: 15,
-      title: "Ecoshift Shopify Admin",
-      description: "Shopify admin login for Ecoshift.",
-      url: "https://admin.shopify.com/login?ui_locales=en-PH&errorHint=no_cookie_session",
-    },
-    {
-      id: 16,
-      title: "Ecoshift Shopify Website",
-      description: "Ecoshift Shopify customer-facing website.",
-      url: "https://eshome.ph/",
-    },
-    {
-      id: 17,
-      title: "Elementor Pro",
-      description: "Elementor Pro website login and management.",
-      url: "https://my.elementor.com/login/?redirect_to=%2Fwebsites%2F",
-    },
-    {
-      id: 18,
-      title: "Nitropack",
-      description: "Nitropack dashboard for website speed optimization.",
-      url: "https://app.nitropack.io/dashboard",
-    },
-    {
-      id: 19,
-      title: "Vercel",
-      description: "Vercel platform login for deployments.",
-      url: "https://vercel.com/login",
-    },
-    {
-      id: 20,
-      title: "VAH",
-      description: "VAH official site.",
-      url: "https://buildchem-nu.vercel.app/",
-    },
-    {
-      id: 21,
-      title: "Neon PostgreSQL",
-      description: "Neon cloud Postgres database console and management.",
-      url: "https://console.neon.tech/realms/prod-realm/protocol/openid-connect/auth?client_id=neon-console&redirect_uri=https%3A%2F%2Fconsole.neon.tech%2Fauth%2Fkeycloak%2Fcallback&response_type=code&scope=openid+profile+email&state=AbXDgr_yQo6C3WZ9xHF_mA%3D%3D%2C%2C%2C",
-    },
-    {
-      id: 22,
-      title: "MongoDB",
-      description: "MongoDB cloud account and database management.",
-      url: "https://account.mongodb.com/account/login?n=https%3A%2F%2Fcloud.mongodb.com%2Fv2%2F6891bf020016b943a3459440&nextHash=%23metrics%2FreplicaSet%2F6891bf5e52da71245672c0d1%2Fexplorer%2FLinkerX%2Fnotes%2Ffind&signedOut=true",
-    },
-    {
-      id: 23,
-      title: "Supabase",
-      description: "Supabase dashboard for backend database and authentication.",
-      url: "https://supabase.com/dashboard/sign-in",
-    },
-    {
-      id: 24,
-      title: "Redis",
-      description: "Redis Cloud subscription and metrics dashboard.",
-      url: "https://cloud.redis.io/#/subscriptions/subscription/2915038/bdb-view/13569236/metric",
-    },
-    {
-      id: 25,
-      title: "Firebase",
-      description: "Firebase console for Firestore and project management.",
-      url: "https://console.firebase.google.com/u/0/project/taskflow-4605f/firestore/databases/-default-/indexes",
-    },
-    {
-      id: 26,
-      title: "IT Ticketing",
-      description: "IT Ticketing.",
-      url: "https://ticketing-demo-dusky.vercel.app/auth/login",
-    },
-  ]
-
-  // Filter items based on search
-  const [search, setSearch] = useState("");
-  const filteredItems = useMemo(() => {
-    if (!search.trim()) return items;
-    return items.filter(
-      (item) =>
-        item.title.toLowerCase().includes(search.toLowerCase()) ||
-        item.description.toLowerCase().includes(search.toLowerCase())
+    if (!open) return;
+    setForm(initial
+      ? { title: initial.title, description: initial.description,
+          url: initial.url, category: initial.category,
+          order: String(initial.order) }
+      : EMPTY_FORM
     );
-  }, [search, items]);
+  }, [open, initial]);
 
-  // Pagination variables
-  const itemsPerPage = 10;
-  const [page, setPage] = useState(1);
-  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const set = (k: keyof FormData, v: string) =>
+    setForm(prev => ({ ...prev, [k]: v }));
 
-  const paginatedItems = filteredItems.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim() || !form.url.trim()) {
+      toast.error("Title and URL are required."); return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        ...form,
+        order: Number(form.order) || 99,
+        ...(initial ? { _id: initial._id } : {}),
+      };
+      const res  = await fetch(API, {
+        method:  initial ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      toast.success(initial ? "Module updated." : "Module created.");
+      onSaved({ ...payload, _id: initial?._id ?? json.id, order: Number(form.order) || 99 } as Module);
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message ?? "Save failed.");
+    } finally { setLoading(false); }
+  };
+
+  if (!open) return null;
+
+  const inp = (label: string, k: keyof FormData, type = "text", ph = "") => (
+    <div className="space-y-1">
+      <label className="text-[9px] font-bold uppercase tracking-widest"
+        style={{ color: C.dim, fontFamily: C.font }}>{label}</label>
+      <input type={type} placeholder={ph} value={form[k] as string}
+        onChange={e => set(k, e.target.value)} required={k === "title" || k === "url"}
+        className="w-full h-8 px-3 text-[11px] focus:outline-none"
+        style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+        onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+        onBlur={e  => (e.currentTarget.style.borderColor = C.border)} />
+    </div>
   );
 
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(8,13,18,0.85)" }}>
+      <div className="w-full max-w-md border overflow-hidden"
+        style={{ borderColor: C.border, backgroundColor: C.panel, fontFamily: C.font }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b"
+          style={{ borderColor: C.border, backgroundColor: C.bg }}>
+          <div className="flex items-center gap-2">
+            {initial ? <Pencil className="size-3.5" style={{ color: C.accent }} />
+                     : <Plus   className="size-3.5" style={{ color: C.accent }} />}
+            <span className="text-[11px] font-bold uppercase tracking-widest"
+              style={{ color: C.accent }}>
+              {initial ? "Edit Module" : "New Module"}
+            </span>
+          </div>
+          <button onClick={onClose} disabled={loading}
+            className="flex items-center justify-center h-5 w-5 transition-colors"
+            style={{ color: C.dim }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#f87171")}
+            onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+            <X className="size-3" />
+          </button>
+        </div>
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-3">
+          {inp("Title *",       "title",       "text",   "e.g. Taskflow")}
+          {inp("URL *",         "url",         "url",    "https://")}
+          {inp("Description",   "description", "text",   "Short description")}
+          {inp("Order",         "order",       "number", "1")}
+          {/* Category */}
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold uppercase tracking-widest"
+              style={{ color: C.dim }}>Category</label>
+            <select value={form.category} onChange={e => set("category", e.target.value)}
+              className="w-full h-8 px-3 text-[11px] focus:outline-none"
+              style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {/* Buttons */}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} disabled={loading}
+              className="h-8 px-4 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+              style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={loading}
+              className="flex items-center gap-1.5 h-8 px-5 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+              style={{ borderColor: C.accent, color: "#fff", backgroundColor: C.accent }}>
+              {loading ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
+              {loading ? "Saving…" : initial ? "Update" : "Create"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Page ───────────────────────────────────────────────────────── */
+export default function ModulesPage() {
+  const router = useRouter();
+
+  const [modules,       setModules]       = useState<Module[]>([]);
+  const [isLoading,     setIsLoading]     = useState(true);
+  const [visitCounts,   setVisitCounts]   = useState<Record<string, number>>({});
+  const [lastVisitedUrl,setLastVisitedUrl] = useState<string | null>(null);
+  const [search,        setSearch]        = useState("");
+  const [category,      setCategory]      = useState("All");
+  const [page,          setPage]          = useState(1);
+  const [formOpen,      setFormOpen]      = useState(false);
+  const [editing,       setEditing]       = useState<Module | null>(null);
+  const [deleting,      setDeleting]      = useState<string | null>(null);
+
+  /* ── Load ── */
   useEffect(() => {
-    setPage(1);
-  }, [search]);
+    const counts  = localStorage.getItem("visitCounts");
+    const lastUrl = localStorage.getItem("lastVisitedUrl");
+    if (counts)  setVisitCounts(JSON.parse(counts));
+    if (lastUrl) setLastVisitedUrl(lastUrl);
 
-  // Update visit counts in localStorage and state
+    fetch(API).then(r => r.json()).then(d => {
+      if (d.success) setModules(d.data);
+    }).catch(() => toast.error("Failed to load modules."))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  /* ── Visit ── */
   const handleVisit = (url: string) => {
-    // Open in new tab
     window.open(url, "_blank", "noopener noreferrer");
-
-    // Update visit counts
-    setVisitCounts((prev) => {
-      const newCounts = { ...prev };
-      newCounts[url] = (newCounts[url] || 0) + 1;
-
-      // Save back to localStorage
-      localStorage.setItem("visitCounts", JSON.stringify(newCounts));
-
-      return newCounts;
+    setVisitCounts(prev => {
+      const next = { ...prev, [url]: (prev[url] || 0) + 1 };
+      localStorage.setItem("visitCounts", JSON.stringify(next));
+      return next;
     });
-
-    // Update last visited url
     setLastVisitedUrl(url);
     localStorage.setItem("lastVisitedUrl", url);
   };
 
-  // Get top 5 most visited URLs sorted descending
-  const topVisited = useMemo(() => {
-    // Map visitCounts to entries, sort descending by count, limit 5
-    const sortedUrls = Object.entries(visitCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([url]) => url);
+  /* ── Delete ── */
+  const handleDelete = async (id: string) => {
+    setDeleting(id);
+    try {
+      const res  = await fetch(API, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ _id: id }) });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setModules(prev => prev.filter(m => m._id !== id));
+      toast.success("Module deleted.");
+    } catch (err: any) { toast.error(err.message ?? "Delete failed."); }
+    finally { setDeleting(null); }
+  };
 
-    // Return item details for the URLs found, ignore if url not in items list
-    return sortedUrls
-      .map((url) => items.find((item) => item.url === url))
-      .filter((item): item is Item => !!item); // filter out undefined
-  }, [visitCounts, items]);
+  /* ── After save ── */
+  const handleSaved = (saved: Module) => {
+    setModules(prev => {
+      const idx = prev.findIndex(m => m._id === saved._id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = saved;
+        return next.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+      }
+      return [...prev, saved].sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+    });
+  };
 
-  const generatePages = (total: number) => Array.from({ length: total }, (_, i) => i + 1);
+  /* ── Top 5 ── */
+  const topVisited = useMemo(() =>
+    Object.entries(visitCounts)
+      .sort(([,a],[,b]) => b - a).slice(0, 5)
+      .map(([url]) => modules.find(m => m.url === url))
+      .filter((m): m is Module => !!m),
+    [visitCounts, modules]);
+
+  /* ── Filter ── */
+  const allCats = ["All", ...Array.from(new Set(modules.map(m => m.category)))];
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return modules
+      .filter(m => category === "All" || m.category === category)
+      .filter(m => !q || m.title.toLowerCase().includes(q) || m.description.toLowerCase().includes(q));
+  }, [modules, search, category]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS));
+  const paginated  = filtered.slice((page - 1) * ROWS, page * ROWS);
+  useEffect(() => setPage(1), [search, category]);
 
   return (
-    <UserProvider>
-      <FormatProvider>
-        <ProtectedPageWrapper>
-          <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset>
-              {/* Header */}
-              <header className="flex h-16 shrink-0 items-center gap-2 px-4">
-                <div className="flex items-center gap-2">
-                  <SidebarTrigger className="-ml-1" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push("/dashboard")}
-                  >
-                    Back
-                  </Button>
-                  <Separator orientation="vertical" className="h-4" />
-                  <Breadcrumb>
-                    <BreadcrumbList>
-                      <BreadcrumbItem>
-                        <BreadcrumbLink href="#">Applications</BreadcrumbLink>
-                      </BreadcrumbItem>
-                      <BreadcrumbSeparator />
-                      <BreadcrumbItem>
-                        <BreadcrumbPage>Modules</BreadcrumbPage>
-                      </BreadcrumbItem>
-                    </BreadcrumbList>
-                  </Breadcrumb>
+    <UserProvider><FormatProvider><ProtectedPageWrapper>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="flex flex-col h-svh overflow-hidden"
+          style={{ backgroundColor: C.bg, color: C.text, fontFamily: C.font }}>
+
+          {/* Header */}
+          <header className="relative flex h-12 shrink-0 items-center border-b overflow-hidden"
+            style={{ borderColor: C.border, backgroundColor: C.panel }}>
+            <div className="absolute bottom-0 left-0 w-full h-px"
+              style={{ background: `linear-gradient(to right,transparent,${C.accent}50,transparent)` }} />
+            <div className="flex items-center gap-2 px-4 relative z-10">
+              <SidebarTrigger className="-ml-1" style={{ color: C.dim }} />
+              <button onClick={() => router.push("/dashboard")}
+                className="text-xs hidden sm:flex font-mono px-2 py-1 transition-colors" style={{ color: C.dim }}
+                onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
+                onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>Home</button>
+              <Separator orientation="vertical" className="h-4 hidden sm:block" style={{ backgroundColor: C.border }} />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink href="#" className="text-xs hidden sm:block font-mono uppercase tracking-wider" style={{ color: C.dim }}>
+                      Applications
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator><ChevronRight size={10} style={{ color: C.muted }} /></BreadcrumbSeparator>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-xs font-mono tracking-widest uppercase" style={{ color: C.accent }}>
+                      Modules
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
+          </header>
+
+          {/* Body */}
+          <div className="flex-1 overflow-hidden flex gap-3 px-4 py-4 min-h-0">
+
+            {/* Left: Top 5 */}
+            <div className="w-60 shrink-0 flex flex-col border overflow-hidden"
+              style={{ borderColor: C.border, backgroundColor: C.panel }}>
+              <div className="flex items-center gap-2 px-3 py-2.5 border-b shrink-0"
+                style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                <Star className="size-3.5" style={{ color: "#fbbf24" }} />
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.accent }}>
+                  Top 5 Visited
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {topVisited.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-2 px-4 text-center">
+                    <Star className="size-7 opacity-10" style={{ color: C.accent }} />
+                    <p className="text-[10px] font-mono" style={{ color: C.dim }}>No visits yet.</p>
+                  </div>
+                ) : topVisited.map((m, i) => {
+                  const Icon  = CAT_ICON[m.category] ?? Globe;
+                  const color = CAT_COLOR[m.category] ?? C.accent;
+                  return (
+                    <button key={m._id} onClick={() => handleVisit(m.url)}
+                      className="w-full flex items-start gap-2 px-3 py-2.5 border-b text-left transition-colors"
+                      style={{ borderColor: C.border, backgroundColor: "transparent" }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)")}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center border mt-0.5"
+                        style={{ borderColor: color + "40", backgroundColor: color + "10" }}>
+                        <Icon className="size-3" style={{ color }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold truncate" style={{ color: C.text }}>{m.title}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Star className="size-2.5" style={{ color: "#fbbf24" }} />
+                          <span className="text-[9px] font-mono" style={{ color: C.dim }}>
+                            {visitCounts[m.url] ?? 0} visit{(visitCounts[m.url] ?? 0) !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-mono shrink-0 mt-1" style={{ color: C.muted }}>#{i + 1}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {lastVisitedUrl && (
+                <div className="shrink-0 border-t px-3 py-2" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                  <p className="text-[9px] uppercase tracking-widest" style={{ color: C.muted }}>Last visited</p>
+                  <p className="text-[9px] font-mono truncate mt-0.5" style={{ color: C.dim }}>
+                    {modules.find(m => m.url === lastVisitedUrl)?.title ?? lastVisitedUrl}
+                  </p>
                 </div>
-              </header>
+              )}
+            </div>
 
-              {/* Two column layout */}
+            {/* Right: Table */}
+            <div className="flex-1 flex flex-col border overflow-hidden min-w-0"
+              style={{ borderColor: C.border, backgroundColor: C.panel }}>
 
-              <div className="flex gap-2 p-6 pt-2 h-[calc(100vh-64px)] overflow-hidden">
-                {/* Left column: Top 5 Most Visited */}
-                <Card className="w-1/3 border-gray-200 shadow-md overflow-hidden flex flex-col">
-                  <CardHeader className="pb-2 flex items-left gap-2">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Star className="w-5 h-5 text-yellow-400" />
-                      Top 5 Most Visited
-                    </CardTitle>
-                  </CardHeader>
-
-                  <ScrollArea className="flex-grow">
-                    <CardContent className="p-2">
-                      {topVisited.length === 0 ? (
-                        <p className="text-center text-gray-500 italic p-4">No visits yet.</p>
-                      ) : (
-                        <ul>
-                          {topVisited.map((item) => (
-                            <li
-                              key={item.id}
-                              onClick={() => handleVisit(item.url)}
-                              title={`${item.description} (Visited ${visitCounts[item.url] ?? 0} times)`}
-                              className="cursor-pointer px-4 py-3 flex justify-between items-center rounded-md border-b"
-                            >
-                              <span className="font-medium truncate">{item.title}</span>
-                              <Badge variant="outline" className="text-xs flex items-center gap-1">
-                                <Star className="w-3 h-3 text-yellow-400" />
-                                {visitCounts[item.url] ?? 0} visits
-                              </Badge>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </CardContent>
-                  </ScrollArea>
-                </Card>
-
-                {/* Right column: Search + List */}
-                <Card className="w-2/3 flex flex-col shadow-md border-gray-200">
-                  <CardContent className="flex flex-col p-6 space-y-4">
-                    <Input
-                      type="search"
-                      placeholder="Search by title or description..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="max-w-lg"
-                    />
-
-                    <ScrollArea className="flex-grow rounded-md border border-gray-200 p-2">
-                      <Table className="min-w-full">
-                        <TableCaption className="text-muted-foreground">
-                          List of applications and sites (filtered: {filteredItems.length} result
-                          {filteredItems.length !== items.length ? "s" : ""})
-                        </TableCaption>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-left">Title</TableHead>
-                            <TableHead className="text-left">Description</TableHead>
-                            <TableHead className="text-center">Link</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {paginatedItems.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={3} className="text-center text-muted-foreground py-8 italic">
-                                No results found.
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            paginatedItems.map((item) => (
-                              <TableRow
-                                key={item.id}
-                                className="cursor-pointer"
-                              >
-                                <TableCell className="font-semibold">{item.title}</TableCell>
-                                <TableCell>{item.description}</TableCell>
-                                <TableCell className="text-center">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleVisit(item.url)}
-                                    className="inline-flex items-center gap-1"
-                                  >
-                                    Open Link <ExternalLink className="w-4 h-4" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
-
-                    <Pagination page={page} totalPages={totalPages} onPageChangeAction={setPage} />
-
-                  </CardContent>
-                </Card>
+              {/* Toolbar */}
+              <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b flex-wrap"
+                style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                <div className="relative flex-1 max-w-xs">
+                  <Search className="absolute left-2.5 top-2.5 size-3.5" style={{ color: C.dim }} />
+                  <input placeholder="Search modules…" value={search} onChange={e => setSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 h-8 text-[11px] focus:outline-none"
+                    style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+                    onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                    onBlur={e  => (e.currentTarget.style.borderColor = C.border)} />
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {allCats.map(cat => {
+                    const active = category === cat;
+                    const color  = cat === "All" ? C.accent : (CAT_COLOR[cat] ?? C.accent);
+                    return (
+                      <button key={cat} onClick={() => setCategory(cat)}
+                        className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border transition-colors"
+                        style={{ borderColor: active ? color : C.border, color: active ? color : C.dim, backgroundColor: active ? color + "15" : "transparent" }}>
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <span className="text-[9px] font-mono" style={{ color: C.dim }}>{filtered.length} modules</span>
+                  <button onClick={() => { setEditing(null); setFormOpen(true); }}
+                    className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                    style={{ backgroundColor: "rgba(232,99,10,0.1)", borderColor: C.accent, color: C.accent }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.2)")}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.1)")}>
+                    <Plus className="size-3" /> New Module
+                  </button>
+                  <Pagination page={page} totalPages={totalPages} onPageChangeAction={setPage} />
+                </div>
               </div>
 
-            </SidebarInset>
-          </SidebarProvider>
-        </ProtectedPageWrapper>
-      </FormatProvider>
-    </UserProvider>
+              {/* Table */}
+              <div className="flex-1 overflow-auto">
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-full gap-2">
+                    <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
+                    <span className="text-[10px] uppercase tracking-widest" style={{ color: C.dim }}>Loading…</span>
+                  </div>
+                ) : paginated.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-3">
+                    <Search className="size-7 opacity-10" style={{ color: C.accent }} />
+                    <p className="text-[10px] font-mono uppercase tracking-widest" style={{ color: C.dim }}>No results found</p>
+                  </div>
+                ) : (
+                  <table className="w-full border-collapse text-[11px]" style={{ fontFamily: C.font }}>
+                    <thead className="sticky top-0 z-10">
+                      <tr style={{ backgroundColor: C.panel, borderBottom: `1px solid ${C.border}` }}>
+                        {["#","Module","Category","Description","Visits","Actions"].map((h, i) => (
+                          <th key={h} className={`px-4 py-2.5 text-[9px] font-bold uppercase tracking-widest ${i === 5 ? "text-right" : "text-left"}`}
+                            style={{ color: `${C.accent}99`, borderRight: i < 5 ? `1px solid ${C.border}` : undefined }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginated.map((m, i) => {
+                        const Icon  = CAT_ICON[m.category] ?? Globe;
+                        const color = CAT_COLOR[m.category] ?? C.accent;
+                        const visits = visitCounts[m.url] ?? 0;
+                        const rowIdx = (page - 1) * ROWS + i + 1;
+                        return (
+                          <tr key={m._id}
+                            style={{ backgroundColor: i % 2 === 0 ? C.bg : C.panel, borderBottom: `1px solid ${C.border}`, cursor: "pointer" }}
+                            onClick={() => handleVisit(m.url)}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)")}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? C.bg : C.panel)}>
+                            <td className="px-4 py-2.5 text-center" style={{ borderRight: `1px solid ${C.border}`, color: C.muted }}>{rowIdx}</td>
+                            <td className="px-4 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <p className="font-bold" style={{ color: C.text }}>{m.title}</p>
+                              <p className="text-[9px] font-mono mt-0.5 truncate max-w-[160px]" style={{ color: C.dim }}>
+                                {m.url.replace(/^https?:\/\//, "").split("/")[0]}
+                              </p>
+                            </td>
+                            <td className="px-4 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold uppercase border"
+                                style={{ borderColor: color + "40", color, backgroundColor: color + "10" }}>
+                                <Icon className="size-2.5" />{m.category}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 max-w-[220px]" style={{ borderRight: `1px solid ${C.border}`, color: C.dim }}>
+                              <p className="truncate">{m.description}</p>
+                            </td>
+                            <td className="px-4 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${C.border}` }}>
+                              {visits > 0
+                                ? <span className="inline-flex items-center gap-1 text-[10px] font-mono" style={{ color: "#fbbf24" }}><Star className="size-3" />{visits}</span>
+                                : <span className="text-[10px] font-mono" style={{ color: C.muted }}>—</span>}
+                            </td>
+                            <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button onClick={() => handleVisit(m.url)}
+                                  className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase border transition-colors"
+                                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                                  <ExternalLink className="size-2.5" /> Open
+                                </button>
+                                <button onClick={() => { setEditing(m); setFormOpen(true); }}
+                                  className="flex items-center justify-center h-6 w-6 border transition-colors"
+                                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                                  <Pencil className="size-3" />
+                                </button>
+                                <button onClick={() => handleDelete(m._id)} disabled={deleting === m._id}
+                                  className="flex items-center justify-center h-6 w-6 border transition-colors disabled:opacity-40"
+                                  style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
+                                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#f87171"; e.currentTarget.style.color = "#f87171"; }}
+                                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                                  {deleting === m._id ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+
+        </SidebarInset>
+      </SidebarProvider>
+
+      <ModuleForm
+        open={formOpen}
+        onClose={() => { setFormOpen(false); setEditing(null); }}
+        initial={editing}
+        onSaved={handleSaved}
+      />
+    </ProtectedPageWrapper></FormatProvider></UserProvider>
   );
 }

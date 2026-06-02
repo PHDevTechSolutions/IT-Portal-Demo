@@ -43,9 +43,9 @@ export function TwoFactorSetup() {
   const [loading,     setLoading]     = useState(false);
   const [copied,      setCopied]      = useState(false);
 
-  /* ── Load current 2FA status ── */
+  /* ── Load current 2FA status — always fresh from DB ── */
   useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
+    fetch("/api/auth/totp/status", { cache: "no-store" })
       .then(r => r.json())
       .then(d => setTotpEnabled(!!d.totpEnabled))
       .catch(() => setTotpEnabled(false));
@@ -80,7 +80,8 @@ export function TwoFactorSetup() {
         body: JSON.stringify({ code: code.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      console.log("[TwoFactorSetup] confirm response:", res.status, data);
+      if (!res.ok) throw new Error(data.message ?? `Error ${res.status}`);
       toast.success("2FA enabled. Your account is now protected.");
       setTotpEnabled(true);
       setStep("idle");
