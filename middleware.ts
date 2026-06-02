@@ -38,6 +38,10 @@ const PUBLIC_PREFIXES = [
   "/api/check-session",
   "/api/auth/totp/verify",
   "/api/auth/biometric",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/auth/forgot-password",
+  "/auth/reset-password",
 ];
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
