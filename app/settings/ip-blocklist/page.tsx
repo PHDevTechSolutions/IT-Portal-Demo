@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   SidebarProvider, SidebarInset, SidebarTrigger,
@@ -14,9 +14,8 @@ import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import { Pagination } from "@/components/app-pagination";
 import { toast } from "sonner";
 import {
-  ShieldOff, Search, Trash2, RefreshCw,
-  Loader2, ChevronRight, AlertTriangle,
-  Monitor, Globe, Clock, BarChart3,
+  ShieldOff, ShieldCheck, Search, Trash2, RefreshCw,
+  Loader2, ChevronRight, Monitor, Globe, Clock, BarChart3,
 } from "lucide-react";
 
 const C = {
@@ -27,6 +26,7 @@ const C = {
   dim:    "#4a6070",
   text:   "#c8d8e8",
   accent: "#e8630a",
+  green:  "#34d399",
   red:    "#f87171",
   font:   "'JetBrains Mono','Fira Code',monospace",
 };
@@ -51,44 +51,54 @@ const PAGE_SIZE = 50;
 export default function IPBlocklistPage() {
   const router = useRouter();
 
-  const [logs,       setLogs]       = useState<LogEntry[]>([]);
-  const [topIps,     setTopIps]     = useState<TopIp[]>([]);
-  const [total,      setTotal]      = useState(0);
-  const [page,       setPage]       = useState(1);
-  const [search,     setSearch]     = useState("");
-  const [isLoading,  setIsLoading]  = useState(true);
-  const [clearing,   setClearing]   = useState(false);
-  const [deleting,   setDeleting]   = useState<string | null>(null);
+  const [logs,      setLogs]      = useState<LogEntry[]>([]);
+  const [topIps,    setTopIps]    = useState<TopIp[]>([]);
+  const [total,     setTotal]     = useState(0);
+  const [page,      setPage]      = useState(1);
+  const [search,    setSearch]    = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [clearing,  setClearing]  = useState(false);
+  const [deleting,  setDeleting]  = useState<string | null>(null);
+  const [whitelisting, setWhitelisting] = useState<string | null>(null); // ip being whitelisted
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const load = async (p = page, q = search) => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: String(p), pageSize: String(PAGE_SIZE), search: q,
-      });
+      const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE), search: q });
       const res  = await fetch(`/api/settings/ip-blocklist?${params}`);
       const json = await res.json();
-      if (json.success) {
-        setLogs(json.logs);
-        setTotal(json.total);
-        setTopIps(json.topIps ?? []);
-      }
+      if (json.success) { setLogs(json.logs); setTotal(json.total); setTopIps(json.topIps ?? []); }
     } catch { toast.error("Failed to load blocklist."); }
-    finally  { setIsLoading(false); }
+    finally { setIsLoading(false); }
   };
 
   useEffect(() => { load(1, ""); }, []);
 
-  const handleSearch = (q: string) => {
-    setSearch(q); setPage(1); load(1, q);
+  const handleSearch = (q: string) => { setSearch(q); setPage(1); load(1, q); };
+  const handlePageChange = (p: number) => { setPage(p); load(p, search); };
+
+  /* ── Add to Whitelist ── */
+  const handleAddToWhitelist = async (ip: string, label = "") => {
+    setWhitelisting(ip);
+    try {
+      const res  = await fetch("/api/settings/ip-whitelist", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ ip, label: label || `Added from Blocklist`, deviceId: "" }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      toast.success(`${ip} added to whitelist.`);
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to add to whitelist.");
+    } finally {
+      setWhitelisting(null);
+    }
   };
 
-  const handlePageChange = (p: number) => {
-    setPage(p); load(p, search);
-  };
-
+  /* ── Delete log entry ── */
   const handleDelete = async (id: string) => {
     setDeleting(id);
     try {
@@ -104,6 +114,7 @@ export default function IPBlocklistPage() {
     finally { setDeleting(null); }
   };
 
+  /* ── Clear All ── */
   const handleClearAll = async () => {
     if (!confirm("Clear all blocked IP logs? This cannot be undone.")) return;
     setClearing(true);
@@ -120,10 +131,8 @@ export default function IPBlocklistPage() {
     finally { setClearing(false); }
   };
 
-  const fmtTime = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleString("en-PH", { timeZone: "Asia/Manila", hour12: false });
-  };
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleString("en-PH", { timeZone: "Asia/Manila", hour12: false });
 
   const parseUA = (ua: string) => {
     if (!ua) return "—";
@@ -131,8 +140,26 @@ export default function IPBlocklistPage() {
     if (ua.includes("Firefox")) return "Firefox";
     if (ua.includes("Safari"))  return "Safari";
     if (ua.includes("Edge"))    return "Edge";
-    return ua.slice(0, 30) + "…";
+    return ua.slice(0, 28) + "…";
   };
+
+  /* ── Whitelist button ── */
+  const WhitelistBtn = ({ ip }: { ip: string }) => (
+    <button
+      onClick={e => { e.stopPropagation(); handleAddToWhitelist(ip); }}
+      disabled={whitelisting === ip}
+      title={`Add ${ip} to whitelist`}
+      className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase border transition-colors disabled:opacity-40"
+      style={{ borderColor: `${C.green}40`, color: C.green, backgroundColor: "transparent" }}
+      onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${C.green}10`)}
+      onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+    >
+      {whitelisting === ip
+        ? <Loader2 className="size-2.5 animate-spin" />
+        : <ShieldCheck className="size-2.5" />}
+      Allow
+    </button>
+  );
 
   return (
     <ProtectedPageWrapper>
@@ -141,7 +168,6 @@ export default function IPBlocklistPage() {
         <SidebarInset className="flex flex-col h-svh overflow-hidden"
           style={{ backgroundColor: C.bg, color: C.text, fontFamily: C.font }}>
 
-          {/* Dot grid */}
           <div className="fixed inset-0 pointer-events-none"
             style={{ backgroundImage: `radial-gradient(circle, #1a2535 1px, transparent 1px)`, backgroundSize: "24px 24px", opacity: 0.12, zIndex: 0 }} />
 
@@ -191,6 +217,13 @@ export default function IPBlocklistPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => router.push("/settings/ip-whitelisting")}
+                className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
+                style={{ borderColor: `${C.green}40`, color: C.green, backgroundColor: "transparent" }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${C.green}10`)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+                <ShieldCheck className="size-3" /> Manage Whitelist
+              </button>
               <button onClick={() => load(page, search)} disabled={isLoading}
                 className="flex items-center gap-1.5 h-8 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
                 style={{ borderColor: C.border, color: C.dim, backgroundColor: "transparent" }}
@@ -218,7 +251,8 @@ export default function IPBlocklistPage() {
             {/* Top offenders */}
             {topIps.length > 0 && (
               <div className="border" style={{ borderColor: C.border, backgroundColor: C.panel }}>
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b"
+                  style={{ borderColor: C.border, backgroundColor: C.bg }}>
                   <BarChart3 className="size-3.5" style={{ color: C.red }} />
                   <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.red }}>
                     Top Blocked IPs
@@ -228,22 +262,19 @@ export default function IPBlocklistPage() {
                   {topIps.map((ip, i) => (
                     <div key={ip._id} className="flex items-center justify-between px-4 py-2.5">
                       <div className="flex items-center gap-3">
-                        <span className="text-[9px] font-bold w-4 text-center" style={{ color: C.muted }}>
-                          #{i + 1}
-                        </span>
+                        <span className="text-[9px] font-bold w-4 text-center" style={{ color: C.muted }}>#{i + 1}</span>
                         <Globe className="size-3.5 shrink-0" style={{ color: C.dim }} />
-                        <span className="text-[11px] font-mono font-bold" style={{ color: C.text }}>
-                          {ip._id}
-                        </span>
+                        <span className="text-[11px] font-mono font-bold" style={{ color: C.text }}>{ip._id}</span>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[9px] font-mono hidden sm:block" style={{ color: C.muted }}>
+                          {fmtTime(ip.lastSeen)}
+                        </span>
                         <span className="text-[10px] font-mono px-2 py-0.5 border"
                           style={{ borderColor: `${C.red}40`, color: C.red, backgroundColor: `${C.red}10` }}>
                           {ip.count} attempt{ip.count !== 1 ? "s" : ""}
                         </span>
-                        <span className="text-[9px] font-mono hidden sm:block" style={{ color: C.muted }}>
-                          {fmtTime(ip.lastSeen)}
-                        </span>
+                        <WhitelistBtn ip={ip._id} />
                       </div>
                     </div>
                   ))}
@@ -255,15 +286,12 @@ export default function IPBlocklistPage() {
             <div className="flex items-center gap-2">
               <div className="relative flex-1 max-w-xs">
                 <Search className="absolute left-2.5 top-2.5 size-3.5" style={{ color: C.dim }} />
-                <input
-                  placeholder="Search IP, path, browser…"
-                  value={search}
+                <input placeholder="Search IP, path, browser…" value={search}
                   onChange={e => handleSearch(e.target.value)}
                   className="w-full pl-8 pr-3 h-8 text-[11px] focus:outline-none"
                   style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
                   onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
-                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
-                />
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)} />
               </div>
               <span className="text-[10px] font-mono" style={{ color: C.dim }}>
                 {total.toLocaleString()} log{total !== 1 ? "s" : ""}
@@ -289,9 +317,10 @@ export default function IPBlocklistPage() {
                 <table className="w-full border-collapse text-[11px]" style={{ fontFamily: C.font }}>
                   <thead className="sticky top-0 z-10">
                     <tr style={{ backgroundColor: C.panel, borderBottom: `1px solid ${C.border}` }}>
-                      {["IP Address","Path Attempted","Browser","Device ID","Time",""].map((h, i) => (
-                        <th key={i} className={`px-4 py-2.5 text-[9px] font-bold uppercase tracking-widest ${i === 5 ? "w-10" : "text-left"}`}
-                          style={{ color: `${C.red}90`, borderRight: i < 5 ? `1px solid ${C.border}` : undefined }}>
+                      {["IP Address","Path Attempted","Browser","Device ID","Time","Whitelist",""].map((h, i) => (
+                        <th key={i}
+                          className={`px-4 py-2.5 text-[9px] font-bold uppercase tracking-widest ${i === 6 ? "w-10" : "text-left"}`}
+                          style={{ color: `${C.red}90`, borderRight: i < 6 ? `1px solid ${C.border}` : undefined }}>
                           {h}
                         </th>
                       ))}
@@ -306,13 +335,13 @@ export default function IPBlocklistPage() {
                         <td className="px-4 py-2.5 whitespace-nowrap font-mono"
                           style={{ borderRight: `1px solid ${C.border}` }}>
                           <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: C.red }} />
+                            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: C.red }} />
                             <span style={{ color: C.red }}>{log.ip}</span>
                           </div>
                         </td>
 
                         {/* Path */}
-                        <td className="px-4 py-2.5 max-w-[200px]"
+                        <td className="px-4 py-2.5 max-w-[180px]"
                           style={{ borderRight: `1px solid ${C.border}`, color: C.dim }}>
                           <p className="truncate font-mono text-[10px]">{log.path || "/"}</p>
                         </td>
@@ -339,6 +368,12 @@ export default function IPBlocklistPage() {
                             <Clock className="size-3 shrink-0" style={{ color: C.muted }} />
                             {fmtTime(log.blockedAt)}
                           </div>
+                        </td>
+
+                        {/* Whitelist button */}
+                        <td className="px-4 py-2.5 whitespace-nowrap"
+                          style={{ borderRight: `1px solid ${C.border}` }}>
+                          <WhitelistBtn ip={log.ip} />
                         </td>
 
                         {/* Delete */}
