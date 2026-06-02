@@ -17,8 +17,9 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl;
-    const ip       = searchParams.get("ip")       ?? "";
-    const deviceId = searchParams.get("deviceId") ?? "";
+    const ip        = searchParams.get("ip")        ?? "";
+    const deviceId  = searchParams.get("deviceId")  ?? "";
+    const sessionId = searchParams.get("sessionId") ?? "";
 
     const db   = await connectToDatabase();
     const meta = await db.collection("ip_whitelist_meta").findOne({ key: "global" });
@@ -26,6 +27,31 @@ export async function GET(req: NextRequest) {
     // If whitelist is disabled globally — everyone allowed
     if (!meta?.enabled) {
       return NextResponse.json({ allowed: true, reason: "Whitelist disabled" });
+    }
+
+    // Localhost always allowed in development — never lock yourself out of dev
+    if (
+      process.env.NODE_ENV === "development" ||
+      ip === "127.0.0.1" ||
+      ip === "::1" ||
+      ip === "localhost"
+    ) {
+      return NextResponse.json({ allowed: true, reason: "Localhost bypass" });
+    }
+
+    // SuperAdmin bypass — check if this session belongs to a SuperAdmin
+    // We look up the session cookie value (userId) and check their Role
+    if (sessionId) {
+      try {
+        const { ObjectId } = await import("mongodb");
+        const user = await db.collection("users").findOne(
+          { _id: new ObjectId(sessionId) },
+          { projection: { Role: 1 } },
+        );
+        if (user?.Role === "SuperAdmin") {
+          return NextResponse.json({ allowed: true, reason: "SuperAdmin bypass" });
+        }
+      } catch { /* ignore — fall through to normal check */ }
     }
 
     // Find a matching enabled entry

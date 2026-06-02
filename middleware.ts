@@ -54,40 +54,51 @@ export async function middleware(req: NextRequest) {
   }
 
   // ── Layer 1: IP Whitelist check ───────────────────────────────────────────
-  // We check whether the `ip-allowed` cookie is present.
-  // This cookie is set by /api/login ONLY after the IP passes the whitelist check.
-  // If the user has no cookie at all and tries to access any page (including /login),
-  // we need to perform a live IP check so they can't even see the login page.
+  // Skip entirely in development or when accessed via localhost
+  const host = req.headers.get("host") ?? "";
+  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
 
-  const ipAllowedCookie = req.cookies.get("ip-allowed");
-  const sessionCookie   = req.cookies.get("session");
+  if (!isLocalhost) {
+    const ipAllowedCookie = req.cookies.get("ip-allowed");
 
-  // If they have ip-allowed cookie → they already passed the check at login time
-  // If they have NO ip-allowed cookie, do a live check against the whitelist API
-  if (!ipAllowedCookie?.value) {
-    try {
-      const clientIp = (
-        req.headers.get("x-forwarded-for")?.split(",")[0] ||
-        req.headers.get("x-real-ip") ||
-        "unknown"
-      ).trim();
+    if (!ipAllowedCookie?.value) {
+      try {
+        const clientIp = (
+          req.headers.get("x-forwarded-for")?.split(",")[0] ||
+          req.headers.get("x-real-ip") ||
+          "unknown"
+        ).trim();
 
-      const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-      const checkUrl = `${appUrl}/api/settings/ip-whitelist/check?ip=${encodeURIComponent(clientIp)}`;
+        const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+        const sessionId = req.cookies.get("session")?.value ?? "";
+        const checkUrl = `${appUrl}/api/settings/ip-whitelist/check?ip=${encodeURIComponent(clientIp)}&sessionId=${encodeURIComponent(sessionId)}`;
 
-      const checkRes  = await fetch(checkUrl, { cache: "no-store" });
-      const checkData = await checkRes.json();
+        const checkRes  = await fetch(checkUrl, { cache: "no-store" });
+        const checkData = await checkRes.json();
 
-      if (!checkData.allowed) {
-        // Redirect to the blocked page
-        return NextResponse.redirect(new URL("/blocked", req.url));
+        if (!checkData.allowed) {
+          // Log the blocked attempt (fire-and-forget)
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+          fetch(`${appUrl}/api/settings/ip-blocklist`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ip:        clientIp,
+              path:      pathname,
+              userAgent: req.headers.get("user-agent") ?? "",
+            }),
+          }).catch(() => {});
+
+          return NextResponse.redirect(new URL("/blocked", req.url));
+        }
+      } catch {
+        // Fail open on check error
       }
-    } catch {
-      // On check error → fail open (don't lock out everyone if DB is down)
     }
   }
 
   // ── Layer 2: Session check ────────────────────────────────────────────────
+  const sessionCookie   = req.cookies.get("session");
   const needsProtection = PROTECTED_PREFIXES.some(p => pathname.startsWith(p));
 
   if (!needsProtection) return NextResponse.next();

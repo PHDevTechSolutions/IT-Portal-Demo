@@ -17,33 +17,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Email, Password and deviceId are required." });
   }
 
-  // ── IP Whitelist check ────────────────────────────────────────────────────
+  // ── IP Whitelist check (production only) ─────────────────────────────────
   const clientIp = (
     req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
     req.socket.remoteAddress ||
     ""
   ).trim();
 
-  let ipAllowed = true;
-  try {
-    const checkRes = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/settings/ip-whitelist/check?ip=${encodeURIComponent(clientIp)}&deviceId=${encodeURIComponent(deviceId)}`,
-    );
-    const checkData = await checkRes.json();
-    if (!checkData.allowed) {
-      return res.status(403).json({
-        message: checkData.reason ?? "Access denied. Your IP or device is not whitelisted.",
-        blocked: true,
-      });
-    }
-  } catch {
-    // Fail open on check error
-  }
-  const db = await connectToDatabase();
+  const isLocalhost = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1";
+
+  // Fetch user first so we can check their Role before applying IP whitelist
+  const db    = await connectToDatabase();
   const users = db.collection("users");
-  const securityAlerts = db.collection("security_alerts"); // Collection for alerts
+  const securityAlerts = db.collection("security_alerts");
 
   const user = await users.findOne({ Email });
+
+  // SuperAdmin always bypasses the IP whitelist
+  const isSuperAdmin = user?.Role === "SuperAdmin";
+
+  if (!isLocalhost && !isSuperAdmin) {
+    try {
+      const checkRes = await fetch(
+        `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/settings/ip-whitelist/check?ip=${encodeURIComponent(clientIp)}&deviceId=${encodeURIComponent(deviceId)}`,
+      );
+      const checkData = await checkRes.json();
+      if (!checkData.allowed) {
+        // Log the blocked login attempt to the blocklist
+        try {
+          await fetch(
+            `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/settings/ip-blocklist`,
+            {
+              method:  "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ip:        clientIp,
+                path:      "/api/login",
+                userAgent: req.headers["user-agent"] ?? "",
+                deviceId,
+              }),
+            }
+          );
+        } catch { /* fire-and-forget */ }
+
+        return res.status(403).json({
+          message: checkData.reason ?? "Access denied. Your IP or device is not whitelisted.",
+          blocked: true,
+        });
+      }
+    } catch {
+      // Fail open on check error
+    }
+  }
+
+  let ipAllowed = true;
+
   if (!user) {
     return res.status(401).json({ message: "Invalid credentials." });
   }

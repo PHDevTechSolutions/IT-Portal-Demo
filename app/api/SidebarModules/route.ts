@@ -173,6 +173,7 @@ const DEFAULT_SIDEBAR_MODULES = [
       { title: "General",          url: "/settings/general" },
       { title: "AI Credentials",   url: "/settings/ai-credentials" },
       { title: "IP Whitelisting",  url: "/settings/ip-whitelisting" },
+      { title: "IP Blocklist",     url: "/settings/ip-blocklist" },
       { title: "Database Backup",  url: "/admin/backup-database" },
     ],
   },
