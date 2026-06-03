@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
       newLines = (content ?? "").split("\n");
 
     } else if (type === "patch") {
-      // Replace lines startLine..endLine (1-indexed)
-      const s = Math.max(1, startLine ?? 1) - 1;
-      const e = Math.min(lines.length, endLine ?? lines.length);
+      // Replace lines startLine..endLine (1-indexed, inclusive)
+      const s = Math.max(0, (startLine ?? 1) - 1);       // convert to 0-index
+      const e = Math.min(lines.length, endLine ?? s + 1); // exclusive end
       const newChunk = (content ?? "").split("\n");
       newLines = [...lines.slice(0, s), ...newChunk, ...lines.slice(e)];
 

@@ -95,33 +95,31 @@ When modifying code, respond with a STRUCTURED TASK LIST using EXACTLY this form
 Description: [what and why]
 \`\`\`patch
 FILE: relative/path/to/file.tsx
-LINES: 12-15
+LINES: FULL
 ---
-replacement code for lines 12-15 only
+complete new file content here
 \`\`\`
 
 **Task 2: [title]**
 Description: [what and why]
 \`\`\`patch
-FILE: relative/path/to/file.tsx
+FILE: relative/path/to/other-file.tsx
 LINES: FULL
 ---
-complete file content
+complete new file content here
 \`\`\`
 
 ### Feature Recommendations
 1. [name] — description
 2. [name] — description
-3. [name] — description
 
-LINES format:
-- "12-15" = replace lines 12 to 15
-- "FULL" = replace entire file  
-- "INSERT_AFTER:42" = insert after line 42
-- "DELETE:12-15" = delete lines 12-15
+CRITICAL RULES:
+- ALWAYS use LINES: FULL — never use line numbers (they cause duplication bugs)
+- Each task = one file. If multiple changes to same file, combine into ONE task
+- Return the COMPLETE file content after the --- separator. Never truncate.
+- No placeholders like "// ... rest of code"
+- For questions (no code change), respond normally without the task format.`;
 
-Rules: Be surgical. Only change what needs changing. No placeholders. Accurate line numbers.
-For questions (no code change), respond normally without the task format.`;
 
 /* ─── FolderRow ───────────────────────────────────────────────────── */
 function FolderRow({ entry, depth, onSelect, selectedPath, onLoadDir, dirCache }: {
@@ -318,6 +316,18 @@ export default function TrainingGroundPage() {
   const [ollamaOffline, setOllamaOffline] = useState(false);
   const [copied,        setCopied]        = useState<string | null>(null);
   const [showModels,    setShowModels]    = useState(false);
+  const modelDropRef = useRef<HTMLDivElement>(null);
+
+  // Close model dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (modelDropRef.current && !modelDropRef.current.contains(e.target as Node)) {
+        setShowModels(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const [rootEntries, setRootEntries] = useState<any[]>([]);
   const [dirCache,    setDirCache]    = useState<Record<string, any[]>>({});
@@ -399,7 +409,11 @@ export default function TrainingGroundPage() {
       if (selectedFile?.path === task.file || filePath === task.file) {
         const fr = await fetch(`/api/ai/files?path=${encodeURIComponent(task.file)}`);
         const fd = await fr.json();
-        setFileContent(fd.content ?? "");
+        const newContent = fd.content ?? "";
+        setFileContent(newContent);
+        setFilePath(task.file);
+        // Update the system context so subsequent patches use correct line numbers
+        // (already handled via fileContent state which is re-injected on next send)
       }
 
       updateTask({ status: "done" });
@@ -415,9 +429,24 @@ export default function TrainingGroundPage() {
   };
 
   const handleApplyAll = async (tasks: Task[], messageId: string) => {
-    for (const task of tasks.filter(t => t.status === "pending")) {
-      const ok = await applyTask(task, messageId);
-      if (!ok) { toast.error(`Task ${task.num} failed — stopping.`); break; }
+    // Group tasks by file
+    const byFile = new Map<string, Task[]>();
+    for (const t of tasks.filter(t => t.status === "pending")) {
+      if (!byFile.has(t.file)) byFile.set(t.file, []);
+      byFile.get(t.file)!.push(t);
+    }
+
+    // For each file, apply tasks in order and re-read between each
+    for (const [file, fileTasks] of byFile) {
+      for (const task of fileTasks) {
+        const ok = await applyTask(task, messageId);
+        if (!ok) {
+          toast.error(`Task ${task.num} failed — stopping.`);
+          return;
+        }
+        // Small delay to let filesystem write settle
+        await new Promise(r => setTimeout(r, 100));
+      }
     }
     toast.success("All tasks applied.");
   };
@@ -526,32 +555,6 @@ export default function TrainingGroundPage() {
               {ollamaOffline && !aiSource && (
                 <span className="text-[9px] px-2 py-0.5 border" style={{ borderColor: "#f8717140", color: "#f87171" }}>Ollama Offline</span>
               )}
-              {models.length > 0 && (
-                <div className="relative">
-                  <button onClick={() => setShowModels(v => !v)}
-                    className="flex items-center gap-1.5 h-7 px-2 text-[10px] font-bold uppercase border"
-                    style={{ borderColor: showModels ? C.accent : C.border, color: showModels ? C.accent : C.dim }}>
-                    <Sparkles className="size-3" />
-                    <span className="max-w-[120px] truncate">{selectedModel}</span>
-                    <ChevronDown className="size-2.5" />
-                  </button>
-                  {showModels && (
-                    <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] border"
-                      style={{ borderColor: C.border, backgroundColor: C.panel }}>
-                      {models.map(m => (
-                        <button key={m.name} onClick={() => { setSelectedModel(m.name); setShowModels(false); }}
-                          className="w-full flex items-center justify-between px-3 py-2 border-b last:border-b-0 transition-colors"
-                          style={{ borderColor: C.border, backgroundColor: selectedModel === m.name ? "rgba(232,99,10,0.08)" : "transparent", color: selectedModel === m.name ? C.accent : C.text }}
-                          onMouseEnter={e => { if (selectedModel !== m.name) e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)"; }}
-                          onMouseLeave={e => { if (selectedModel !== m.name) e.currentTarget.style.backgroundColor = "transparent"; }}>
-                          <span className="text-[10px] font-mono">{m.name}</span>
-                          {m.size && <span className="text-[9px] ml-2" style={{ color: C.muted }}>{fmtBytes(m.size)}</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
               {messages.length > 0 && (
                 <button onClick={() => setMessages([])}
                   className="flex items-center gap-1 h-7 px-2 text-[10px] uppercase border transition-colors"
@@ -625,19 +628,49 @@ export default function TrainingGroundPage() {
                     <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
                   </div>
                 ) : fileContent ? (
-                  <pre className="text-[11px] p-4 leading-5 min-h-full"
-                    style={{ color: C.text, fontFamily: C.font, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {fileContent.split("\n").map((line, i) => (
-                      <div key={i} className="flex gap-3">
-                        <span className="select-none w-8 text-right shrink-0" style={{ color: C.muted, fontSize: 10 }}>{i + 1}</span>
-                        <span>{line}</span>
-                      </div>
-                    ))}
-                  </pre>
+                  <div className="relative h-full flex">
+                    {/* Line numbers */}
+                    <div className="select-none text-right pt-4 pb-4 pr-2 pl-3 shrink-0 overflow-hidden"
+                      style={{ color: C.muted, fontSize: 10, fontFamily: C.font, lineHeight: "20px", minWidth: 44, backgroundColor: C.panel }}>
+                      {fileContent.split("\n").map((_, i) => (
+                        <div key={i} style={{ height: 20 }}>{i + 1}</div>
+                      ))}
+                    </div>
+                    {/* Editable textarea */}
+                    <textarea
+                      value={fileContent}
+                      onChange={e => setFileContent(e.target.value)}
+                      spellCheck={false}
+                      className="flex-1 p-4 pl-2 text-[11px] focus:outline-none resize-none w-full"
+                      style={{
+                        backgroundColor: C.bg, border: "none",
+                        color: C.text, fontFamily: C.font,
+                        lineHeight: "20px", whiteSpace: "pre", overflowWrap: "normal",
+                        overflowX: "auto",
+                      }}
+                    />
+                    {/* Save button — shows when content changed */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res  = await fetch("/api/ai/write", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ path: filePath, content: fileContent }),
+                          });
+                          const json = await res.json();
+                          if (!json.success) throw new Error(json.error);
+                          toast.success("Saved.");
+                        } catch (err: any) { toast.error(err.message); }
+                      }}
+                      className="absolute bottom-3 right-3 flex items-center gap-1.5 h-7 px-3 text-[9px] font-bold uppercase border transition-colors"
+                      style={{ borderColor: C.accent, color: "#fff", backgroundColor: C.accent }}>
+                      Save
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-4">
                     <FileCode className="size-10 opacity-10" style={{ color: C.accent }} />
-                    <p className="text-[11px]" style={{ color: C.dim }}>Click a file to view its code</p>
+                    <p className="text-[11px]" style={{ color: C.dim }}>Click a file to view and edit its code</p>
                   </div>
                 )}
               </div>
@@ -646,10 +679,54 @@ export default function TrainingGroundPage() {
             {/* Col 3: Chat */}
             <div className="w-96 shrink-0 flex flex-col overflow-hidden" style={{ backgroundColor: C.panel }}>
               <div className="flex items-center gap-2 px-3 py-2.5 border-b shrink-0"
-                style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                style={{ borderColor: C.border, backgroundColor: C.bg, position: "relative", zIndex: 20 }}>
                 <Bot className="size-3.5" style={{ color: C.accent }} />
                 <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: C.accent }}>AI Chat</span>
-                {fileContent && <span className="ml-auto text-[8px] px-1.5 py-0.5 border" style={{ borderColor: "#34d39940", color: "#34d399", backgroundColor: "#34d39910" }}>File context active</span>}
+                <div className="ml-auto flex items-center gap-1.5">
+                  {aiSource && (
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-bold uppercase border"
+                      style={{ borderColor: "#34d39940", color: "#34d399", backgroundColor: "#34d39910" }}>
+                      <Zap className="size-2" />{aiSource === "ollama" ? "Ollama" : "Groq"}
+                    </span>
+                  )}
+                  {/* Model selector */}
+                  {models.length > 0 && (
+                    <div className="relative" ref={modelDropRef}>
+                      <button onClick={() => setShowModels(v => !v)}
+                        className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase border"
+                        style={{ borderColor: showModels ? C.accent : C.border, color: showModels ? C.accent : C.dim }}>
+                        <Sparkles className="size-2.5" />
+                        <span className="max-w-[80px] truncate">{selectedModel.split(":")[0]}</span>
+                        <ChevronDown className="size-2" />
+                      </button>
+                      {showModels && (
+                        <div className="absolute right-0 top-full mt-1 z-[200] min-w-[180px] border shadow-xl"
+                          style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                          {models.map(m => (
+                            <button key={m.name} onClick={() => { setSelectedModel(m.name); setShowModels(false); }}
+                              className="w-full flex items-center justify-between px-3 py-2 border-b last:border-b-0 transition-colors"
+                              style={{ borderColor: C.border, backgroundColor: selectedModel === m.name ? "rgba(232,99,10,0.08)" : "transparent", color: selectedModel === m.name ? C.accent : C.text }}
+                              onMouseEnter={e => { if (selectedModel !== m.name) e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)"; }}
+                              onMouseLeave={e => { if (selectedModel !== m.name) e.currentTarget.style.backgroundColor = "transparent"; }}>
+                              <span className="text-[10px] font-mono">{m.name}</span>
+                              {m.size && <span className="text-[9px] ml-2" style={{ color: C.muted }}>{fmtBytes(m.size)}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {messages.length > 0 && (
+                    <button onClick={() => setMessages([])} title="Clear chat"
+                      className="flex items-center justify-center h-6 w-6 border transition-colors"
+                      style={{ borderColor: C.border, color: C.dim }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#f87171"; e.currentTarget.style.color = "#f87171"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                      <Trash2 className="size-3" />
+                    </button>
+                  )}
+                  {fileContent && <span className="text-[8px] px-1.5 py-0.5 border" style={{ borderColor: "#34d39940", color: "#34d399", backgroundColor: "#34d39910" }}>ctx</span>}
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
