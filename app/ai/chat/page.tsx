@@ -1906,10 +1906,129 @@ function SaveableBlock({ block, targetFolder, index, total, onSaved }: {
   );
 }
 
+/* ─── Dir Group (collapsible directory row in Read Dir checklist) ── */
+function DirGroup({ dirName, files, allChecked, anyChecked, totalLines, readLines,
+  doneCount, coverage, onToggleDir, onToggleFile, selectedFolder }: {
+  dirName: string; files: DirFile[]; allChecked: boolean; anyChecked: boolean;
+  totalLines: number; readLines: number; doneCount: number; coverage: number | null;
+  onToggleDir: () => void; onToggleFile: (path: string) => void; selectedFolder: string | null;
+}) {
+  const [open, setOpen] = useState(true);
+  const allDone   = doneCount === files.length && files.length > 0;
+  const hasErrors = files.some(f => f.status === "error");
+
+  return (
+    <div className="border-b" style={{ borderColor: `${C.border}60` }}>
+      {/* Directory header row */}
+      <div className="flex items-center gap-1.5 px-2 py-1 cursor-pointer select-none"
+        style={{ backgroundColor: `${C.panel}` }}
+        onClick={() => setOpen(v => !v)}>
+        {/* Dir checkbox */}
+        <input type="checkbox"
+          checked={allChecked}
+          ref={el => { if (el) el.indeterminate = anyChecked && !allChecked; }}
+          onChange={e => { e.stopPropagation(); onToggleDir(); }}
+          onClick={e => e.stopPropagation()}
+          style={{ accentColor: C.accent, flexShrink: 0 }}
+        />
+        {/* Expand arrow */}
+        <ChevronRight className="size-2.5 shrink-0 transition-transform"
+          style={{ color: C.dim, transform: open ? "rotate(90deg)" : "none" }} />
+        {/* Folder icon + name */}
+        <Folder className="size-3 shrink-0" style={{ color: C.warn }} />
+        <span className="flex-1 text-[9px] font-mono font-bold truncate" style={{ color: C.text }}>
+          {dirName}
+        </span>
+        {/* Stats */}
+        <span className="text-[8px] shrink-0" style={{ color: C.muted }}>
+          {files.filter(f => f.checked).length}/{files.length}
+        </span>
+        {/* Coverage pill — shows after learning */}
+        {coverage !== null && (
+          <span className="text-[8px] px-1 border shrink-0"
+            style={{
+              borderColor: coverage === 100 ? `${C.success}40` : `${C.warn}40`,
+              color:       coverage === 100 ? C.success : C.warn,
+              backgroundColor: coverage === 100 ? `${C.success}08` : `${C.warn}08`,
+            }}>
+            {coverage}%
+          </span>
+        )}
+        {/* Done indicator */}
+        {allDone && !hasErrors && (
+          <CheckCircle2 className="size-2.5 shrink-0" style={{ color: C.success }} />
+        )}
+        {hasErrors && (
+          <AlertCircle className="size-2.5 shrink-0" style={{ color: C.error }} />
+        )}
+      </div>
+
+      {/* File rows */}
+      {open && files.map(f => {
+        const isFullRead  = f.totalLines > 0 && f.readLines >= f.totalLines;
+        const isSampled   = f.totalLines > 0 && f.readLines < f.totalLines;
+        return (
+          <label key={f.path}
+            className="flex items-center gap-1.5 pl-8 pr-2 py-0.5 cursor-pointer transition-colors"
+            style={{ borderTop: `1px solid ${C.border}20` }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${C.info}06`)}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+            <input type="checkbox" checked={f.checked}
+              onChange={() => onToggleFile(f.path)}
+              style={{ accentColor: C.accent, flexShrink: 0 }} />
+            {/* Status icon */}
+            <span className="shrink-0 w-3 flex items-center justify-center">
+              {f.status === "reading" && <Loader2 className="size-2.5 animate-spin" style={{ color: C.accent }} />}
+              {f.status === "done"    && <CheckCircle2 className="size-2.5" style={{ color: C.success }} />}
+              {f.status === "error"   && <AlertCircle  className="size-2.5" style={{ color: C.error   }} />}
+              {f.status === "idle"    && <File className="size-2.5" style={{ color: getFileColor(f.name) }} />}
+            </span>
+            {/* Filename */}
+            <span className="flex-1 text-[9px] font-mono truncate"
+              style={{ color: f.checked ? C.text : C.muted }}>
+              {f.name}
+            </span>
+            {/* Line count + coverage */}
+            {f.totalLines > 0 ? (
+              <span className="text-[8px] shrink-0 tabular-nums"
+                style={{ color: isSampled ? C.warn : C.success }}
+                title={isSampled
+                  ? `Sampled: ${f.readLines} of ${f.totalLines} lines read`
+                  : `Full: all ${f.totalLines} lines read`}>
+                {f.readLines}/{f.totalLines}L
+                {isSampled && " ~"}
+              </span>
+            ) : (
+              <span className="text-[8px] shrink-0 tabular-nums" style={{ color: C.muted }}>
+                {fmtFileSize(f.size)}
+              </span>
+            )}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+function fmtFileSize(b: number) {
+  if (b < 1024)        return `${b}B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)}KB`;
+  return `${(b / 1024 / 1024).toFixed(1)}MB`;
+}
+
 /* ─── Knowledge Base Panel ───────────────────────────────────────── */
 interface KnowledgeEntry { id: string; question: string; answer: string; tags: string[]; }
 
-interface DirFile { path: string; name: string; size: number; checked: boolean; status: "idle" | "reading" | "done" | "error"; }
+interface DirFile {
+  path:       string;
+  name:       string;
+  dir:        string;   // parent directory (relative)
+  size:       number;
+  totalLines: number;   // total lines in file (0 = not yet read)
+  readLines:  number;   // lines actually read (0 = not yet read)
+  checked:    boolean;
+  status:     "idle" | "reading" | "done" | "error";
+}
 
 function KnowledgePanel({
   onContextUpdate,
@@ -1980,7 +2099,18 @@ function KnowledgePanel({
           if (e.type === "file") {
             const ext = e.name.split(".").pop()?.toLowerCase() ?? "";
             const ok  = ["ts","tsx","js","jsx","css","html","json","md","mdx","py","txt","env","yaml","yml","sql","prisma","graphql"].includes(ext);
-            if (ok) entries.push({ path: e.path, name: e.name, size: e.size ?? 0, checked: true, status: "idle" });
+            if (ok) {
+              // Calculate relative dir from root
+              const relPath = e.path.replace(selectedFolder ?? "", "").replace(/^[/\\]/, "");
+              const relDir  = relPath.includes("/") || relPath.includes("\\")
+                ? relPath.replace(/[/\\][^/\\]+$/, "")
+                : "(root)";
+              entries.push({
+                path: e.path, name: e.name, dir: relDir,
+                size: e.size ?? 0, totalLines: 0, readLines: 0,
+                checked: true, status: "idle",
+              });
+            }
           } else if (e.type === "dir" && depth < 3) {
             entries.push(...await collect(e.path, depth + 1));
           }
@@ -2015,25 +2145,36 @@ function KnowledgePanel({
         const json = await res.json();
         const content = json.content ?? "";
         if (content.trim()) {
-          // For large files, take meaningful chunks:
-          // - First 2000 chars (imports, types, constants — the "structure")
-          // - Last 1000 chars (exports, final functions)
-          // - Middle sample every ~5000 chars
-          let extracted = content;
-          const MAX = 6000;
-          if (content.length > MAX) {
-            const head   = content.slice(0, 2500);
-            const tail   = content.slice(-1000);
-            // Sample 1 middle chunk
-            const midPos = Math.floor(content.length / 2);
-            const mid    = content.slice(midPos - 500, midPos + 1000);
-            extracted = `${head}\n\n// ... [${content.length} chars total — middle sample] ...\n\n${mid}\n\n// ... [end sample] ...\n\n${tail}`;
+          const allLines  = content.split("\n");
+          const totalLines = allLines.length;
+          const MAX_CHARS  = 6000;
+          let extracted    = content;
+          let readLines    = totalLines; // assume full unless sampled
+
+          if (content.length > MAX_CHARS) {
+            // Smart sampling: head + mid + tail
+            const head    = content.slice(0, 2500);
+            const tail    = content.slice(-1000);
+            const midPos  = Math.floor(content.length / 2);
+            const mid     = content.slice(midPos - 500, midPos + 1000);
+            extracted     = `${head}\n\n// ... [${totalLines} lines total — sampled] ...\n\n${mid}\n\n// ... [tail] ...\n\n${tail}`;
+            // Approximate lines read
+            readLines = Math.round(
+              (head.split("\n").length + mid.split("\n").length + tail.split("\n").length)
+            );
           }
-          // Get relative path from folder root
+
           const rel = f.path.replace(selectedFolder ?? "", "").replace(/^[/\\]/, "");
-          parts.push(`// FILE: ${rel}\n${extracted}`);
+          parts.push(`// FILE: ${rel} (${totalLines} lines${readLines < totalLines ? `, ${readLines} read` : ", full"})\n${extracted}`);
+
+          // Update file stats in checklist
+          setDirFiles(prev => prev.map(x => x.path === f.path
+            ? { ...x, status: "done", totalLines, readLines }
+            : x,
+          ));
+        } else {
+          setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "done", totalLines: 0, readLines: 0 } : x));
         }
-        setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "done" } : x));
       } catch {
         setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "error" } : x));
       }
@@ -2186,7 +2327,7 @@ function KnowledgePanel({
             </button>
           </div>
 
-          {/* File checklist */}
+          {/* File checklist — grouped by directory, collapsible */}
           <div className="flex-1 overflow-y-auto" style={{ minHeight: 60 }}>
             {dirLoading && (
               <div className="flex items-center justify-center py-4">
@@ -2196,36 +2337,43 @@ function KnowledgePanel({
             {!dirLoading && dirFiles.length === 0 && (
               <p className="text-[9px] px-3 py-3 text-center" style={{ color: C.muted }}>No readable files found</p>
             )}
-            {!dirLoading && dirFiles.map((f, i) => (
-              <label key={f.path}
-                className="flex items-center gap-2 px-3 py-1 cursor-pointer transition-colors border-b"
-                style={{ borderColor: `${C.border}40` }}
-                onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${C.info}05`)}
-                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-                <input
-                  type="checkbox"
-                  checked={f.checked}
-                  onChange={() => setDirFiles(prev => prev.map((x, j) => j === i ? { ...x, checked: !x.checked } : x))}
-                  className="shrink-0"
-                  style={{ accentColor: C.accent }}
-                />
-                {/* Status icon */}
-                <span className="shrink-0">
-                  {f.status === "reading" && <Loader2 className="size-2.5 animate-spin" style={{ color: C.accent }} />}
-                  {f.status === "done"    && <CheckCircle2 className="size-2.5" style={{ color: C.success }} />}
-                  {f.status === "error"   && <AlertCircle  className="size-2.5" style={{ color: C.error   }} />}
-                  {f.status === "idle"    && <File className="size-2.5" style={{ color: getFileColor(f.name) }} />}
-                </span>
-                <span className="flex-1 text-[9px] font-mono truncate" style={{ color: f.checked ? C.text : C.muted }}>
-                  {f.path.replace(selectedFolder ?? "", "").replace(/^[/\\]/, "")}
-                </span>
-                <span className="text-[8px] shrink-0"
-                  style={{ color: f.size > 6000 ? C.warn : C.muted }}
-                  title={f.size > 6000 ? "Large file — will be sampled (head+mid+tail)" : "Full file"}>
-                  {fmtSize(f.size)}{f.size > 6000 ? " ~" : ""}
-                </span>
-              </label>
-            ))}
+            {!dirLoading && (() => {
+              // Group files by directory
+              const groups = new Map<string, DirFile[]>();
+              for (const f of dirFiles) {
+                const g = groups.get(f.dir) ?? [];
+                g.push(f);
+                groups.set(f.dir, g);
+              }
+
+              return Array.from(groups.entries()).map(([dirName, files]) => {
+                const allChecked  = files.every(f => f.checked);
+                const anyChecked  = files.some(f => f.checked);
+                const totalLines  = files.reduce((s, f) => s + f.totalLines, 0);
+                const readLines   = files.reduce((s, f) => s + f.readLines, 0);
+                const doneCount   = files.filter(f => f.status === "done").length;
+                const coverage    = totalLines > 0 ? Math.round((readLines / totalLines) * 100) : null;
+
+                return (
+                  <DirGroup key={dirName} dirName={dirName} files={files}
+                    allChecked={allChecked} anyChecked={anyChecked}
+                    totalLines={totalLines} readLines={readLines}
+                    doneCount={doneCount} coverage={coverage}
+                    onToggleDir={() =>
+                      setDirFiles(prev => prev.map(f =>
+                        f.dir === dirName ? { ...f, checked: !allChecked } : f,
+                      ))
+                    }
+                    onToggleFile={(path) =>
+                      setDirFiles(prev => prev.map(f =>
+                        f.path === path ? { ...f, checked: !f.checked } : f,
+                      ))
+                    }
+                    selectedFolder={selectedFolder}
+                  />
+                );
+              });
+            })()}
           </div>
 
           {/* Learn footer */}
