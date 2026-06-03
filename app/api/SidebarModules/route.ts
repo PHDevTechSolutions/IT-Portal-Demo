@@ -207,11 +207,20 @@ const DEFAULT_SIDEBAR_MODULES = [
     description: "File and document management",
     items: [
       { title: "File Manager", url: "/documents/files" },
-      { title: "Templates", url: "/documents/templates" },
-      { title: "Approvals", url: "/documents/approvals" },
+      { title: "Templates",    url: "/documents/templates" },
+      { title: "Approvals",    url: "/documents/approvals" },
     ],
   },
   // 10. TOOLS
+  {
+    key: "ai-model",
+    title: "AI Model",
+    icon: "Bot",
+    description: "AI Training Ground and chat",
+    items: [
+      { title: "Training Ground", url: "/ai/chat" },
+    ],
+  },
   {
     key: "applications",
     title: "Applications",

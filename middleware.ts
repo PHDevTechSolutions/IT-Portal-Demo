@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 const PROTECTED_PREFIXES = [
   "/dashboard", "/taskflow", "/admin", "/settings",
   "/account", "/cloudflare", "/acculog", "/stash",
-  "/ticketing", "/application",
+  "/ticketing", "/application", "/documents", "/ai",
 ];
 
 const PUBLIC_PREFIXES = [
