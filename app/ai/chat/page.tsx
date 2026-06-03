@@ -840,6 +840,118 @@ function TerminalPanel({
     return C.text;
   };
 
+  /** Collapsible JSON value node — renders objects/arrays like DevTools */
+  const JsonNode = ({ value, depth = 0 }: { value: unknown; depth?: number }) => {
+    const [open, setOpen] = useState(depth < 2);
+    const indent = depth * 12;
+
+    if (value === null)      return <span style={{ color: "#94a3b8" }}>null</span>;
+    if (value === undefined) return <span style={{ color: "#94a3b8" }}>undefined</span>;
+    if (typeof value === "boolean") return <span style={{ color: "#c084fc" }}>{String(value)}</span>;
+    if (typeof value === "number")  return <span style={{ color: "#34d399" }}>{String(value)}</span>;
+    if (typeof value === "string")  return <span style={{ color: "#fbbf24" }}>"{value}"</span>;
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <span style={{ color: C.dim }}>[]</span>;
+      return (
+        <span>
+          <button onClick={() => setOpen(v => !v)}
+            style={{ color: C.accent, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: C.font, fontSize: 11 }}>
+            {open ? "▾" : "▸"}
+          </button>
+          {open ? (
+            <span>
+              {"[\n"}
+              {value.map((item, i) => (
+                <span key={i} style={{ display: "block", paddingLeft: indent + 14 }}>
+                  <JsonNode value={item} depth={depth + 1} />
+                  {i < value.length - 1 ? "," : ""}
+                </span>
+              ))}
+              <span style={{ paddingLeft: indent }}>]</span>
+            </span>
+          ) : (
+            <span style={{ color: C.dim }}> [{value.length}]</span>
+          )}
+        </span>
+      );
+    }
+
+    if (typeof value === "object") {
+      const keys = Object.keys(value as object);
+      if (keys.length === 0) return <span style={{ color: C.dim }}>{"{}"}</span>;
+      return (
+        <span>
+          <button onClick={() => setOpen(v => !v)}
+            style={{ color: C.accent, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: C.font, fontSize: 11 }}>
+            {open ? "▾" : "▸"}
+          </button>
+          {open ? (
+            <span>
+              {"{\n"}
+              {keys.map((k, i) => (
+                <span key={k} style={{ display: "block", paddingLeft: indent + 14 }}>
+                  <span style={{ color: C.info }}>{k}</span>
+                  <span style={{ color: C.dim }}>: </span>
+                  <JsonNode value={(value as any)[k]} depth={depth + 1} />
+                  {i < keys.length - 1 ? "," : ""}
+                </span>
+              ))}
+              <span style={{ paddingLeft: indent }}>{"}"}</span>
+            </span>
+          ) : (
+            <span style={{ color: C.dim }}>
+              {" {"}
+              {keys.slice(0, 3).map((k, i) => (
+                <span key={k}>
+                  <span style={{ color: C.info }}>{k}</span>
+                  <span style={{ color: C.dim }}>: </span>
+                  <span style={{ color: C.text }}>{String((value as any)[k])}</span>
+                  {i < Math.min(3, keys.length) - 1 ? ", " : ""}
+                </span>
+              ))}
+              {keys.length > 3 ? <span style={{ color: C.muted }}>, …+{keys.length - 3}</span> : ""}
+              {"}"}
+            </span>
+          )}
+        </span>
+      );
+    }
+
+    return <span style={{ color: C.text }}>{String(value)}</span>;
+  };
+
+  /**
+   * Try to extract and render JSON from a line of text.
+   * Handles: pure JSON, "Label: {...}", console.log objects, etc.
+   * Returns null if no JSON found.
+   */
+  const tryRenderJson = (text: string): React.ReactNode | null => {
+    const stripped = stripAnsi(text).trim();
+    if (!stripped.includes("{") && !stripped.includes("[")) return null;
+
+    // Try to find a JSON object/array in the text
+    const jsonRe = /(\{[\s\S]*\}|\[[\s\S]*\])/;
+    const match = stripped.match(jsonRe);
+    if (!match) return null;
+
+    try {
+      const parsed = JSON.parse(match[1]);
+      // Only render as collapsible if it's an object/array with content
+      if (typeof parsed !== "object" || parsed === null) return null;
+
+      const prefix = stripped.slice(0, stripped.indexOf(match[1])).trim();
+      return (
+        <span>
+          {prefix && <span style={{ color: C.dim }}>{prefix} </span>}
+          <JsonNode value={parsed} depth={0} />
+        </span>
+      );
+    } catch {
+      return null;
+    }
+  };
+
   /** Linkify http/https URLs inside a plain text string */
   const linkify = (text: string, baseColor: string) => {
     const urlRe = /(https?:\/\/[^\s\])"']+)/g;
@@ -861,9 +973,13 @@ function TerminalPanel({
     );
   };
 
-  /** Render a line: ANSI-parse stdout/stderr, plain for others */
+  /** Render a line: try JSON first, then ANSI-parse, then linkify */
   const renderLine = (line: TermLine) => {
     if (line.type === "stdout" || line.type === "stderr") {
+      // Try collapsible JSON first
+      const jsonNode = tryRenderJson(line.raw);
+      if (jsonNode) return jsonNode;
+
       const spans = parseAnsi(line.raw);
       const fallbackColor = baseColor(line.type);
       if (spans.length === 1 && !spans[0].color && !spans[0].bg && !spans[0].bold) {
@@ -873,7 +989,6 @@ function TerminalPanel({
         <>
           {spans.map((sp, i) => {
             const col = sp.color ?? fallbackColor;
-            // Linkify within each span
             return <span key={i} style={{
               color:      col,
               background: sp.bg,
