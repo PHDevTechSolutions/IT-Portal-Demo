@@ -74,8 +74,14 @@ export async function GET(req: NextRequest) {
         .map(name => {
           const childAbs  = path.join(absPath, name);
           const childRel  = path.relative(ROOT, childAbs);
-          const isDir     = fs.statSync(childAbs).isDirectory();
-          return { name, type: isDir ? "dir" : "file", path: childRel };
+          const childStat = fs.statSync(childAbs);
+          const isDir     = childStat.isDirectory();
+          return {
+            name,
+            type: isDir ? "dir" : "file",
+            path: childRel,
+            size: isDir ? undefined : childStat.size,
+          };
         })
         .sort((a, b) => {
           // Dirs first, then files, then alphabetical

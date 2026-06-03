@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -18,6 +18,7 @@ import {
   SmilePlus, Brain, Network, Workflow, Settings2,
   FolderPlus, HardDrive, ArrowLeft, Home,
   TerminalSquare, ChevronUp, StopCircle,
+  Download, GitCompare, Columns2,
 } from "lucide-react";
 
 const C = {
@@ -350,172 +351,30 @@ When the user asks for a plain HTML/CSS website:
 - Include filename as first-line comment: <!-- index.html --> or /* style.css */
 - Make it VISUALLY IMPRESSIVE with gradients, shadows, cards, animations — not plain/boring
 
-=== FEW-SHOT EXAMPLES ===
-
---- EXAMPLE 1: Dashboard page ---
-USER: Create a dashboard page with a stats card row and a user table
-CORRECT RESPONSE:
-Install required components:
+=== OUTPUT FORMAT ===
+For code tasks, use EXACTLY this structure — no deviations:
 \`\`\`bash
-npx shadcn@latest add card table badge
+npx shadcn@latest add <components>
 \`\`\`
-**Task 1: Create dashboard page**
-Description: Dashboard with stat cards and users table
-\`\`\`patch
-FILE: app/dashboard/page.tsx
-LINES: FULL
----
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Users, TrendingUp, DollarSign, Activity } from "lucide-react"
-
-const stats = [
-  { title: "Total Users", value: "12,345", change: "+12%", icon: Users },
-  { title: "Revenue", value: "₱234,567", change: "+8%", icon: DollarSign },
-  { title: "Growth", value: "23.5%", change: "+4%", icon: TrendingUp },
-  { title: "Active Now", value: "573", change: "+2%", icon: Activity },
-]
-
-export default function DashboardPage() {
-  return (
-    <div className="flex-1 space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back.</p>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <Card key={stat.title}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">{stat.change} from last month</p>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-\`\`\`
-
---- EXAMPLE 2: Login form ---
-USER: Create a login page with email and password
-CORRECT RESPONSE:
-\`\`\`bash
-npx shadcn@latest add card input label button
-\`\`\`
-**Task 1: Create login page**
-Description: Login form with email, password, submit, and error handling
-\`\`\`patch
-FILE: app/login/page.tsx
-LINES: FULL
----
-"use client"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-
-export default function LoginPage() {
-  const router = useRouter()
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setLoading(true)
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || "Login failed")
-      router.push("/dashboard")
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>Enter your credentials to access your account.</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Logging in..." : "Login"}
-            </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              No account? <Link href="/register" className="text-primary underline underline-offset-4">Register</Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
-  )
-}
-\`\`\`
-
-=== RESPONSE FORMAT FOR CODE TASKS ===
-When the user asks to build something, ALWAYS respond in this exact order:
-1. List the shadcn components to install (bash block)
-2. List the files to create as Task blocks using the patch format
-3. Add a short "Feature Recommendations" section
-
-Use this exact format for tasks:
 ### Tasks
-**Task 1: [short title]**
-Description: [one sentence explaining what and why]
+**Task 1: [title]**
+Description: [one sentence]
 \`\`\`patch
-FILE: relative/path/to/file.tsx
+FILE: path/to/file.tsx
 LINES: FULL
 ---
-[COMPLETE FILE CONTENT — never truncate]
+[COMPLETE FILE — never truncate, never use placeholders]
 \`\`\`
-
 ### Feature Recommendations
-1. [name] — [one line description]
+1. name — description
 
-=== CRITICAL REMINDERS ===
-- LINES: FULL always — never use line numbers
-- Return the COMPLETE file. If it is long, keep writing until it is done. Never stop early.
-- For simple questions (no code needed), just answer normally — no task format needed.
-- Always include the install commands before the code.
-- When creating multiple files (e.g. layout + page), create separate Task blocks for each file.
-- If the user seems frustrated, acknowledge briefly before answering.
-- When the user references a specific file or entity, address it directly.`;
+=== CRITICAL RULES ===
+- LINES: FULL always — never line numbers
+- Write the FULL file. Never stop early. No "// ... rest of code".
+- For questions only: answer normally, skip the task format.
+- Include install commands before code tasks.
+- "use client" at top of all client components.
+- Use Next.js <Link> for navigation, never <a> for internal routes.`;
 
 /* ─── Default user prefs ─────────────────────────────────────────── */
 const DEFAULT_PREFS: UserPrefs = {
@@ -640,6 +499,338 @@ function PrefsPanel({ prefs, onChange }: { prefs: UserPrefs; onChange: (p: UserP
             }}>
             {prefs.autoApply ? "ON" : "OFF"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── 1. Token Counter ────────────────────────────────────────────── */
+/** Rough GPT-style token estimator: ~4 chars per token */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+function TokenBadge({ messages, systemPrompt, fileContent, folderContext, knowledgeCtx }: {
+  messages: Message[]; systemPrompt: string; fileContent: string;
+  folderContext: string; knowledgeCtx: string;
+}) {
+  const total = useMemo(() => {
+    const parts = [
+      systemPrompt,
+      folderContext,
+      knowledgeCtx,
+      fileContent.slice(0, 8000),
+      ...messages.map(m => m.content),
+    ];
+    return parts.reduce((s, p) => s + estimateTokens(p), 0);
+  }, [messages, systemPrompt, fileContent, folderContext, knowledgeCtx]);
+
+  const limit   = 8000; // conservative limit for local models
+  const pct     = Math.min(100, Math.round((total / limit) * 100));
+  const color   = pct > 90 ? C.error : pct > 70 ? C.warn : C.success;
+
+  return (
+    <span
+      className="flex items-center gap-1 text-[8px] px-1.5 py-0.5 border"
+      style={{ borderColor: `${color}40`, color, backgroundColor: `${color}08` }}
+      title={`~${total.toLocaleString()} tokens used (${pct}% of ~${limit.toLocaleString()} limit)`}>
+      <span>{total.toLocaleString()}t</span>
+      <span style={{ color: `${color}80` }}>{pct}%</span>
+    </span>
+  );
+}
+
+/* ─── 2. Chat Export ─────────────────────────────────────────────── */
+function exportChat(messages: Message[], format: "md" | "txt") {
+  if (messages.length === 0) return;
+
+  let content = "";
+  const date  = new Date().toISOString().slice(0, 10);
+
+  if (format === "md") {
+    content = `# AI Chat Export — ${date}\n\n`;
+    for (const m of messages) {
+      if (m.role === "system") continue;
+      const role = m.role === "user" ? "**You**" : "**AI**";
+      content += `### ${role}\n\n${m.content}\n\n---\n\n`;
+    }
+  } else {
+    content = `AI Chat Export — ${date}\n${"=".repeat(40)}\n\n`;
+    for (const m of messages) {
+      if (m.role === "system") continue;
+      const role = m.role === "user" ? "YOU" : "AI";
+      content += `[${role}]\n${m.content}\n\n`;
+    }
+  }
+
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `chat-export-${date}.${format}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ─── 3. Diff Viewer ─────────────────────────────────────────────── */
+interface DiffLine { type: "add" | "remove" | "context"; text: string; }
+
+function computeDiff(before: string, after: string): DiffLine[] {
+  const beforeLines = before.split("\n");
+  const afterLines  = after.split("\n");
+  const result: DiffLine[] = [];
+
+  // Simple line-by-line diff using LCS
+  const m = beforeLines.length, n = afterLines.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--)
+    for (let j = n - 1; j >= 0; j--)
+      dp[i][j] = beforeLines[i] === afterLines[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+
+  let i = 0, j = 0;
+  while (i < m || j < n) {
+    if (i < m && j < n && beforeLines[i] === afterLines[j]) {
+      result.push({ type: "context", text: beforeLines[i] });
+      i++; j++;
+    } else if (j < n && (i >= m || dp[i + 1][j] <= dp[i][j + 1])) {
+      result.push({ type: "add", text: afterLines[j] });
+      j++;
+    } else {
+      result.push({ type: "remove", text: beforeLines[i] });
+      i++;
+    }
+  }
+  // Collapse long context runs
+  const collapsed: DiffLine[] = [];
+  let ctxRun = 0;
+  for (const line of result) {
+    if (line.type === "context") {
+      ctxRun++;
+      if (ctxRun <= 3) collapsed.push(line);
+      else if (ctxRun === 4) collapsed.push({ type: "context", text: "..." });
+    } else {
+      ctxRun = 0;
+      collapsed.push(line);
+    }
+  }
+  return collapsed;
+}
+
+function DiffViewer({ before, after, onApply, onClose }: {
+  before: string; after: string; onApply: () => void; onClose: () => void;
+}) {
+  const lines = useMemo(() => computeDiff(before, after), [before, after]);
+  const adds    = lines.filter(l => l.type === "add").length;
+  const removes = lines.filter(l => l.type === "remove").length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+      <div className="flex flex-col border shadow-2xl" style={{
+        borderColor: C.border, backgroundColor: C.bg,
+        width: "min(900px, 95vw)", maxHeight: "80vh", fontFamily: C.font,
+      }}>
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0"
+          style={{ borderColor: C.border, backgroundColor: C.panel }}>
+          <Code2 className="size-4" style={{ color: C.accent }} />
+          <span className="text-[11px] font-bold uppercase tracking-widest flex-1" style={{ color: C.accent }}>
+            Diff Preview
+          </span>
+          <span className="text-[9px] px-1.5 border" style={{ borderColor: `${C.success}40`, color: C.success }}>+{adds}</span>
+          <span className="text-[9px] px-1.5 border" style={{ borderColor: `${C.error}40`, color: C.error }}>-{removes}</span>
+          <button onClick={onClose} style={{ color: C.dim }}
+            onMouseEnter={e => (e.currentTarget.style.color = C.error)}
+            onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+            <X className="size-4" />
+          </button>
+        </div>
+        {/* Diff content */}
+        <div className="flex-1 overflow-auto">
+          <pre className="text-[10px] leading-5 p-4" style={{ fontFamily: C.font, margin: 0 }}>
+            {lines.map((line, i) => (
+              <div key={i} style={{
+                backgroundColor: line.type === "add" ? "#34d39918"
+                  : line.type === "remove" ? "#f8717118"
+                  : "transparent",
+                color: line.type === "add" ? C.success
+                  : line.type === "remove" ? C.error
+                  : C.dim,
+                paddingLeft: 8,
+              }}>
+                <span style={{ userSelect: "none", marginRight: 8, opacity: 0.5 }}>
+                  {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
+                </span>
+                {line.text === "..." ? (
+                  <span style={{ color: C.muted, fontStyle: "italic" }}>... unchanged lines ...</span>
+                ) : line.text}
+              </div>
+            ))}
+          </pre>
+        </div>
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t shrink-0"
+          style={{ borderColor: C.border, backgroundColor: C.panel }}>
+          <button onClick={onClose}
+            className="h-8 px-4 text-[10px] uppercase border"
+            style={{ borderColor: C.border, color: C.dim }}>
+            Cancel
+          </button>
+          <button onClick={() => { onApply(); onClose(); }}
+            className="flex items-center gap-2 h-8 px-4 text-[10px] font-bold uppercase border"
+            style={{ borderColor: C.accent, color: "#fff", backgroundColor: C.accent }}>
+            <Play className="size-3" /> Apply Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── 4. Multi-model Comparison ──────────────────────────────────── */
+// (State + logic wired in main component, UI shown in chat column)
+
+/* ─── 5. Snippet Library ─────────────────────────────────────────── */
+interface Snippet { id: string; title: string; code: string; lang: string; }
+
+const SNIPPET_KEY = "ai-snippets";
+
+function loadSnippets(): Snippet[] {
+  try { return JSON.parse(localStorage.getItem(SNIPPET_KEY) ?? "[]"); } catch { return []; }
+}
+function saveSnippets(s: Snippet[]) {
+  try { localStorage.setItem(SNIPPET_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+}
+
+function SnippetLibrary({ onInsert, onClose }: {
+  onInsert: (code: string) => void; onClose: () => void;
+}) {
+  const [snippets, setSnippets] = useState<Snippet[]>([]);
+  const [adding,   setAdding]   = useState(false);
+  const [title,    setTitle]    = useState("");
+  const [code,     setCode]     = useState("");
+  const [lang,     setLang]     = useState("tsx");
+  const [search,   setSearch]   = useState("");
+
+  useEffect(() => { setSnippets(loadSnippets()); }, []);
+
+  const save = () => {
+    if (!title.trim() || !code.trim()) return;
+    const next = [...snippets, { id: crypto.randomUUID(), title, code, lang }];
+    setSnippets(next); saveSnippets(next);
+    setTitle(""); setCode(""); setAdding(false);
+  };
+
+  const del = (id: string) => {
+    const next = snippets.filter(s => s.id !== id);
+    setSnippets(next); saveSnippets(next);
+  };
+
+  const filtered = snippets.filter(s =>
+    !search || s.title.toLowerCase().includes(search.toLowerCase()) ||
+    s.code.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+      <div className="flex flex-col border shadow-2xl"
+        style={{ borderColor: C.border, backgroundColor: C.bg, width: "min(600px, 95vw)", maxHeight: "80vh", fontFamily: C.font }}>
+        {/* Header */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0"
+          style={{ borderColor: C.border, backgroundColor: C.panel }}>
+          <Sparkles className="size-4" style={{ color: C.accent }} />
+          <span className="text-[11px] font-bold uppercase tracking-widest flex-1" style={{ color: C.accent }}>
+            Snippet Library
+          </span>
+          <button onClick={() => setAdding(v => !v)}
+            className="flex items-center gap-1 h-6 px-2 text-[9px] uppercase border"
+            style={{ borderColor: C.accent, color: C.accent }}>
+            <Play className="size-2.5" /> {adding ? "Cancel" : "Add"}
+          </button>
+          <button onClick={onClose} style={{ color: C.dim }}
+            onMouseEnter={e => (e.currentTarget.style.color = C.error)}
+            onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+            <X className="size-4" />
+          </button>
+        </div>
+        {/* Add form */}
+        {adding && (
+          <div className="shrink-0 border-b p-4 space-y-2"
+            style={{ borderColor: C.border, backgroundColor: C.panel }}>
+            <div className="flex gap-2">
+              <input value={title} onChange={e => setTitle(e.target.value)}
+                placeholder="Snippet title…"
+                className="flex-1 px-2 py-1.5 text-[10px] focus:outline-none"
+                style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }} />
+              <select value={lang} onChange={e => setLang(e.target.value)}
+                className="px-2 py-1.5 text-[10px] focus:outline-none"
+                style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+                {["tsx","ts","jsx","js","css","html","json","bash","py","sql"].map(l => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </div>
+            <textarea value={code} onChange={e => setCode(e.target.value)}
+              placeholder="Paste your code here…" rows={6}
+              className="w-full px-2 py-1.5 text-[10px] focus:outline-none resize-none"
+              style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }} />
+            <button onClick={save}
+              className="flex items-center gap-1.5 h-7 px-3 text-[9px] font-bold uppercase border"
+              style={{ borderColor: C.accent, color: "#fff", backgroundColor: C.accent }}>
+              <CheckCircle2 className="size-3" /> Save Snippet
+            </button>
+          </div>
+        )}
+        {/* Search */}
+        {snippets.length > 3 && (
+          <div className="shrink-0 px-4 py-2 border-b" style={{ borderColor: C.border }}>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search snippets…"
+              className="w-full px-2 py-1 text-[9px] focus:outline-none"
+              style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font, height: 26 }} />
+          </div>
+        )}
+        {/* List */}
+        <div className="flex-1 overflow-y-auto">
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <Sparkles className="size-8 opacity-10" style={{ color: C.accent }} />
+              <p className="text-[10px]" style={{ color: C.dim }}>No snippets yet. Add one above.</p>
+            </div>
+          )}
+          {filtered.map(s => (
+            <div key={s.id} className="border-b group" style={{ borderColor: C.border }}>
+              <div className="flex items-center gap-2 px-4 py-2">
+                <span className="text-[8px] px-1 border shrink-0"
+                  style={{ borderColor: `${C.info}30`, color: C.info }}>{s.lang}</span>
+                <span className="flex-1 text-[10px] font-bold" style={{ color: C.text }}>{s.title}</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => { onInsert(s.code); onClose(); }}
+                    className="flex items-center gap-1 h-5 px-2 text-[8px] uppercase border"
+                    style={{ borderColor: `${C.success}50`, color: C.success }}
+                    title="Insert into chat">
+                    <Play className="size-2" /> Use
+                  </button>
+                  <button onClick={() => del(s.id)}
+                    className="h-5 w-5 flex items-center justify-center"
+                    style={{ color: C.dim }}
+                    onMouseEnter={e => (e.currentTarget.style.color = C.error)}
+                    onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+              </div>
+              <pre className="px-4 pb-2 text-[9px] leading-4 overflow-hidden max-h-16"
+                style={{ color: C.dim, fontFamily: C.font, margin: 0, whiteSpace: "pre-wrap" }}>
+                {s.code.split("\n").slice(0, 3).join("\n")}
+                {s.code.split("\n").length > 3 && <span style={{ color: C.muted }}> …+{s.code.split("\n").length - 3} lines</span>}
+              </pre>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -863,10 +1054,8 @@ function TerminalPanel({
   const [lastCmd, setLastCmd] = useState("");                          // for Fix & Restart
   const [needsFix, setNeedsFix] = useState(false);                    // workspace mismatch detected
   const [fixing,   setFixing]   = useState(false);                    // patching in progress
-  const [devUrl,   setDevUrl]   = useState<string | null>(null);      // detected dev server URL
-  const [customPort,    setCustomPort]    = useState(() => {
-    try { return localStorage.getItem("ai-terminal-port") ?? ""; } catch { return ""; }
-  });
+  const [devUrl,        setDevUrl]        = useState<string | null>(null);
+  const [customPort,    setCustomPort]    = useState("");
   const [showPortInput, setShowPortInput] = useState(false);
 
   // Persist custom port
@@ -2045,8 +2234,9 @@ function KnowledgePanel({
   const [showDirReader, setShowDirReader] = useState(false);
   const [dirFiles,      setDirFiles]      = useState<DirFile[]>([]);
   const [dirLoading,    setDirLoading]    = useState(false);
-  const [learnProgress, setLearnProgress] = useState<{ done: number; total: number } | null>(null);
+  const [learnProgress, setLearnProgress] = useState<{ done: number; total: number; label?: string } | null>(null);
   const [learnedCtx,    setLearnedCtx]    = useState("");
+  const [learnMode,     setLearnMode]     = useState<"raw" | "summary">("raw");
   const [editId,   setEditId]   = useState<string | null>(null);
   const [q,        setQ]        = useState("");
   const [a,        setA]        = useState("");
@@ -2206,6 +2396,65 @@ function KnowledgePanel({
     onContextUpdate(parts.join("\n\n"));
   };
 
+  /**
+   * Summary mode: instead of injecting raw code, build a compact
+   * structural map of each file (exports, functions, types, imports summary).
+   * Much more context-efficient — 264 files → ~8KB instead of ~2MB.
+   */
+  const learnSummary = async () => {
+    const toRead = dirFiles.filter(f => f.checked);
+    if (toRead.length === 0) return;
+    setLearnProgress({ done: 0, total: toRead.length, label: "Summarizing" });
+
+    const summaries: string[] = [];
+    for (let i = 0; i < toRead.length; i++) {
+      const f = toRead[i];
+      setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "reading" } : x));
+      try {
+        const useExternal = !!selectedFolder;
+        const url = useExternal
+          ? `/api/ai/browse?path=${encodeURIComponent(f.path)}`
+          : `/api/ai/files?path=${encodeURIComponent(f.path)}`;
+        const res  = await fetch(url);
+        const json = await res.json();
+        const content: string = json.content ?? "";
+        if (!content.trim()) { setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "done" } : x)); continue; }
+
+        const lines      = content.split("\n");
+        const totalLines = lines.length;
+        const rel        = f.path.replace(selectedFolder ?? "", "").replace(/^[/\\]/, "");
+
+        // Extract structural info without sending to AI (pure regex)
+        const exports   = lines.filter(l => /^export\s+(default\s+)?(function|class|const|interface|type|enum)\s+\w/.test(l.trim())).slice(0, 10).map(l => l.trim().slice(0, 80));
+        const imports   = lines.filter(l => /^import\s+/.test(l.trim())).slice(0, 8).map(l => l.trim().slice(0, 80));
+        const functions = lines.filter(l => /^(export\s+)?(async\s+)?function\s+\w/.test(l.trim())).slice(0, 8).map(l => l.trim().slice(0, 80));
+        const hooks     = lines.filter(l => /const\s+\[.*\]\s*=\s*useState|useEffect|useCallback|useMemo|useRef/.test(l)).slice(0, 6).map(l => l.trim().slice(0, 80));
+
+        const summary = [
+          `FILE: ${rel} (${totalLines} lines)`,
+          imports.length   ? `IMPORTS: ${imports.slice(0,3).join(" | ")}` : "",
+          exports.length   ? `EXPORTS:\n  ${exports.join("\n  ")}` : "",
+          functions.length ? `FUNCTIONS:\n  ${functions.join("\n  ")}` : "",
+          hooks.length     ? `HOOKS: ${hooks.join(" | ")}` : "",
+        ].filter(Boolean).join("\n");
+
+        summaries.push(summary);
+        setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "done", totalLines, readLines: totalLines } : x));
+      } catch {
+        setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "error" } : x));
+      }
+      setLearnProgress({ done: i + 1, total: toRead.length, label: "Summarizing" });
+      await new Promise(r => setTimeout(r, 5));
+    }
+
+    const ctx = summaries.length > 0
+      ? `=== PROJECT STRUCTURE SUMMARY (${toRead.length} files) ===\n\n${summaries.join("\n\n")}\n\n=== END SUMMARY ===`
+      : "";
+    setLearnedCtx(ctx);
+    buildCombinedContext(entries, ctx);
+    setLearnProgress(null);
+  };
+
   const fmtSize = (b: number) => b < 1024 ? `${b}B` : b < 1024*1024 ? `${(b/1024).toFixed(0)}KB` : `${(b/1024/1024).toFixed(1)}MB`;
   const checkedCount = dirFiles.filter(f => f.checked).length;
   const totalSize    = dirFiles.filter(f => f.checked).reduce((s, f) => s + f.size, 0);
@@ -2254,39 +2503,55 @@ function KnowledgePanel({
 
   return (
     <div className="flex flex-col h-full" style={{ fontFamily: C.font, backgroundColor: C.bg }}>
-      {/* ── Header ── */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b shrink-0"
-        style={{ borderColor: C.border, backgroundColor: C.panel }}>
-        <Brain className="size-3.5 shrink-0" style={{ color: C.accent }} />
-        <span className="text-[9px] font-bold uppercase tracking-widest flex-1" style={{ color: C.accent }}>
-          Knowledge Base
-        </span>
-        <span className="text-[8px]" style={{ color: C.muted }}>{entries.length} Q&A</span>
-        {/* Read Directory button — always visible, uses selected folder or project root */}
-        <button
-          onClick={async () => {
-            setShowDirReader(v => !v);
-            if (!showDirReader && dirFiles.length === 0) await loadDirFiles();
-          }}
-          className="flex items-center gap-1 h-5 px-1.5 text-[8px] uppercase border transition-colors"
-          style={{
-            borderColor: showDirReader ? C.info : C.border,
-            color:       showDirReader ? C.info : C.dim,
-            backgroundColor: showDirReader ? `${C.info}10` : "transparent",
-          }}>
-          <Network className="size-2.5" />
-          {learnedCtx ? "Re-read" : "Read Dir"}
-        </button>
-        <button
-          onClick={() => { setShowAdd(v => !v); if (showAdd) resetForm(); setShowDirReader(false); }}
-          className="flex items-center gap-1 h-5 px-1.5 text-[8px] uppercase border transition-colors"
-          style={{
-            borderColor: showAdd ? C.accent : C.border,
-            color: showAdd ? C.accent : C.dim,
-            backgroundColor: showAdd ? `${C.accent}10` : "transparent",
-          }}>
-          {showAdd ? <><X className="size-2.5" /> Cancel</> : <><Play className="size-2.5" /> Add</>}
-        </button>
+      {/* ── Header — two rows to avoid cramping ── */}
+      <div className="shrink-0 border-b" style={{ borderColor: C.border, backgroundColor: C.panel }}>
+        {/* Row 1: title + count */}
+        <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+          <Brain className="size-3.5 shrink-0" style={{ color: C.accent }} />
+          <span className="text-[9px] font-bold uppercase tracking-widest flex-1" style={{ color: C.accent }}>
+            Knowledge Base
+          </span>
+          {entries.length > 0 && (
+            <span className="text-[8px] px-1.5 border"
+              style={{ borderColor: `${C.accent}30`, color: C.accent }}>
+              {entries.length} Q&A
+            </span>
+          )}
+          {learnedCtx && (
+            <span className="text-[8px] px-1.5 border"
+              style={{ borderColor: `${C.success}30`, color: C.success }}>
+              ✓ learned
+            </span>
+          )}
+        </div>
+        {/* Row 2: action buttons */}
+        <div className="flex items-center gap-1.5 px-3 pb-2">
+          <button
+            onClick={async () => {
+              setShowDirReader(v => !v);
+              setShowAdd(false);
+              if (!showDirReader && dirFiles.length === 0) await loadDirFiles();
+            }}
+            className="flex items-center gap-1 h-6 px-2 text-[8px] uppercase border flex-1 justify-center transition-colors"
+            style={{
+              borderColor: showDirReader ? C.info : C.border,
+              color:       showDirReader ? C.info : C.dim,
+              backgroundColor: showDirReader ? `${C.info}10` : "transparent",
+            }}>
+            <Network className="size-2.5" />
+            {showDirReader ? "Hide Dir" : "Read Dir"}
+          </button>
+          <button
+            onClick={() => { setShowAdd(v => !v); resetForm(); setShowDirReader(false); }}
+            className="flex items-center gap-1 h-6 px-2 text-[8px] uppercase border flex-1 justify-center transition-colors"
+            style={{
+              borderColor: showAdd ? C.accent : C.border,
+              color:       showAdd ? C.accent : C.dim,
+              backgroundColor: showAdd ? `${C.accent}10` : "transparent",
+            }}>
+            {showAdd ? <><X className="size-2.5" /> Cancel</> : <><Play className="size-2.5" /> + Add Q&A</>}
+          </button>
+        </div>
       </div>
 
       {/* ── Directory Reader Panel ── */}
@@ -2378,43 +2643,85 @@ function KnowledgePanel({
 
           {/* Learn footer */}
           {dirFiles.length > 0 && (
-            <div className="shrink-0 border-t px-3 py-2 flex items-center gap-2"
+            <div className="shrink-0 border-t px-3 py-2 space-y-1.5"
               style={{ borderColor: C.border, backgroundColor: C.panel }}>
               {learnProgress ? (
-                <>
+                <div className="flex items-center gap-2">
                   <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: C.muted }}>
                     <div className="h-full rounded-full transition-all"
                       style={{ width: `${(learnProgress.done / learnProgress.total) * 100}%`, backgroundColor: C.info }} />
                   </div>
                   <span className="text-[8px] shrink-0" style={{ color: C.dim }}>
-                    {learnProgress.done}/{learnProgress.total}
+                    {learnProgress.label ?? "Reading"} {learnProgress.done}/{learnProgress.total}
                   </span>
-                </>
+                </div>
               ) : (
                 <>
-                  <span className="text-[8px] flex-1" style={{ color: C.dim }}>
-                    {checkedCount} files · {fmtSize(totalSize)}
-                    {learnedCtx && <span style={{ color: C.success }}> · learned ✓</span>}
-                  </span>
-                  <button
-                    onClick={learnSelected}
-                    disabled={checkedCount === 0}
-                    className="flex items-center gap-1 h-6 px-2 text-[8px] font-bold uppercase border disabled:opacity-40 transition-colors"
-                    style={{ borderColor: C.info, color: "#fff", backgroundColor: C.info }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#7dd3fc")}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = C.info)}>
-                    <Brain className="size-2.5" />
-                    Learn ({checkedCount})
-                  </button>
-                  {learnedCtx && (
+                  {/* Mode toggle */}
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[8px]" style={{ color: C.muted }}>Mode:</span>
                     <button
-                      onClick={() => { setLearnedCtx(""); buildCombinedContext(entries, ""); }}
-                      className="h-6 px-1.5 text-[8px] border"
-                      style={{ borderColor: `${C.error}40`, color: C.error }}
-                      title="Clear learned context">
-                      <X className="size-2.5" />
+                      onClick={() => setLearnMode("summary")}
+                      className="text-[8px] px-1.5 border transition-colors"
+                      style={{
+                        borderColor: learnMode === "summary" ? C.success : C.border,
+                        color:       learnMode === "summary" ? C.success : C.dim,
+                        backgroundColor: learnMode === "summary" ? `${C.success}10` : "transparent",
+                        height: 18,
+                      }}
+                      title="Extract exports, functions, types — compact. Works for 264 files.">
+                      Summary
                     </button>
+                    <button
+                      onClick={() => setLearnMode("raw")}
+                      className="text-[8px] px-1.5 border transition-colors"
+                      style={{
+                        borderColor: learnMode === "raw" ? C.warn : C.border,
+                        color:       learnMode === "raw" ? C.warn : C.dim,
+                        backgroundColor: learnMode === "raw" ? `${C.warn}10` : "transparent",
+                        height: 18,
+                      }}
+                      title="Inject actual code — good for ≤20 files. Large selections will overflow context.">
+                      Raw
+                    </button>
+                  </div>
+                  {/* Warning on its own row */}
+                  {learnMode === "raw" && checkedCount > 20 && (
+                    <p className="text-[8px]" style={{ color: C.error }}>
+                      ⚠ {checkedCount} files may overflow context window. Use Summary instead.
+                    </p>
                   )}
+
+                  {/* Mode description */}
+                  <p className="text-[8px]" style={{ color: C.muted }}>
+                    {learnMode === "summary"
+                      ? `Summary: exports + functions per file → ~${Math.round(checkedCount * 0.2)}KB context`
+                      : `Raw: actual code (sampled for large files) → ~${Math.round(totalSize / 1024)}KB context`}
+                    {learnedCtx && <span style={{ color: C.success }}> · learned ✓</span>}
+                  </p>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => learnMode === "summary" ? learnSummary() : learnSelected()}
+                      disabled={checkedCount === 0}
+                      className="flex items-center gap-1 h-6 px-2 text-[8px] font-bold uppercase border disabled:opacity-40 transition-colors flex-1 justify-center"
+                      style={{ borderColor: C.info, color: "#fff", backgroundColor: C.info }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
+                      <Brain className="size-2.5" />
+                      {learnMode === "summary" ? `Summarize (${checkedCount})` : `Learn Raw (${checkedCount})`}
+                    </button>
+                    {learnedCtx && (
+                      <button
+                        onClick={() => { setLearnedCtx(""); buildCombinedContext(entries, ""); }}
+                        className="h-6 px-1.5 text-[8px] border"
+                        style={{ borderColor: `${C.error}40`, color: C.error }}
+                        title="Clear learned context">
+                        <X className="size-2.5" />
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -2550,6 +2857,73 @@ function KnowledgePanel({
   );
 }
 
+/* ─── Think Renderer ────────────────────────────────────────────── */
+/**
+ * Renders AI responses that contain <think>...</think> blocks.
+ * The thinking section is shown as a collapsible "Reasoning" panel,
+ * keeping the final answer clean and readable.
+ */
+function ThinkRenderer({ content }: { content: string }) {
+  const [thinkOpen, setThinkOpen] = useState(false);
+
+  // Check if content has <think> blocks
+  const hasThink = /<think>/i.test(content);
+  if (!hasThink) return <>{content}</>;
+
+  // Split into think blocks and answer
+  const thinkRe = /<think>([\s\S]*?)<\/think>/gi;
+  const thinks:  string[] = [];
+  let   answer = content;
+
+  let m: RegExpExecArray | null;
+  while ((m = thinkRe.exec(content)) !== null) {
+    thinks.push(m[1].trim());
+  }
+  // Remove think blocks from the displayed answer
+  answer = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  return (
+    <>
+      {/* Collapsible reasoning section */}
+      {thinks.length > 0 && (
+        <div className="mb-3">
+          <button
+            onClick={() => setThinkOpen(v => !v)}
+            className="flex items-center gap-1.5 text-[9px] uppercase font-bold border px-2 py-1 transition-colors w-full"
+            style={{
+              borderColor: `${C.info}40`,
+              color:       thinkOpen ? C.info : C.dim,
+              backgroundColor: thinkOpen ? `${C.info}08` : "transparent",
+            }}>
+            <Brain className="size-3 shrink-0" style={{ color: C.info }} />
+            <span className="flex-1 text-left">
+              {thinkOpen ? "Hide reasoning" : "Show reasoning"}
+              <span className="ml-1 font-normal" style={{ color: C.muted }}>
+                ({thinks.reduce((s, t) => s + t.split(/\s+/).length, 0)} words)
+              </span>
+            </span>
+            <ChevronDown className="size-3 shrink-0 transition-transform"
+              style={{ transform: thinkOpen ? "rotate(180deg)" : "none" }} />
+          </button>
+          {thinkOpen && (
+            <div className="border border-t-0 px-3 py-2"
+              style={{ borderColor: `${C.info}30`, backgroundColor: `${C.info}04` }}>
+              {thinks.map((t, i) => (
+                <pre key={i} className="text-[10px] leading-relaxed whitespace-pre-wrap break-words"
+                  style={{ color: `${C.text}80`, fontFamily: C.font, margin: 0 }}>
+                  {t}
+                </pre>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Final answer */}
+      {answer && <span style={{ whiteSpace: "pre-wrap" }}>{answer}</span>}
+    </>
+  );
+}
+
 /* ─── Main Page ───────────────────────────────────────────────────── */
 export default function TrainingGroundPage() {
   const router    = useRouter();
@@ -2576,12 +2950,10 @@ export default function TrainingGroundPage() {
   // External folder browser
   const [showBrowser,    setShowBrowser]    = useState(false);
   const [browserMode,    setBrowserMode]    = useState<"project" | "external">("project");
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(() => {
-    try { return localStorage.getItem("ai-selected-folder") ?? null; } catch { return null; }
-  });
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [folderContext,  setFolderContext]  = useState<string>("");
 
-  // RAG index state
+  // RAG index state (used by KB directory reader only, not injected into messages)
   const [ragIndexed,   setRagIndexed]   = useState(false);
   const [ragIndexing,  setRagIndexing]  = useState(false);
   const [ragStats,     setRagStats]     = useState<{ totalFiles: number; totalChunks: number } | null>(null);
@@ -2589,6 +2961,23 @@ export default function TrainingGroundPage() {
   // Knowledge base context (injected into every AI message)
   const [knowledgeCtx,  setKnowledgeCtx]  = useState("");
   const [showKnowledge, setShowKnowledge] = useState(false);
+
+  // Feature 3: Diff viewer
+  const [diffTask,     setDiffTask]     = useState<{ task: Task; msgId: string; before: string } | null>(null);
+
+  // Feature 4: Multi-model comparison
+  const [compareMode,   setCompareMode]   = useState(false);
+  const [compareModel,  setCompareModel]  = useState("");
+  const [compareResult, setCompareResult] = useState<{ modelA: string; modelB: string; contentA: string; contentB: string } | null>(null);
+  const [isComparing,   setIsComparing]   = useState(false);
+
+  // Feature 5: Snippet library
+  const [showSnippets, setShowSnippets] = useState(false);
+
+  // Thinking mode
+  type ThinkMode = "normal" | "think" | "deep_think" | "research" | "deep_research";
+  const [thinkMode,     setThinkMode]     = useState<ThinkMode>("normal");
+  const [searchStatus,  setSearchStatus]  = useState("");
 
   // Restore folder context on mount if a folder was previously selected
   useEffect(() => {
@@ -2608,13 +2997,9 @@ export default function TrainingGroundPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount only
 
-  // Terminal — persist open/height state across refreshes
-  const [showTerminal,   setShowTerminal]   = useState(() => {
-    try { return localStorage.getItem("ai-terminal-open") === "1"; } catch { return false; }
-  });
-  const [terminalHeight, setTerminalHeight] = useState(() => {
-    try { return parseInt(localStorage.getItem("ai-terminal-height") ?? "220", 10) || 220; } catch { return 220; }
-  });
+  // Terminal — default false/220, restored from localStorage in the client-only useEffect below
+  const [showTerminal,   setShowTerminal]   = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(220);
   const termDragRef = useRef<{ startY: number; startH: number } | null>(null);
 
   // Persist terminal visibility and height
@@ -2636,6 +3021,18 @@ export default function TrainingGroundPage() {
       const stored = localStorage.getItem("ai-chat-prefs");
       if (stored) setUserPrefs(JSON.parse(stored));
     } catch { /* ignore */ }
+  }, []);
+
+  // ── Single client-only restore for all localStorage values ──────
+  useEffect(() => {
+    try {
+      const folder = localStorage.getItem("ai-selected-folder");
+      if (folder) setSelectedFolder(folder);
+      setShowTerminal(localStorage.getItem("ai-terminal-open") === "1");
+      const h = parseInt(localStorage.getItem("ai-terminal-height") ?? "0", 10);
+      if (h > 0) setTerminalHeight(h);
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handlePrefsChange = useCallback((p: UserPrefs) => {
@@ -2954,6 +3351,72 @@ export default function TrainingGroundPage() {
     applyTask(task, messageId);
   };
 
+  /** Feature 3: Show diff before applying — reads current file first */
+  const handleDiffApply = async (task: Task, messageId: string) => {
+    if (task.lines !== "FULL") {
+      // For non-FULL patches, apply directly
+      applyTask(task, messageId);
+      return;
+    }
+    // Read current file content
+    const isExternal = task.file.startsWith("C:") || task.file.startsWith("/");
+    const url = isExternal
+      ? `/api/ai/browse?path=${encodeURIComponent(task.file)}`
+      : `/api/ai/files?path=${encodeURIComponent(task.file)}`;
+    try {
+      const res  = await fetch(url);
+      const json = await res.json();
+      const before = json.content ?? "";
+      setDiffTask({ task, msgId: messageId, before });
+    } catch {
+      // Fallback: apply directly if read fails
+      applyTask(task, messageId);
+    }
+  };
+
+  /** Feature 4: Send same prompt to a second model for comparison */
+  const handleCompare = async (userText: string, modelA: string, modelB: string) => {
+    if (!userText.trim() || !modelA || !modelB) return;
+    setIsComparing(true);
+    setCompareResult(null);
+
+    const ctx = [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...(fileContent ? [{ role: "system", content: `Open file (${filePath}):\n\`\`\`\n${fileContent.slice(0, 4000)}\n\`\`\`` }] : []),
+      { role: "user", content: userText },
+    ];
+
+    try {
+      const [resA, resB] = await Promise.all([
+        fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: modelA, messages: ctx }) }),
+        fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: modelB, messages: ctx }) }),
+      ]);
+
+      const readStream = async (res: Response): Promise<string> => {
+        const reader = res.body!.getReader();
+        const dec = new TextDecoder();
+        let buf = "", full = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split("\n\n"); buf = parts.pop() ?? "";
+          for (const part of parts) {
+            if (!part.startsWith("data: ")) continue;
+            try { const d = JSON.parse(part.slice(6)); if (d.token) full += d.token; } catch { /* skip */ }
+          }
+        }
+        return full;
+      };
+
+      const [contentA, contentB] = await Promise.all([readStream(resA), readStream(resB)]);
+      setCompareResult({ modelA, modelB, contentA, contentB });
+    } catch (e: any) {
+      toast.error(`Compare failed: ${e.message}`);
+    } finally {
+      setIsComparing(false);
+    }
+  };
   const handleApplyAll = async (tasks: Task[], messageId: string) => {
     const byFile = new Map<string, Task[]>();
     for (const t of tasks.filter(t => t.status === "pending")) {
@@ -2989,25 +3452,55 @@ export default function TrainingGroundPage() {
     setMessages(prev => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
     setInput(""); setIsStreaming(true);
 
-    // RAG: retrieve relevant chunks for this query
-    const ragContext = await ragSearch(text);
+    // Web search for research modes
+    let webContext = "";
+    if (thinkMode === "research" || thinkMode === "deep_research") {
+      setSearchStatus(`🔍 Searching: "${text.slice(0, 60)}${text.length > 60 ? "…" : ""}"`);
+      try {
+        const searchRes = await fetch("/api/ai/search", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ query: text, mode: thinkMode, maxPages: thinkMode === "deep_research" ? 5 : 2 }),
+          signal:  AbortSignal.timeout(30000),
+        });
+        const searchJson = await searchRes.json();
+        if (searchJson.results?.length > 0) {
+          const parts = searchJson.results.map((r: any, i: number) =>
+            `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}${r.content ? `\n\n${r.content.slice(0, 1500)}` : ""}`,
+          );
+          webContext = `=== WEB SEARCH RESULTS for "${text}" ===\n\n${parts.join("\n\n---\n\n")}\n\n=== END WEB RESULTS ===`;
+          setSearchStatus(`✓ Found ${searchJson.results.length} pages`);
+        } else {
+          setSearchStatus("⚠ No results found");
+        }
+      } catch (e: any) {
+        setSearchStatus(`⚠ Search failed: ${e.message}`);
+      }
+    }
+
+    // Thinking mode system instructions
+    const thinkInstructions: Record<string, string> = {
+      normal:        "",
+      think:         "Before answering, reason through this step by step inside <think>...</think> tags, then give your final answer.",
+      deep_think:    "This requires deep analysis. Inside <think>...</think> tags: (1) break down the problem, (2) consider multiple approaches, (3) identify edge cases, (4) choose the best approach with justification. Then provide a comprehensive answer.",
+      research:      "You have been provided web search results above. Use them to give an accurate, up-to-date answer. Cite sources with [1], [2], etc.",
+      deep_research: "You have been provided comprehensive web research. Synthesize information from multiple sources, compare findings, identify consensus and contradictions, and provide a thorough research-backed answer with citations [1], [2], etc.",
+    };
 
     // Build context with NLP annotations injected as a system hint
     const ctx = [
       { role: "system", content: SYSTEM_PROMPT },
       ...(projectTreeRef.current ? [{ role: "system", content: projectTreeRef.current }] : []),
       ...(folderContext    ? [{ role: "system", content: folderContext }]    : []),
-      // Inject knowledge base Q&A entries
       ...(knowledgeCtx    ? [{ role: "system", content: knowledgeCtx }]    : []),
-      // Inject RAG-retrieved code snippets as additional context
-      ...(ragContext       ? [{ role: "system", content: ragContext }]       : []),
+      ...(webContext       ? [{ role: "system", content: webContext }]       : []),
       ...(fileContent      ? [{ role: "system", content: `Open file (${filePath}):\n\`\`\`\n${fileContent.slice(0, 8000)}\n\`\`\`` }] : []),
-      // Context-aware injection: intent + entities + prefs + conversation continuity
       {
         role: "system",
         content: [
           `User intent: ${INTENT_LABELS[intent]}.`,
           ctxNote,
+          thinkInstructions[thinkMode] ?? "",
           entities.errors.length > 0 ? `Errors mentioned: ${entities.errors.join(", ")}.` : "",
           entities.features.length > 0 ? `Features mentioned: ${entities.features.join(", ")}.` : "",
           sentiment === "negative" ? "The user seems frustrated — acknowledge briefly before answering." : "",
@@ -3068,11 +3561,17 @@ export default function TrainingGroundPage() {
         { id: assistantId, role: "assistant" as const, content: full, source },
       ];
       saveSession(finalMsgs);
+
+      // Feature 4: trigger comparison if compare mode is active
+      if (compareMode && compareModel && compareModel !== selectedModel) {
+        handleCompare(text, selectedModel, compareModel);
+      }
     } catch (err: any) {
       toast.error(err.message ?? "AI error");
       setMessages(prev => prev.filter(m => m.id !== assistantId));
     } finally {
       setIsStreaming(false);
+      setSearchStatus("");
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
@@ -3135,15 +3634,6 @@ export default function TrainingGroundPage() {
               </BreadcrumbList>
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
-              {/* NLP badges */}
-              <span className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 text-[8px] border"
-                style={{ borderColor: `${C.info}30`, color: C.info, backgroundColor: `${C.info}08` }}>
-                <Brain className="size-2.5" /> NLP
-              </span>
-              <span className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 text-[8px] border"
-                style={{ borderColor: `${C.success}30`, color: C.success, backgroundColor: `${C.success}08` }}>
-                <Network className="size-2.5" /> Context
-              </span>
               {aiSource && (
                 <span className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold uppercase border"
                   style={{ borderColor: `${C.success}40`, color: C.success, backgroundColor: `${C.success}10` }}>
@@ -3280,11 +3770,12 @@ export default function TrainingGroundPage() {
 
                   {/* Chat history */}
                   <div className="shrink-0 border-t" style={{ borderColor: C.border }}>
-                    <button onClick={() => setShowHistory(v => !v)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-left transition-colors"
+                    <div
+                      className="w-full flex items-center justify-between px-3 py-2 cursor-pointer transition-colors"
                       style={{ backgroundColor: showHistory ? "rgba(232,99,10,0.06)" : "transparent" }}
-                      onMouseEnter={e => { if (!showHistory) e.currentTarget.style.backgroundColor = "rgba(232,99,10,0.04)"; }}
-                      onMouseLeave={e => { if (!showHistory) e.currentTarget.style.backgroundColor = "transparent"; }}>
+                      onMouseEnter={e => { if (!showHistory) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(232,99,10,0.04)"; }}
+                      onMouseLeave={e => { if (!showHistory) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                      onClick={() => setShowHistory(v => !v)}>
                       <div className="flex items-center gap-1.5">
                         <RefreshCw className="size-3" style={{ color: C.accent }} />
                         <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: C.accent }}>
@@ -3305,7 +3796,7 @@ export default function TrainingGroundPage() {
                           transition: "transform 0.15s",
                         }} />
                       </div>
-                    </button>
+                    </div>
                     {showHistory && (
                       <div className="max-h-48 overflow-y-auto border-t" style={{ borderColor: C.border, backgroundColor: C.bg }}>
                         {histLoading ? (
@@ -3362,8 +3853,7 @@ export default function TrainingGroundPage() {
                         transition: "transform 0.15s",
                       }} />
                     </button>
-                    {showPrefs && <PrefsPanel prefs={userPrefs} onChange={handlePrefsChange} />}
-                  </div>
+                    {showPrefs && <PrefsPanel prefs={userPrefs} onChange={handlePrefsChange} />}                  </div>
                 </>
               )}
             </div>
@@ -3618,7 +4108,36 @@ export default function TrainingGroundPage() {
                 </div>
               </div>
 
-              {/* Messages */}
+              {/* Feature 4: Compare model selector — shown when compare mode is on */}
+              {compareMode && models.length > 1 && (
+                <div className="flex items-center gap-2 px-3 py-2 border-b shrink-0"
+                  style={{ borderColor: C.border, backgroundColor: `${C.warn}08` }}>
+                  <Columns2 className="size-3 shrink-0" style={{ color: C.warn }} />
+                  <span className="text-[8px] uppercase font-bold shrink-0" style={{ color: C.warn }}>Compare:</span>
+                  <select
+                    value={compareModel}
+                    onChange={e => setCompareModel(e.target.value)}
+                    className="flex-1 text-[9px] px-1.5 py-0.5 focus:outline-none"
+                    style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+                    <option value="">Select second model…</option>
+                    {models.filter(m => m.name !== selectedModel).map(m => (
+                      <option key={m.name} value={m.name}>{m.name}</option>
+                    ))}
+                  </select>
+                  {compareModel && isComparing && (
+                    <span className="text-[8px] flex items-center gap-1" style={{ color: C.warn }}>
+                      <Loader2 className="size-2.5 animate-spin" /> comparing…
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setCompareMode(false)}
+                    style={{ color: C.dim }}
+                    onMouseEnter={e => (e.currentTarget.style.color = C.error)}
+                    onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+                    <X className="size-3" />
+                  </button>
+                </div>
+              )}
               <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
                 {messages.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-2">
@@ -3693,9 +4212,11 @@ export default function TrainingGroundPage() {
                           color: C.text, whiteSpace: "pre-wrap",
                           wordBreak: "break-word", fontFamily: C.font,
                         }}>
-                        {msg.content || (isStreaming && (
-                          <span className="inline-block w-1.5 h-3.5 bg-orange-400 animate-pulse align-middle" />
-                        ))}
+                        {msg.content
+                          ? <ThinkRenderer content={msg.content} />
+                          : (isStreaming && (
+                            <span className="inline-block w-1.5 h-3.5 bg-orange-400 animate-pulse align-middle" />
+                          ))}
                       </div>
 
                       {/* NLP metadata badges for user messages */}
@@ -3730,7 +4251,7 @@ export default function TrainingGroundPage() {
                         <TaskPanel
                           tasks={msg.tasks}
                           recs={msg.recs ?? []}
-                          onApplyTask={task => handleApplyTask(task, msg.id)}
+                          onApplyTask={task => handleDiffApply(task, msg.id)}
                           onApplyAll={() => handleApplyAll(msg.tasks!, msg.id)}
                           onAskRec={rec => handleSend(`Implement recommendation ${rec.n}: ${rec.text}`)}
                         />
@@ -3749,6 +4270,47 @@ export default function TrainingGroundPage() {
 
               {/* Input */}
               <div className="shrink-0 border-t p-3" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                {/* Thinking mode selector */}
+                <div className="flex items-center gap-1 mb-2 flex-wrap">
+                  {(["normal","think","deep_think","research","deep_research"] as const).map(mode => {
+                    const labels: Record<string, string> = {
+                      normal:        "Normal",
+                      think:         "🤔 Think",
+                      deep_think:    "🧠 Deep Think",
+                      research:      "🔍 Research",
+                      deep_research: "🔬 Deep Research",
+                    };
+                    const colors: Record<string, string> = {
+                      normal:        C.dim,
+                      think:         C.info,
+                      deep_think:    "#c084fc",
+                      research:      C.warn,
+                      deep_research: C.accent,
+                    };
+                    const active = thinkMode === mode;
+                    return (
+                      <button key={mode}
+                        onClick={() => setThinkMode(mode)}
+                        className="text-[8px] px-1.5 border transition-colors"
+                        style={{
+                          height: 18,
+                          borderColor: active ? colors[mode] : `${C.border}`,
+                          color:       active ? colors[mode] : C.muted,
+                          backgroundColor: active ? `${colors[mode]}15` : "transparent",
+                          fontWeight: active ? "bold" : "normal",
+                        }}>
+                        {labels[mode]}
+                      </button>
+                    );
+                  })}
+                  {/* Search status indicator */}
+                  {searchStatus && (
+                    <span className="text-[8px] ml-1 flex items-center gap-1" style={{ color: C.warn }}>
+                      {isStreaming && <Loader2 className="size-2.5 animate-spin" />}
+                      {searchStatus}
+                    </span>
+                  )}
+                </div>
                 {/* Live intent preview while typing */}
                 {input.trim().length > 3 && (
                   <div className="flex items-center gap-1.5 mb-1.5">
@@ -3811,11 +4373,172 @@ export default function TrainingGroundPage() {
                     {isStreaming ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
                   </button>
                 </div>
+
+                {/* ── Bottom toolbar: token count + feature shortcuts ── */}
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  {/* Feature 1: Token counter */}
+                  <TokenBadge
+                    messages={messages}
+                    systemPrompt={SYSTEM_PROMPT}
+                    fileContent={fileContent}
+                    folderContext={folderContext}
+                    knowledgeCtx={knowledgeCtx}
+                  />
+                  <div className="flex-1" />
+                  {/* Feature 2: Export */}
+                  {messages.length > 0 && (
+                    <div className="relative group/export">
+                      <button
+                        className="flex items-center gap-1 h-5 px-1.5 text-[8px] border transition-colors"
+                        style={{ borderColor: C.border, color: C.dim }}
+                        title="Export chat"
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = C.info; e.currentTarget.style.color = C.info; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                        <Download className="size-2.5" /> Export
+                      </button>
+                      <div className="absolute bottom-full right-0 mb-1 z-50 hidden group-hover/export:flex flex-col border shadow-lg"
+                        style={{ borderColor: C.border, backgroundColor: C.panel, minWidth: 100 }}>
+                        <button onClick={() => exportChat(messages, "md")}
+                          className="px-3 py-1.5 text-[9px] text-left transition-colors"
+                          style={{ color: C.text }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${C.info}10`)}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+                          .md
+                        </button>
+                        <button onClick={() => exportChat(messages, "txt")}
+                          className="px-3 py-1.5 text-[9px] text-left transition-colors"
+                          style={{ color: C.text }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${C.info}10`)}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+                          .txt
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Feature 4: Compare */}
+                  {models.length > 1 && (
+                    <button
+                      onClick={() => setCompareMode(v => !v)}
+                      className="flex items-center gap-1 h-5 px-1.5 text-[8px] border transition-colors"
+                      style={{
+                        borderColor: compareMode ? C.warn : C.border,
+                        color:       compareMode ? C.warn : C.dim,
+                        backgroundColor: compareMode ? `${C.warn}10` : "transparent",
+                      }}
+                      title="Compare two models side by side">
+                      <Columns2 className="size-2.5" /> Compare
+                    </button>
+                  )}
+                  {/* Feature 5: Snippets */}
+                  <button
+                    onClick={() => setShowSnippets(true)}
+                    className="flex items-center gap-1 h-5 px-1.5 text-[8px] border transition-colors"
+                    style={{ borderColor: C.border, color: C.dim }}
+                    title="Snippet library"
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                    <Sparkles className="size-2.5" /> Snippets
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* ── Feature 3: Diff Viewer Modal ── */}
+      {diffTask && (
+        <DiffViewer
+          before={diffTask.before}
+          after={diffTask.task.code}
+          onApply={() => applyTask(diffTask.task, diffTask.msgId)}
+          onClose={() => setDiffTask(null)}
+        />
+      )}
+
+      {/* ── Feature 4: Compare Result Panel ── */}
+      {compareResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.75)" }}>
+          <div className="flex flex-col border shadow-2xl"
+            style={{ borderColor: C.border, backgroundColor: C.bg, width: "min(1100px, 98vw)", maxHeight: "85vh", fontFamily: C.font }}>
+            <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0"
+              style={{ borderColor: C.border, backgroundColor: C.panel }}>
+              <Columns2 className="size-4" style={{ color: C.warn }} />
+              <span className="text-[11px] font-bold uppercase tracking-widest flex-1" style={{ color: C.warn }}>
+                Model Comparison
+              </span>
+              <button onClick={() => setCompareResult(null)} style={{ color: C.dim }}
+                onMouseEnter={e => (e.currentTarget.style.color = C.error)}
+                onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="flex flex-1 overflow-hidden min-h-0 divide-x"
+              style={{ borderColor: C.border }}>
+              {/* Model A */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <div className="px-4 py-2 border-b shrink-0"
+                  style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                  <span className="text-[9px] font-bold" style={{ color: C.accent }}>{compareResult.modelA}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto px-4 py-3">
+                  <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-words"
+                    style={{ color: C.text, fontFamily: C.font, margin: 0 }}>
+                    {compareResult.contentA}
+                  </pre>
+                </div>
+              </div>
+              {/* Model B */}
+              <div className="flex-1 flex flex-col min-w-0" style={{ borderColor: C.border }}>
+                <div className="px-4 py-2 border-b shrink-0"
+                  style={{ borderColor: C.border, backgroundColor: C.panel }}>
+                  <span className="text-[9px] font-bold" style={{ color: C.info }}>{compareResult.modelB}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto px-4 py-3">
+                  <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-words"
+                    style={{ color: C.text, fontFamily: C.font, margin: 0 }}>
+                    {compareResult.contentB}
+                  </pre>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 border-t shrink-0"
+              style={{ borderColor: C.border, backgroundColor: C.panel }}>
+              <span className="text-[9px]" style={{ color: C.dim }}>
+                Click a response to use it in chat
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { handleSend(`Use the response from ${compareResult.modelA}: ${compareResult.contentA.slice(0, 200)}...`); setCompareResult(null); }}
+                  className="h-7 px-3 text-[9px] uppercase border"
+                  style={{ borderColor: C.accent, color: C.accent }}>
+                  Use {compareResult.modelA.split(":")[0]}
+                </button>
+                <button
+                  onClick={() => { handleSend(`Use the response from ${compareResult.modelB}: ${compareResult.contentB.slice(0, 200)}...`); setCompareResult(null); }}
+                  className="h-7 px-3 text-[9px] uppercase border"
+                  style={{ borderColor: C.info, color: C.info }}>
+                  Use {compareResult.modelB.split(":")[0]}
+                </button>
+                <button onClick={() => setCompareResult(null)}
+                  className="h-7 px-3 text-[9px] uppercase border"
+                  style={{ borderColor: C.border, color: C.dim }}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Feature 5: Snippet Library Modal ── */}
+      {showSnippets && (
+        <SnippetLibrary
+          onInsert={(code) => setInput(prev => prev ? `${prev}\n\n${code}` : code)}
+          onClose={() => setShowSnippets(false)}
+        />
+      )}
     </ProtectedPageWrapper>
   );
 }
