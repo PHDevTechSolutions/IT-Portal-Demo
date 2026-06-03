@@ -231,39 +231,290 @@ function parseTasks(content: string): { tasks: Task[]; recs: Recommendation[] } 
 }
 
 /* ─── System prompt ───────────────────────────────────────────────── */
-const SYSTEM_PROMPT = `You are an expert software engineer with full read/write access to this Next.js/TypeScript project.
+const SYSTEM_PROMPT = `You are an expert Next.js and React developer. You write clean, complete, production-ready code using shadcn/ui, Tailwind CSS, and TypeScript.
 
-CAPABILITIES:
-- Intent-aware: understand whether the user wants to ask, debug, review, or build.
-- Entity-aware: identify files, component names, and error types in requests.
-- Context-aware: reference the current conversation history and open file.
-- Sentiment-aware: if the user expresses frustration, acknowledge it briefly before answering.
-- Personalised: adapt explanation depth based on stated preferences.
+=== HARD RULES — NEVER BREAK THESE ===
+1. NEVER truncate code. ALWAYS write the full file from top to bottom. No "// ... rest of code" or "// add more here".
+2. ALWAYS import shadcn components from "@/components/ui/..." — never from "shadcn" directly.
+3. ALWAYS use Tailwind classes for spacing, color, layout. Never write inline styles unless absolutely necessary.
+4. ALWAYS run "npx shadcn@latest add <component>" — never "npx shadcn-ui add".
+5. ALWAYS write TypeScript. Never write plain JavaScript files (.js) unless asked.
+6. NEVER skip error handling in server actions or API routes.
+7. When writing a page or layout, ALWAYS include all imports at the top.
+8. ALWAYS write "use client" at the top of client components.
+9. NEVER use <a> tags for internal navigation — always use Next.js <Link> from "next/link".
+10. ALWAYS complete every function body. Never leave TODOs or empty functions.
 
-When modifying code, respond with a STRUCTURED TASK LIST using EXACTLY this format:
+=== SHADCN SETUP (memorize this) ===
+INSTALL shadcn in a new project:
+\`\`\`bash
+npx create-next-app@latest my-app --typescript --tailwind --eslint
+cd my-app
+npx shadcn@latest init
+\`\`\`
+During "npx shadcn@latest init" choose:
+- Style: Default
+- Base color: Slate (or as requested)
+- CSS variables: Yes
 
+ADD individual components:
+\`\`\`bash
+npx shadcn@latest add button
+npx shadcn@latest add card
+npx shadcn@latest add input
+npx shadcn@latest add label
+npx shadcn@latest add table
+npx shadcn@latest add dialog
+npx shadcn@latest add form
+npx shadcn@latest add select
+npx shadcn@latest add sidebar
+npx shadcn@latest add navigation-menu
+\`\`\`
+
+CORRECT import paths (always use these):
+\`\`\`typescript
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Calendar } from "@/components/ui/calendar"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
+import { Toaster } from "@/components/ui/toaster"
+import { useToast } from "@/hooks/use-toast"
+\`\`\`
+
+=== NEXT.JS ROUTING (memorize both) ===
+APP ROUTER (app/) structure:
+\`\`\`
+app/
+  layout.tsx          ← root layout, wraps everything
+  page.tsx            ← home page "/"
+  globals.css         ← global styles
+  dashboard/
+    page.tsx          ← "/dashboard"
+    layout.tsx        ← dashboard-specific layout
+  dashboard/users/
+    page.tsx          ← "/dashboard/users"
+  api/users/
+    route.ts          ← API route GET/POST
+\`\`\`
+
+PAGES ROUTER (pages/) structure:
+\`\`\`
+pages/
+  _app.tsx            ← wraps all pages
+  _document.tsx       ← HTML document
+  index.tsx           ← home page "/"
+  dashboard.tsx       ← "/dashboard"
+  dashboard/
+    users.tsx         ← "/dashboard/users"
+  api/
+    users.ts          ← API route
+\`\`\`
+
+=== DESIGN RULES (always follow) ===
+- Use shadcn's built-in variants: variant="default|destructive|outline|secondary|ghost|link"
+- Dashboard layouts: use CSS grid or flexbox with a sidebar + main content pattern
+- Always add hover states, focus rings, and transitions
+- Use cn() from "@/lib/utils" to merge Tailwind classes conditionally
+- Color tokens: use "bg-background", "text-foreground", "border", "muted", "accent", "primary"
+- Spacing: always use Tailwind spacing scale (p-4, gap-6, space-y-4, etc.)
+- Typography: use "text-sm", "text-muted-foreground", "font-semibold", "tracking-tight" etc.
+
+=== HTML/CSS WEBSITES (when NOT using Next.js/React) ===
+When the user asks for a plain HTML/CSS website:
+- Use MODERN CSS: custom properties (--primary, --bg, etc.), flexbox/grid, smooth transitions, animations
+- Use semantic HTML5: <header>, <nav>, <main>, <section>, <article>, <footer>
+- Create ALL files needed: index.html, about.html, contact.html, style.css, script.js
+- All HTML files MUST link to shared CSS: <link rel="stylesheet" href="style.css">
+- Navigation links use relative paths: <a href="about.html">About</a>
+- Add micro-interactions: hover states, focus rings, button press effects
+- Include filename as first-line comment: <!-- index.html --> or /* style.css */
+- Make it VISUALLY IMPRESSIVE with gradients, shadows, cards, animations — not plain/boring
+
+=== FEW-SHOT EXAMPLES ===
+
+--- EXAMPLE 1: Dashboard page ---
+USER: Create a dashboard page with a stats card row and a user table
+CORRECT RESPONSE:
+Install required components:
+\`\`\`bash
+npx shadcn@latest add card table badge
+\`\`\`
+**Task 1: Create dashboard page**
+Description: Dashboard with stat cards and users table
+\`\`\`patch
+FILE: app/dashboard/page.tsx
+LINES: FULL
+---
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Users, TrendingUp, DollarSign, Activity } from "lucide-react"
+
+const stats = [
+  { title: "Total Users", value: "12,345", change: "+12%", icon: Users },
+  { title: "Revenue", value: "₱234,567", change: "+8%", icon: DollarSign },
+  { title: "Growth", value: "23.5%", change: "+4%", icon: TrendingUp },
+  { title: "Active Now", value: "573", change: "+2%", icon: Activity },
+]
+
+export default function DashboardPage() {
+  return (
+    <div className="flex-1 space-y-6 p-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">Welcome back.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon
+          return (
+            <Card key={stat.title}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <Icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground">{stat.change} from last month</p>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+\`\`\`
+
+--- EXAMPLE 2: Login form ---
+USER: Create a login page with email and password
+CORRECT RESPONSE:
+\`\`\`bash
+npx shadcn@latest add card input label button
+\`\`\`
+**Task 1: Create login page**
+Description: Login form with email, password, submit, and error handling
+\`\`\`patch
+FILE: app/login/page.tsx
+LINES: FULL
+---
+"use client"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+
+export default function LoginPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || "Login failed")
+      router.push("/dashboard")
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle className="text-2xl">Login</CardTitle>
+          <CardDescription>Enter your credentials to access your account.</CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-3">
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Logging in..." : "Login"}
+            </Button>
+            <p className="text-sm text-muted-foreground text-center">
+              No account? <Link href="/register" className="text-primary underline underline-offset-4">Register</Link>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
+    </div>
+  )
+}
+\`\`\`
+
+=== RESPONSE FORMAT FOR CODE TASKS ===
+When the user asks to build something, ALWAYS respond in this exact order:
+1. List the shadcn components to install (bash block)
+2. List the files to create as Task blocks using the patch format
+3. Add a short "Feature Recommendations" section
+
+Use this exact format for tasks:
 ### Tasks
-
-**Task 1: [title]**
-Description: [what and why]
+**Task 1: [short title]**
+Description: [one sentence explaining what and why]
 \`\`\`patch
 FILE: relative/path/to/file.tsx
 LINES: FULL
 ---
-complete new file content here
+[COMPLETE FILE CONTENT — never truncate]
 \`\`\`
 
 ### Feature Recommendations
-1. [name] — description
-2. [name] — description
+1. [name] — [one line description]
 
-CRITICAL RULES:
-- ALWAYS use LINES: FULL — never use line numbers (they cause duplication bugs)
-- Each task = one file. If multiple changes to same file, combine into ONE task
-- Return the COMPLETE file content after the --- separator. Never truncate.
-- No placeholders like "// ... rest of code"
-- For questions (no code change), respond normally without the task format.
-- If the user seems frustrated (negative sentiment), start with a brief empathetic acknowledgment.
+=== CRITICAL REMINDERS ===
+- LINES: FULL always — never use line numbers
+- Return the COMPLETE file. If it is long, keep writing until it is done. Never stop early.
+- For simple questions (no code needed), just answer normally — no task format needed.
+- Always include the install commands before the code.
+- When creating multiple files (e.g. layout + page), create separate Task blocks for each file.
+- If the user seems frustrated, acknowledge briefly before answering.
 - When the user references a specific file or entity, address it directly.`;
 
 /* ─── Default user prefs ─────────────────────────────────────────── */
@@ -1451,20 +1702,30 @@ function extractCodeBlocks(content: string): CodeBlock[] {
     const code = m[2];
     if (!code.trim()) continue;
 
-    // Suggest a filename based on language / content hints
-    let name = "file.txt";
-    if (lang === "html" || /<!doctype|<html/i.test(code))  name = "index.html";
-    else if (lang === "css")                                name = "style.css";
-    else if (lang === "javascript" || lang === "js")        name = "script.js";
-    else if (lang === "typescript" || lang === "ts")        name = "index.ts";
-    else if (lang === "tsx")                                name = "component.tsx";
-    else if (lang === "jsx")                                name = "component.jsx";
-    else if (lang === "json")                               name = "data.json";
-    else if (lang === "python" || lang === "py")            name = "main.py";
-    else if (lang === "sql")                                name = "query.sql";
-    else if (lang === "bash" || lang === "sh")              name = "script.sh";
-    else if (lang === "markdown" || lang === "md")          name = "README.md";
-    else if (lang)                                          name = `file.${lang}`;
+    // Try to detect filename from first-line comment in code
+    // e.g. <!-- index.html --> or /* style.css */ or // script.js
+    let detectedName = "";
+    const firstLine = code.trim().split("\n")[0];
+    const commentNameRe = /(?:<!--|\/\*|\/\/)\s*([\w\-.]+\.[\w]+)\s*(?:-->|\*\/)?/;
+    const commentMatch = firstLine.match(commentNameRe);
+    if (commentMatch) detectedName = commentMatch[1];
+
+    // Fall back to language-based suggestion
+    let name = detectedName || (() => {
+      if (lang === "html" || /<!doctype|<html/i.test(code))  return "index.html";
+      if (lang === "css")                                     return "style.css";
+      if (lang === "javascript" || lang === "js")             return "script.js";
+      if (lang === "typescript" || lang === "ts")             return "index.ts";
+      if (lang === "tsx")                                     return "component.tsx";
+      if (lang === "jsx")                                     return "component.jsx";
+      if (lang === "json")                                    return "data.json";
+      if (lang === "python" || lang === "py")                 return "main.py";
+      if (lang === "sql")                                     return "query.sql";
+      if (lang === "bash" || lang === "sh")                   return "script.sh";
+      if (lang === "markdown" || lang === "md")               return "README.md";
+      if (lang)                                               return `file.${lang}`;
+      return "file.txt";
+    })();
 
     blocks.push({ lang, code, suggestedName: name });
   }
@@ -1477,8 +1738,66 @@ function CodeBlockSaver({ content, targetFolder, onSaved }: {
   const blocks = extractCodeBlocks(content);
   if (blocks.length === 0 || !targetFolder) return null;
 
+  const [savingAll, setSavingAll] = useState(false);
+  const [savedAll,  setSavedAll]  = useState(false);
+  const [saveAllErr, setSaveAllErr] = useState("");
+
+  const saveAll = async () => {
+    setSavingAll(true); setSaveAllErr("");
+    let failed = 0;
+    for (const block of blocks) {
+      try {
+        const filePath = `${targetFolder}\\${block.suggestedName}`;
+        const res  = await fetch("/api/ai/browse", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ path: filePath, content: block.code }),
+        });
+        const json = await res.json();
+        if (!json.success) failed++;
+      } catch { failed++; }
+    }
+    setSavingAll(false);
+    if (failed === 0) {
+      setSavedAll(true);
+      onSaved?.();
+      setTimeout(() => setSavedAll(false), 3000);
+    } else {
+      setSaveAllErr(`${failed} file(s) failed to save`);
+    }
+  };
+
+  const folderName = targetFolder.replace(/\\/g, "/").split("/").filter(Boolean).pop();
+
   return (
     <div className="mt-2 space-y-1.5">
+      {/* Save All header — only show when multiple blocks */}
+      {blocks.length > 1 && (
+        <div className="flex items-center justify-between px-2 py-1.5 border"
+          style={{ borderColor: `${C.accent}40`, backgroundColor: `${C.accent}05` }}>
+          <div className="flex items-center gap-1.5">
+            <FolderOpen className="size-3" style={{ color: C.warn }} />
+            <span className="text-[9px] font-mono" style={{ color: C.warn }}>{folderName}/</span>
+            <span className="text-[8px]" style={{ color: C.dim }}>{blocks.length} files ready</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {saveAllErr && <span className="text-[8px]" style={{ color: C.error }}>{saveAllErr}</span>}
+            <button
+              onClick={saveAll}
+              disabled={savingAll || savedAll}
+              className="flex items-center gap-1 h-5 px-2 text-[8px] font-bold uppercase border disabled:opacity-60"
+              style={{
+                borderColor: savedAll ? C.success : C.accent,
+                color:       savedAll ? C.success : "#fff",
+                backgroundColor: savedAll ? `${C.success}20` : C.accent,
+              }}>
+              {savingAll ? <><Loader2 className="size-2.5 animate-spin" /> Saving…</>
+              : savedAll  ? <><CheckCircle2 className="size-2.5" /> All Saved</>
+              : <><Play className="size-2.5" /> Save All ({blocks.length})</>}
+            </button>
+          </div>
+        </div>
+      )}
       {blocks.map((block, i) => (
         <SaveableBlock key={i} block={block} targetFolder={targetFolder}
           index={i} total={blocks.length} onSaved={onSaved} />
@@ -1587,6 +1906,502 @@ function SaveableBlock({ block, targetFolder, index, total, onSaved }: {
   );
 }
 
+/* ─── Knowledge Base Panel ───────────────────────────────────────── */
+interface KnowledgeEntry { id: string; question: string; answer: string; tags: string[]; }
+
+interface DirFile { path: string; name: string; size: number; checked: boolean; status: "idle" | "reading" | "done" | "error"; }
+
+function KnowledgePanel({
+  onContextUpdate,
+  selectedFolder,
+}: {
+  onContextUpdate: (ctx: string) => void;
+  selectedFolder:  string | null;
+}) {
+  const [entries,  setEntries]  = useState<KnowledgeEntry[]>([]);
+  const [loading,  setLoading]  = useState(false);
+  const [showAdd,  setShowAdd]  = useState(false);
+
+  // ── Directory reader state ──────────────────────────────────────
+  const [showDirReader, setShowDirReader] = useState(false);
+  const [dirFiles,      setDirFiles]      = useState<DirFile[]>([]);
+  const [dirLoading,    setDirLoading]    = useState(false);
+  const [learnProgress, setLearnProgress] = useState<{ done: number; total: number } | null>(null);
+  const [learnedCtx,    setLearnedCtx]    = useState("");
+  const [editId,   setEditId]   = useState<string | null>(null);
+  const [q,        setQ]        = useState("");
+  const [a,        setA]        = useState("");
+  const [tags,     setTags]     = useState("");
+  const [search,   setSearch]   = useState("");
+  const [saving,   setSaving]   = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch("/api/ai/knowledge");
+      const json = await res.json();
+      const list = json.entries ?? [];
+      setEntries(list);
+      // Build context string for AI injection
+      if (list.length > 0) {
+        const ctx = "=== KNOWLEDGE BASE (Q&A) ===\n" +
+          list.map((e: KnowledgeEntry) => `Q: ${e.question}\nA: ${e.answer}`).join("\n\n") +
+          "\n=== END KNOWLEDGE BASE ===";
+        onContextUpdate(ctx);
+      } else {
+        onContextUpdate("");
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  // ── Directory reader functions ────────────────────────────────────
+
+  /** Walk the selected folder (or project root) and build a checklist of readable files */
+  const loadDirFiles = async () => {
+    setDirLoading(true); setDirFiles([]);
+
+    // Decide which API and root to use
+    const useExternal = !!selectedFolder;
+    const rootPath    = selectedFolder ?? "";
+
+    try {
+      const collect = async (p: string, depth: number): Promise<DirFile[]> => {
+        if (depth > 3) return [];
+        const url = useExternal
+          ? `/api/ai/browse?path=${encodeURIComponent(p)}`
+          : p ? `/api/ai/files?path=${encodeURIComponent(p)}` : "/api/ai/files";
+        const res  = await fetch(url);
+        const json = await res.json();
+        const entries: DirFile[] = [];
+        for (const e of json.entries ?? []) {
+          if (e.type === "file") {
+            const ext = e.name.split(".").pop()?.toLowerCase() ?? "";
+            const ok  = ["ts","tsx","js","jsx","css","html","json","md","mdx","py","txt","env","yaml","yml","sql","prisma","graphql"].includes(ext);
+            if (ok) entries.push({ path: e.path, name: e.name, size: e.size ?? 0, checked: true, status: "idle" });
+          } else if (e.type === "dir" && depth < 3) {
+            entries.push(...await collect(e.path, depth + 1));
+          }
+        }
+        return entries;
+      };
+
+      const files = await collect(rootPath, 0);
+      files.sort((a, b) => a.size - b.size);
+      setDirFiles(files);
+    } catch { /* silent */ }
+    finally { setDirLoading(false); }
+  };
+
+  /** Read all checked files and inject their content into AI context */
+  const learnSelected = async () => {
+    const toRead = dirFiles.filter(f => f.checked);
+    if (toRead.length === 0) return;
+    setLearnProgress({ done: 0, total: toRead.length });
+
+    const parts: string[] = [];
+    for (let i = 0; i < toRead.length; i++) {
+      const f = toRead[i];
+      // Mark as reading
+      setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "reading" } : x));
+      try {
+        const useExternal = !!selectedFolder;
+        const url = useExternal
+          ? `/api/ai/browse?path=${encodeURIComponent(f.path)}`
+          : `/api/ai/files?path=${encodeURIComponent(f.path)}`;
+        const res  = await fetch(url);
+        const json = await res.json();
+        const content = json.content ?? "";
+        if (content.trim()) {
+          // For large files, take meaningful chunks:
+          // - First 2000 chars (imports, types, constants — the "structure")
+          // - Last 1000 chars (exports, final functions)
+          // - Middle sample every ~5000 chars
+          let extracted = content;
+          const MAX = 6000;
+          if (content.length > MAX) {
+            const head   = content.slice(0, 2500);
+            const tail   = content.slice(-1000);
+            // Sample 1 middle chunk
+            const midPos = Math.floor(content.length / 2);
+            const mid    = content.slice(midPos - 500, midPos + 1000);
+            extracted = `${head}\n\n// ... [${content.length} chars total — middle sample] ...\n\n${mid}\n\n// ... [end sample] ...\n\n${tail}`;
+          }
+          // Get relative path from folder root
+          const rel = f.path.replace(selectedFolder ?? "", "").replace(/^[/\\]/, "");
+          parts.push(`// FILE: ${rel}\n${extracted}`);
+        }
+        setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "done" } : x));
+      } catch {
+        setDirFiles(prev => prev.map(x => x.path === f.path ? { ...x, status: "error" } : x));
+      }
+      setLearnProgress({ done: i + 1, total: toRead.length });
+      // Small yield to keep UI responsive
+      await new Promise(r => setTimeout(r, 10));
+    }
+
+    const ctx = parts.length > 0
+      ? `=== DIRECTORY KNOWLEDGE (${toRead.length} files read) ===\n\n${parts.join("\n\n---\n\n")}\n\n=== END DIRECTORY KNOWLEDGE ===`
+      : "";
+    setLearnedCtx(ctx);
+    // Combine with Q&A context
+    buildCombinedContext(entries, ctx);
+    setLearnProgress(null);
+  };
+
+  /** Combine Q&A entries + learned file context into one context string */
+  const buildCombinedContext = (qaEntries: KnowledgeEntry[], dirCtx: string) => {
+    const parts: string[] = [];
+    if (qaEntries.length > 0) {
+      parts.push(
+        "=== KNOWLEDGE BASE (Q&A) ===\n" +
+        qaEntries.map(e => `Q: ${e.question}\nA: ${e.answer}`).join("\n\n") +
+        "\n=== END KNOWLEDGE BASE ===",
+      );
+    }
+    if (dirCtx) parts.push(dirCtx);
+    onContextUpdate(parts.join("\n\n"));
+  };
+
+  const fmtSize = (b: number) => b < 1024 ? `${b}B` : b < 1024*1024 ? `${(b/1024).toFixed(0)}KB` : `${(b/1024/1024).toFixed(1)}MB`;
+  const checkedCount = dirFiles.filter(f => f.checked).length;
+  const totalSize    = dirFiles.filter(f => f.checked).reduce((s, f) => s + f.size, 0);
+
+  const resetForm = () => { setQ(""); setA(""); setTags(""); setEditId(null); setShowAdd(false); };
+
+  const handleSave = async () => {
+    if (!q.trim() || !a.trim()) return;
+    setSaving(true);
+    try {
+      const tagList = tags.split(",").map(t => t.trim()).filter(Boolean);
+      if (editId) {
+        await fetch("/api/ai/knowledge", {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editId, question: q, answer: a, tags: tagList }),
+        });
+      } else {
+        await fetch("/api/ai/knowledge", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, answer: a, tags: tagList }),
+        });
+      }
+      resetForm();
+      await load();
+    } finally { setSaving(false); }
+  };
+
+  const handleEdit = (e: KnowledgeEntry) => {
+    setEditId(e.id); setQ(e.question); setA(e.answer);
+    setTags(e.tags.join(", ")); setShowAdd(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    await fetch("/api/ai/knowledge", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    await load();
+  };
+
+  const filtered = entries.filter(e =>
+    !search || e.question.toLowerCase().includes(search.toLowerCase()) ||
+    e.answer.toLowerCase().includes(search.toLowerCase()) ||
+    e.tags.some(t => t.toLowerCase().includes(search.toLowerCase())),
+  );
+
+  return (
+    <div className="flex flex-col h-full" style={{ fontFamily: C.font, backgroundColor: C.bg }}>
+      {/* ── Header ── */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b shrink-0"
+        style={{ borderColor: C.border, backgroundColor: C.panel }}>
+        <Brain className="size-3.5 shrink-0" style={{ color: C.accent }} />
+        <span className="text-[9px] font-bold uppercase tracking-widest flex-1" style={{ color: C.accent }}>
+          Knowledge Base
+        </span>
+        <span className="text-[8px]" style={{ color: C.muted }}>{entries.length} Q&A</span>
+        {/* Read Directory button — always visible, uses selected folder or project root */}
+        <button
+          onClick={async () => {
+            setShowDirReader(v => !v);
+            if (!showDirReader && dirFiles.length === 0) await loadDirFiles();
+          }}
+          className="flex items-center gap-1 h-5 px-1.5 text-[8px] uppercase border transition-colors"
+          style={{
+            borderColor: showDirReader ? C.info : C.border,
+            color:       showDirReader ? C.info : C.dim,
+            backgroundColor: showDirReader ? `${C.info}10` : "transparent",
+          }}>
+          <Network className="size-2.5" />
+          {learnedCtx ? "Re-read" : "Read Dir"}
+        </button>
+        <button
+          onClick={() => { setShowAdd(v => !v); if (showAdd) resetForm(); setShowDirReader(false); }}
+          className="flex items-center gap-1 h-5 px-1.5 text-[8px] uppercase border transition-colors"
+          style={{
+            borderColor: showAdd ? C.accent : C.border,
+            color: showAdd ? C.accent : C.dim,
+            backgroundColor: showAdd ? `${C.accent}10` : "transparent",
+          }}>
+          {showAdd ? <><X className="size-2.5" /> Cancel</> : <><Play className="size-2.5" /> Add</>}
+        </button>
+      </div>
+
+      {/* ── Directory Reader Panel ── */}
+      {showDirReader && (
+        <div className="shrink-0 border-b flex flex-col" style={{ borderColor: C.border, maxHeight: 320 }}>
+          {/* Dir reader header */}
+          <div className="flex items-center gap-2 px-3 py-1.5 border-b shrink-0"
+            style={{ borderColor: C.border, backgroundColor: `${C.info}08` }}>
+            <Network className="size-3 shrink-0" style={{ color: C.info }} />
+            <span className="text-[9px] font-mono truncate flex-1" style={{ color: C.info }}>
+              {selectedFolder
+                ? selectedFolder.replace(/\\/g, "/").split("/").filter(Boolean).pop()
+                : "project root"}
+            </span>
+            {dirLoading
+              ? <span className="text-[8px]" style={{ color: C.dim }}><Loader2 className="size-2.5 animate-spin inline mr-1" />scanning…</span>
+              : <span className="text-[8px]" style={{ color: C.muted }}>{dirFiles.length} files</span>
+            }
+            {/* Select all / none */}
+            {dirFiles.length > 0 && (
+              <button
+                onClick={() => setDirFiles(prev => prev.map(f => ({ ...f, checked: !prev.every(x => x.checked) })))}
+                className="text-[8px] px-1.5 border transition-colors"
+                style={{ borderColor: C.border, color: C.dim, height: 18 }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.info; e.currentTarget.style.color = C.info; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.dim; }}>
+                {dirFiles.every(f => f.checked) ? "None" : "All"}
+              </button>
+            )}
+            <button
+              onClick={() => loadDirFiles()}
+              className="flex items-center justify-center h-4 w-4 transition-colors"
+              style={{ color: C.dim }}
+              title="Refresh file list"
+              onMouseEnter={e => (e.currentTarget.style.color = C.info)}
+              onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+              <RefreshCw className="size-3" />
+            </button>
+          </div>
+
+          {/* File checklist */}
+          <div className="flex-1 overflow-y-auto" style={{ minHeight: 60 }}>
+            {dirLoading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
+              </div>
+            )}
+            {!dirLoading && dirFiles.length === 0 && (
+              <p className="text-[9px] px-3 py-3 text-center" style={{ color: C.muted }}>No readable files found</p>
+            )}
+            {!dirLoading && dirFiles.map((f, i) => (
+              <label key={f.path}
+                className="flex items-center gap-2 px-3 py-1 cursor-pointer transition-colors border-b"
+                style={{ borderColor: `${C.border}40` }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${C.info}05`)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+                <input
+                  type="checkbox"
+                  checked={f.checked}
+                  onChange={() => setDirFiles(prev => prev.map((x, j) => j === i ? { ...x, checked: !x.checked } : x))}
+                  className="shrink-0"
+                  style={{ accentColor: C.accent }}
+                />
+                {/* Status icon */}
+                <span className="shrink-0">
+                  {f.status === "reading" && <Loader2 className="size-2.5 animate-spin" style={{ color: C.accent }} />}
+                  {f.status === "done"    && <CheckCircle2 className="size-2.5" style={{ color: C.success }} />}
+                  {f.status === "error"   && <AlertCircle  className="size-2.5" style={{ color: C.error   }} />}
+                  {f.status === "idle"    && <File className="size-2.5" style={{ color: getFileColor(f.name) }} />}
+                </span>
+                <span className="flex-1 text-[9px] font-mono truncate" style={{ color: f.checked ? C.text : C.muted }}>
+                  {f.path.replace(selectedFolder ?? "", "").replace(/^[/\\]/, "")}
+                </span>
+                <span className="text-[8px] shrink-0"
+                  style={{ color: f.size > 6000 ? C.warn : C.muted }}
+                  title={f.size > 6000 ? "Large file — will be sampled (head+mid+tail)" : "Full file"}>
+                  {fmtSize(f.size)}{f.size > 6000 ? " ~" : ""}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {/* Learn footer */}
+          {dirFiles.length > 0 && (
+            <div className="shrink-0 border-t px-3 py-2 flex items-center gap-2"
+              style={{ borderColor: C.border, backgroundColor: C.panel }}>
+              {learnProgress ? (
+                <>
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: C.muted }}>
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${(learnProgress.done / learnProgress.total) * 100}%`, backgroundColor: C.info }} />
+                  </div>
+                  <span className="text-[8px] shrink-0" style={{ color: C.dim }}>
+                    {learnProgress.done}/{learnProgress.total}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[8px] flex-1" style={{ color: C.dim }}>
+                    {checkedCount} files · {fmtSize(totalSize)}
+                    {learnedCtx && <span style={{ color: C.success }}> · learned ✓</span>}
+                  </span>
+                  <button
+                    onClick={learnSelected}
+                    disabled={checkedCount === 0}
+                    className="flex items-center gap-1 h-6 px-2 text-[8px] font-bold uppercase border disabled:opacity-40 transition-colors"
+                    style={{ borderColor: C.info, color: "#fff", backgroundColor: C.info }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#7dd3fc")}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = C.info)}>
+                    <Brain className="size-2.5" />
+                    Learn ({checkedCount})
+                  </button>
+                  {learnedCtx && (
+                    <button
+                      onClick={() => { setLearnedCtx(""); buildCombinedContext(entries, ""); }}
+                      className="h-6 px-1.5 text-[8px] border"
+                      style={{ borderColor: `${C.error}40`, color: C.error }}
+                      title="Clear learned context">
+                      <X className="size-2.5" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Add / Edit Q&A form ── */}
+      {showAdd && (
+        <div className="shrink-0 border-b px-3 py-2.5 space-y-2"
+          style={{ borderColor: C.border, backgroundColor: C.panel }}>
+          <p className="text-[9px] font-bold uppercase" style={{ color: C.accent }}>
+            {editId ? "Edit Entry" : "New Q&A Entry"}
+          </p>
+          <div className="space-y-1.5">
+            <label className="text-[8px] uppercase" style={{ color: C.dim }}>Question / Trigger</label>
+            <textarea
+              value={q} onChange={e => setQ(e.target.value)}
+              placeholder="e.g. How do I add authentication?"
+              rows={2}
+              className="w-full px-2 py-1.5 text-[10px] focus:outline-none resize-none"
+              style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+              onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+              onBlur={e => (e.currentTarget.style.borderColor = C.border)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[8px] uppercase" style={{ color: C.dim }}>Answer / Knowledge</label>
+            <textarea
+              value={a} onChange={e => setA(e.target.value)}
+              placeholder="e.g. This project uses NextAuth.js with Supabase adapter..."
+              rows={4}
+              className="w-full px-2 py-1.5 text-[10px] focus:outline-none resize-none"
+              style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}
+              onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+              onBlur={e => (e.currentTarget.style.borderColor = C.border)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[8px] uppercase" style={{ color: C.dim }}>Tags (comma-separated)</label>
+            <input
+              value={tags} onChange={e => setTags(e.target.value)}
+              placeholder="auth, nextjs, supabase"
+              className="w-full px-2 py-1.5 text-[10px] focus:outline-none"
+              style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font, height: 28 }}
+              onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+              onBlur={e => (e.currentTarget.style.borderColor = C.border)}
+            />
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              onClick={handleSave} disabled={saving || !q.trim() || !a.trim()}
+              className="flex items-center gap-1 h-6 px-2 text-[9px] font-bold uppercase border disabled:opacity-50"
+              style={{ borderColor: C.accent, color: "#fff", backgroundColor: C.accent }}>
+              {saving ? <Loader2 className="size-2.5 animate-spin" /> : <CheckCircle2 className="size-2.5" />}
+              {editId ? "Update" : "Save"}
+            </button>
+            <button onClick={resetForm}
+              className="h-6 px-2 text-[9px] uppercase border"
+              style={{ borderColor: C.border, color: C.dim }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Search ── */}
+      {entries.length > 3 && (
+        <div className="shrink-0 px-3 py-1.5 border-b" style={{ borderColor: C.border }}>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search knowledge…"
+            className="w-full px-2 py-1 text-[9px] focus:outline-none"
+            style={{ backgroundColor: C.panel, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font, height: 24 }}
+          />
+        </div>
+      )}
+
+      {/* ── Q&A Entries list ── */}
+      <div className="flex-1 overflow-y-auto">
+        {loading && (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
+          </div>
+        )}
+        {!loading && filtered.length === 0 && !showDirReader && (
+          <div className="flex flex-col items-center justify-center py-8 gap-2 text-center px-3">
+            <Brain className="size-8 opacity-10" style={{ color: C.accent }} />
+            <p className="text-[10px]" style={{ color: C.dim }}>
+              {entries.length === 0
+                ? "Add Q&A pairs to teach the AI about your project.\nOr use 'Read Dir' to learn from files."
+                : "No results for your search."}
+            </p>
+          </div>
+        )}
+        {!loading && filtered.map(entry => (
+          <div key={entry.id} className="border-b px-3 py-2.5 group"
+            style={{ borderColor: C.border }}>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[10px] font-bold flex-1" style={{ color: C.text }}>{entry.question}</p>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <button onClick={() => handleEdit(entry)}
+                  className="h-4 w-4 flex items-center justify-center"
+                  style={{ color: C.dim }}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+                  <Lightbulb className="size-3" />
+                </button>
+                <button onClick={() => handleDelete(entry.id)}
+                  className="h-4 w-4 flex items-center justify-center"
+                  style={{ color: C.dim }}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.error)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+                  <Trash2 className="size-3" />
+                </button>
+              </div>
+            </div>
+            <p className="text-[9px] mt-1 line-clamp-2" style={{ color: C.dim }}>{entry.answer}</p>
+            {entry.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {entry.tags.map(tag => (
+                  <span key={tag} className="text-[8px] px-1 border"
+                    style={{ borderColor: `${C.info}30`, color: C.info, backgroundColor: `${C.info}08` }}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Page ───────────────────────────────────────────────────── */
 export default function TrainingGroundPage() {
   const router    = useRouter();
@@ -1618,6 +2433,15 @@ export default function TrainingGroundPage() {
   });
   const [folderContext,  setFolderContext]  = useState<string>("");
 
+  // RAG index state
+  const [ragIndexed,   setRagIndexed]   = useState(false);
+  const [ragIndexing,  setRagIndexing]  = useState(false);
+  const [ragStats,     setRagStats]     = useState<{ totalFiles: number; totalChunks: number } | null>(null);
+
+  // Knowledge base context (injected into every AI message)
+  const [knowledgeCtx,  setKnowledgeCtx]  = useState("");
+  const [showKnowledge, setShowKnowledge] = useState(false);
+
   // Restore folder context on mount if a folder was previously selected
   useEffect(() => {
     const saved = selectedFolder;
@@ -1631,6 +2455,8 @@ export default function TrainingGroundPage() {
         setFolderContext(`Active working folder: ${saved}\nContents:\n${fileNames || "(empty)"}`);
       })
       .catch(() => setFolderContext(`Active working folder: ${saved}`));
+    // Also restore RAG index (fire and forget)
+    indexFolderForRag(saved); // intentionally not awaited
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount only
 
@@ -1878,6 +2704,54 @@ export default function TrainingGroundPage() {
       // Context fetch failed — still set the folder, just without listing
       setFolderContext(`Active working folder: ${folderPath}`);
     }
+
+    // Auto-index the folder for RAG after selecting it (fire and forget)
+    indexFolderForRag(folderPath); // intentionally not awaited
+  };
+
+  /** Index a folder into the RAG engine */
+  const indexFolderForRag = async (folderPath: string) => {
+    setRagIndexing(true); setRagIndexed(false);
+    try {
+      const res  = await fetch("/api/ai/rag", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ action: "index", path: folderPath }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setRagIndexed(true);
+        setRagStats({ totalFiles: json.files, totalChunks: json.chunks });
+        toast.success(`RAG: indexed ${json.files} files (${json.chunks} chunks)`);
+      }
+    } catch { /* silent */ }
+    finally { setRagIndexing(false); }
+  };
+
+  /** Search the RAG index — hard 1.5s timeout so it never blocks the AI response */
+  const ragSearch = async (query: string): Promise<string> => {
+    if (!ragIndexed) return "";
+    try {
+      const ac  = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 1500); // 1.5s max
+      const res = await fetch("/api/ai/rag", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ action: "search", query, k: 4 }),
+        signal:  ac.signal,
+      });
+      clearTimeout(tid);
+      const json = await res.json();
+      if (!json.results?.length) return "";
+
+      const snippets = json.results
+        .map((r: any) =>
+          `// ${r.filePath} (lines ${r.lines[0]}–${r.lines[1]})\n${r.content}`,
+        )
+        .join("\n\n---\n\n");
+
+      return `=== RELEVANT CODE (RAG) ===\n${snippets}\n=== END ===`;
+    } catch { return ""; } // timeout or error → continue without RAG
   };
 
   /* ── Apply a single task ── */
@@ -1967,12 +2841,19 @@ export default function TrainingGroundPage() {
     setMessages(prev => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
     setInput(""); setIsStreaming(true);
 
+    // RAG: retrieve relevant chunks for this query
+    const ragContext = await ragSearch(text);
+
     // Build context with NLP annotations injected as a system hint
     const ctx = [
       { role: "system", content: SYSTEM_PROMPT },
       ...(projectTreeRef.current ? [{ role: "system", content: projectTreeRef.current }] : []),
-      ...(folderContext ? [{ role: "system", content: folderContext }] : []),
-      ...(fileContent ? [{ role: "system", content: `Open file (${filePath}):\n\`\`\`\n${fileContent.slice(0, 8000)}\n\`\`\`` }] : []),
+      ...(folderContext    ? [{ role: "system", content: folderContext }]    : []),
+      // Inject knowledge base Q&A entries
+      ...(knowledgeCtx    ? [{ role: "system", content: knowledgeCtx }]    : []),
+      // Inject RAG-retrieved code snippets as additional context
+      ...(ragContext       ? [{ role: "system", content: ragContext }]       : []),
+      ...(fileContent      ? [{ role: "system", content: `Open file (${filePath}):\n\`\`\`\n${fileContent.slice(0, 8000)}\n\`\`\`` }] : []),
       // Context-aware injection: intent + entities + prefs + conversation continuity
       {
         role: "system",
@@ -2147,29 +3028,43 @@ export default function TrainingGroundPage() {
               {/* Tab bar: Project / Open Folder */}
               <div className="flex items-stretch border-b shrink-0" style={{ borderColor: C.border, backgroundColor: C.bg }}>
                 <button
-                  onClick={() => { setBrowserMode("project"); setShowBrowser(false); }}
+                  onClick={() => { setBrowserMode("project"); setShowBrowser(false); setShowKnowledge(false); }}
                   className="flex-1 flex items-center justify-center gap-1 py-2 text-[9px] font-bold uppercase tracking-widest transition-colors"
                   style={{
-                    color: browserMode === "project" ? C.accent : C.dim,
-                    borderBottom: browserMode === "project" ? `2px solid ${C.accent}` : "2px solid transparent",
+                    color: browserMode === "project" && !showKnowledge ? C.accent : C.dim,
+                    borderBottom: browserMode === "project" && !showKnowledge ? `2px solid ${C.accent}` : "2px solid transparent",
                     backgroundColor: "transparent",
                   }}>
                   <Code2 className="size-3" /> Project
                 </button>
                 <button
-                  onClick={() => { setBrowserMode("external"); setShowBrowser(true); }}
+                  onClick={() => { setBrowserMode("external"); setShowBrowser(true); setShowKnowledge(false); }}
                   className="flex-1 flex items-center justify-center gap-1 py-2 text-[9px] font-bold uppercase tracking-widest transition-colors"
                   style={{
-                    color: browserMode === "external" ? C.accent : C.dim,
-                    borderBottom: browserMode === "external" ? `2px solid ${C.accent}` : "2px solid transparent",
+                    color: browserMode === "external" && !showKnowledge ? C.accent : C.dim,
+                    borderBottom: browserMode === "external" && !showKnowledge ? `2px solid ${C.accent}` : "2px solid transparent",
                     backgroundColor: "transparent",
                   }}>
                   <FolderPlus className="size-3" /> Open
                 </button>
+                <button
+                  onClick={() => { setShowKnowledge(v => !v); setShowBrowser(false); }}
+                  className="flex-1 flex items-center justify-center gap-1 py-2 text-[9px] font-bold uppercase tracking-widest transition-colors"
+                  style={{
+                    color: showKnowledge ? C.accent : C.dim,
+                    borderBottom: showKnowledge ? `2px solid ${C.accent}` : "2px solid transparent",
+                    backgroundColor: "transparent",
+                  }}>
+                  <Brain className="size-3" /> KB
+                </button>
               </div>
 
-              {/* External browser panel */}
-              {browserMode === "external" && showBrowser ? (
+              {/* Knowledge Base panel */}
+              {showKnowledge ? (
+                <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                  <KnowledgePanel onContextUpdate={setKnowledgeCtx} selectedFolder={selectedFolder} />
+                </div>
+              ) : browserMode === "external" && showBrowser ? (
                 <div className="flex-1 flex flex-col overflow-hidden min-h-0">
                   <ExternalBrowser
                     onOpenFile={handleOpenExternalFile}
@@ -2188,6 +3083,19 @@ export default function TrainingGroundPage() {
                         title={selectedFolder}>
                         {selectedFolder.replace(/\\/g, "/").split("/").filter(Boolean).pop()}
                       </span>
+                      {/* Re-index button */}
+                      <button
+                        onClick={() => indexFolderForRag(selectedFolder)}
+                        disabled={ragIndexing}
+                        title={ragIndexed ? `Re-index RAG (${ragStats?.totalFiles} files)` : "Index for RAG"}
+                        className="flex items-center justify-center h-4 w-4 transition-colors disabled:opacity-50"
+                        style={{ color: ragIndexed ? C.info : C.muted }}
+                        onMouseEnter={e => (e.currentTarget.style.color = C.info)}
+                        onMouseLeave={e => (e.currentTarget.style.color = ragIndexed ? C.info : C.muted)}>
+                        {ragIndexing
+                          ? <Loader2 className="size-3 animate-spin" />
+                          : <Brain className="size-3" />}
+                      </button>
                       <button
                         onClick={() => { setSelectedFolder(null); setFolderContext(""); try { localStorage.removeItem("ai-selected-folder"); } catch { /* ignore */ } }}
                         title="Clear selected folder"
@@ -2541,6 +3449,24 @@ export default function TrainingGroundPage() {
                       </span>
                     </span>
                   )}
+                  {/* RAG status badge */}
+                  {ragIndexing && (
+                    <span className="flex items-center gap-1 text-[8px] px-1.5 py-0.5 border"
+                      style={{ borderColor: `${C.info}40`, color: C.info, backgroundColor: `${C.info}08` }}>
+                      <Loader2 className="size-2 animate-spin" /> indexing…
+                    </span>
+                  )}
+                  {ragIndexed && !ragIndexing && (
+                    <button
+                      onClick={() => selectedFolder && indexFolderForRag(selectedFolder)}
+                      className="flex items-center gap-1 text-[8px] px-1.5 py-0.5 border transition-colors"
+                      style={{ borderColor: `${C.info}40`, color: C.info, backgroundColor: `${C.info}08` }}
+                      title={ragStats ? `RAG: ${ragStats.totalFiles} files, ${ragStats.totalChunks} chunks — click to re-index` : "RAG active"}>
+                      <Brain className="size-2.5 shrink-0" />
+                      <span>RAG</span>
+                      {ragStats && <span style={{ color: C.muted }}>{ragStats.totalFiles}f</span>}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2552,6 +3478,43 @@ export default function TrainingGroundPage() {
                     <p className="text-[10px]" style={{ color: C.dim }}>
                       {fileContent ? `Open: ${selectedFile?.name}` : "Open a file and ask the AI"}
                     </p>
+
+                    {/* Folder-aware quick actions */}
+                    {selectedFolder && (
+                      <div className="w-full space-y-1">
+                        <p className="text-[8px] uppercase tracking-widest font-bold mb-1" style={{ color: C.muted }}>
+                          Generate for: {selectedFolder.replace(/\\/g, "/").split("/").filter(Boolean).pop()}
+                        </p>
+                        {[
+                          {
+                            label: "⚡ Modern Website (HTML + CSS + JS)",
+                            prompt: "Build a complete modern website with 3 pages: index.html (home), about.html, contact.html. Use a single style.css with CSS variables, flexbox/grid layout, a sticky navigation bar with links between pages, hero section, cards, footer. Make it visually impressive with gradients, shadows, hover animations. All pages link to each other via <a href>."
+                          },
+                          {
+                            label: "🎨 Landing Page (single page)",
+                            prompt: "Build a stunning single-page landing page in index.html + style.css. Include: sticky nav, hero with gradient background, features section with cards, testimonials, CTA section, footer. Use modern CSS: custom properties, flexbox, smooth scroll, hover effects, responsive design."
+                          },
+                          {
+                            label: "📋 Dashboard UI (HTML + CSS)",
+                            prompt: "Build a modern admin dashboard in index.html + style.css. Include: sidebar navigation, top header with user avatar, stat cards, a data table, charts placeholder. Use CSS grid for layout, dark color scheme with accent colors."
+                          },
+                          {
+                            label: "🛒 E-commerce Page",
+                            prompt: "Build a product listing page (index.html + style.css) for an e-commerce site. Include: navbar, search bar, product cards grid with images, price, add-to-cart button, footer. Modern CSS with hover effects on cards."
+                          },
+                        ].map(item => (
+                          <button key={item.label} onClick={() => handleSend(item.prompt)}
+                            className="w-full px-2 py-2 text-left text-[10px] border transition-colors"
+                            style={{ borderColor: `${C.accent}40`, color: C.accent, backgroundColor: `${C.accent}05` }}
+                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${C.accent}12`; }}
+                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = `${C.accent}05`; }}>
+                            {item.label}
+                          </button>
+                        ))}
+                        <div className="border-t my-1" style={{ borderColor: C.border }} />
+                      </div>
+                    )}
+
                     <div className="space-y-1.5 w-full">
                       {suggestions.map(p => (
                         <button key={p} onClick={() => handleSend(p)}
