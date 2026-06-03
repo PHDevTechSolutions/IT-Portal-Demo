@@ -1437,6 +1437,156 @@ function ExternalBrowser({
   );
 }
 
+/* ─── Code Block Saver ───────────────────────────────────────────── */
+
+interface CodeBlock { lang: string; code: string; suggestedName: string; }
+
+/** Extract all fenced code blocks from markdown text */
+function extractCodeBlocks(content: string): CodeBlock[] {
+  const blocks: CodeBlock[] = [];
+  const re = /```(\w*)\n([\s\S]*?)```/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const lang = m[1].toLowerCase();
+    const code = m[2];
+    if (!code.trim()) continue;
+
+    // Suggest a filename based on language / content hints
+    let name = "file.txt";
+    if (lang === "html" || /<!doctype|<html/i.test(code))  name = "index.html";
+    else if (lang === "css")                                name = "style.css";
+    else if (lang === "javascript" || lang === "js")        name = "script.js";
+    else if (lang === "typescript" || lang === "ts")        name = "index.ts";
+    else if (lang === "tsx")                                name = "component.tsx";
+    else if (lang === "jsx")                                name = "component.jsx";
+    else if (lang === "json")                               name = "data.json";
+    else if (lang === "python" || lang === "py")            name = "main.py";
+    else if (lang === "sql")                                name = "query.sql";
+    else if (lang === "bash" || lang === "sh")              name = "script.sh";
+    else if (lang === "markdown" || lang === "md")          name = "README.md";
+    else if (lang)                                          name = `file.${lang}`;
+
+    blocks.push({ lang, code, suggestedName: name });
+  }
+  return blocks;
+}
+
+function CodeBlockSaver({ content, targetFolder, onSaved }: {
+  content: string; targetFolder: string | null; onSaved?: () => void;
+}) {
+  const blocks = extractCodeBlocks(content);
+  if (blocks.length === 0 || !targetFolder) return null;
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      {blocks.map((block, i) => (
+        <SaveableBlock key={i} block={block} targetFolder={targetFolder}
+          index={i} total={blocks.length} onSaved={onSaved} />
+      ))}
+    </div>
+  );
+}
+
+function SaveableBlock({ block, targetFolder, index, total, onSaved }: {
+  block: CodeBlock; targetFolder: string; index: number; total: number; onSaved?: () => void;
+}) {
+  const [filename,  setFilename]  = useState(block.suggestedName);
+  const [editing,   setEditing]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [error,     setError]     = useState("");
+
+  const save = async () => {
+    if (!filename.trim()) return;
+    setSaving(true); setError("");
+    try {
+      const filePath = `${targetFolder}\\${filename.trim()}`;
+      const res  = await fetch("/api/ai/browse", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ path: filePath, content: block.code }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error ?? "Save failed");
+      setSaved(true);
+      onSaved?.();                          // ← refresh file tree
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const folderName = targetFolder.replace(/\\/g, "/").split("/").filter(Boolean).pop();
+  const label = total > 1 ? `Block ${index + 1} · ${block.lang || "text"}` : (block.lang || "text");
+
+  return (
+    <div className="border" style={{ borderColor: C.border, backgroundColor: C.panel }}>
+      {/* Header row */}
+      <div className="flex items-center gap-2 px-2 py-1.5 border-b" style={{ borderColor: C.border }}>
+        <FileCode className="size-3 shrink-0" style={{ color: getFileColor(filename) }} />
+        <span className="text-[8px] uppercase font-bold shrink-0" style={{ color: C.dim }}>{label}</span>
+        <span className="text-[8px] shrink-0" style={{ color: C.muted }}>→</span>
+        <FolderOpen className="size-3 shrink-0" style={{ color: C.warn }} />
+        <span className="text-[8px] font-mono shrink-0" style={{ color: C.warn }}>{folderName}/</span>
+
+        {/* Filename — editable */}
+        {editing ? (
+          <input
+            autoFocus
+            value={filename}
+            onChange={e => setFilename(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { setEditing(false); } if (e.key === "Escape") setEditing(false); }}
+            onBlur={() => setEditing(false)}
+            className="flex-1 px-1 text-[9px] font-mono focus:outline-none"
+            style={{ backgroundColor: C.bg, border: `1px solid ${C.accent}`, color: C.text, height: 18 }}
+          />
+        ) : (
+          <button onClick={() => setEditing(true)}
+            className="flex-1 text-left text-[9px] font-mono truncate transition-colors"
+            style={{ color: C.text }}
+            title="Click to rename"
+            onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
+            onMouseLeave={e => (e.currentTarget.style.color = C.text)}>
+            {filename}
+          </button>
+        )}
+
+        {/* Save button */}
+        <button
+          onClick={save}
+          disabled={saving || saved}
+          className="flex items-center gap-1 h-5 px-2 text-[8px] font-bold uppercase border shrink-0 transition-colors disabled:opacity-60"
+          style={{
+            borderColor: saved ? C.success : C.accent,
+            color:       saved ? C.success : "#fff",
+            backgroundColor: saved ? `${C.success}20` : C.accent,
+          }}
+          onMouseEnter={e => { if (!saved) (e.currentTarget as HTMLElement).style.backgroundColor = "#ff7a1a"; }}
+          onMouseLeave={e => { if (!saved) (e.currentTarget as HTMLElement).style.backgroundColor = C.accent; }}>
+          {saving ? <><Loader2 className="size-2.5 animate-spin" /> Saving…</>
+          : saved  ? <><CheckCircle2 className="size-2.5" /> Saved</>
+          : <><Play className="size-2.5" /> Save to Folder</>}
+        </button>
+      </div>
+
+      {/* Code preview — first 4 lines */}
+      <div className="px-2 py-1.5 overflow-hidden" style={{ maxHeight: 64 }}>
+        <pre className="text-[9px] leading-4 overflow-hidden"
+          style={{ color: C.dim, fontFamily: C.font, margin: 0, whiteSpace: "pre-wrap" }}>
+          {block.code.split("\n").slice(0, 4).join("\n")}
+          {block.code.split("\n").length > 4 && <span style={{ color: C.muted }}>{`\n… +${block.code.split("\n").length - 4} lines`}</span>}
+        </pre>
+      </div>
+
+      {error && (
+        <div className="px-2 py-1 border-t text-[8px]" style={{ borderColor: C.border, color: C.error }}>{error}</div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main Page ───────────────────────────────────────────────────── */
 export default function TrainingGroundPage() {
   const router    = useRouter();
@@ -1530,7 +1680,10 @@ export default function TrainingGroundPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const [rootEntries,  setRootEntries]  = useState<any[]>([]);
+  const [rootEntries,         setRootEntries]         = useState<any[]>([]);
+  const [externalEntries,     setExternalEntries]     = useState<any[]>([]);
+  const [externalDirCache,    setExternalDirCache]    = useState<Record<string, any[]>>({});
+  const [externalTreeLoading, setExternalTreeLoading] = useState(false);
   const [dirCache,     setDirCache]     = useState<Record<string, any[]>>({});
   const [treeLoading,  setTreeLoading]  = useState(true);
   const [selectedFile, setSelectedFile] = useState<any>(null);
@@ -1634,6 +1787,40 @@ export default function TrainingGroundPage() {
     setDirCache(prev => ({ ...prev, [p]: kids }));
     return kids;
   }, [dirCache]);
+
+  /** Load a directory via the external browse API (absolute paths) */
+  const loadExternalDir = useCallback(async (p: string): Promise<any[]> => {
+    if (externalDirCache[p]) return externalDirCache[p];
+    const res  = await fetch(`/api/ai/browse?path=${encodeURIComponent(p)}`);
+    const d    = await res.json();
+    const kids = d.entries ?? [];
+    setExternalDirCache(prev => ({ ...prev, [p]: kids }));
+    return kids;
+  }, [externalDirCache]);
+
+  /** When selectedFolder changes, reload the external file tree */
+  useEffect(() => {
+    if (!selectedFolder) { setExternalEntries([]); return; }
+    setExternalTreeLoading(true);
+    fetch(`/api/ai/browse?path=${encodeURIComponent(selectedFolder)}`)
+      .then(r => r.json())
+      .then(d => setExternalEntries(d.entries ?? []))
+      .catch(() => setExternalEntries([]))
+      .finally(() => setExternalTreeLoading(false));
+    // Clear dir cache so subdirs reload fresh
+    setExternalDirCache({});
+  }, [selectedFolder]);
+
+  /** Re-fetch the root of the external folder — called after saving files */
+  const refreshExternalTree = useCallback(() => {
+    if (!selectedFolder) return;
+    fetch(`/api/ai/browse?path=${encodeURIComponent(selectedFolder)}`)
+      .then(r => r.json())
+      .then(d => setExternalEntries(d.entries ?? []))
+      .catch(() => {});
+    // Also bust the dir cache so any open subdirs reload on next expand
+    setExternalDirCache({});
+  }, [selectedFolder]);
 
   const handleSelectFile = async (entry: any) => {
     if (entry.type !== "file") return;
@@ -2012,15 +2199,27 @@ export default function TrainingGroundPage() {
                     </div>
                   )}
                   <div className="flex-1 overflow-y-auto py-1">
-                    {treeLoading ? (
+                    {(selectedFolder ? externalTreeLoading : treeLoading) ? (
                       <div className="flex items-center justify-center py-6">
                         <Loader2 className="size-3.5 animate-spin" style={{ color: C.accent }} />
                       </div>
-                    ) : rootEntries.map((entry: any) => (
-                      <FolderRow key={entry.path} entry={entry} depth={0}
-                        onSelect={handleSelectFile} selectedPath={selectedFile?.path ?? ""}
-                        onLoadDir={loadDir} dirCache={dirCache} />
-                    ))}
+                    ) : selectedFolder ? (
+                      // Show external folder contents
+                      externalEntries.length === 0
+                        ? <p className="text-[9px] px-3 py-4 text-center" style={{ color: C.muted }}>Empty folder</p>
+                        : externalEntries.map((entry: any) => (
+                          <FolderRow key={entry.path} entry={entry} depth={0}
+                            onSelect={handleOpenExternalFile} selectedPath={selectedFile?.path ?? ""}
+                            onLoadDir={loadExternalDir} dirCache={externalDirCache} />
+                        ))
+                    ) : (
+                      // Show admin portal project files
+                      rootEntries.map((entry: any) => (
+                        <FolderRow key={entry.path} entry={entry} depth={0}
+                          onSelect={handleSelectFile} selectedPath={selectedFile?.path ?? ""}
+                          onLoadDir={loadDir} dirCache={dirCache} />
+                      ))
+                    )}
                   </div>
 
                   {/* Chat history */}
@@ -2407,6 +2606,12 @@ export default function TrainingGroundPage() {
                             ? <><Check className="size-2.5" style={{ color: C.success }} /> Copied</>
                             : <><Copy className="size-2.5" /> Copy</>}
                         </button>
+                      )}
+
+                      {/* Save code blocks to selected folder */}
+                      {msg.role === "assistant" && msg.content && selectedFolder && (
+                        <CodeBlockSaver content={msg.content} targetFolder={selectedFolder}
+                          onSaved={refreshExternalTree} />
                       )}
 
                       {/* Task panel */}
