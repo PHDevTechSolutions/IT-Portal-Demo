@@ -16,11 +16,31 @@ export const dynamic = "force-dynamic";
 
 const ROOT = path.resolve(process.cwd());
 
-// Files/dirs to skip
+// Dirs/files to always skip — build artifacts and VCS internals
 const SKIP = new Set([
-  "node_modules", ".next", ".git", ".vercel",
-  "dist", "build", ".turbo", "coverage",
+  "node_modules", ".next", ".git", ".vercel", ".turbo",
+  "dist", "build", "coverage",
 ]);
+
+// Dotfiles that ARE useful to show (env files, config dotfiles)
+const ALLOWED_DOTFILES = new Set([
+  ".env", ".env.local", ".env.development", ".env.development.local",
+  ".env.production", ".env.production.local", ".env.test", ".env.test.local",
+  ".env.example", ".env.sample", ".env.template",
+  ".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json", ".eslintrc.yml",
+  ".prettierrc", ".prettierrc.js", ".prettierrc.json", ".prettierrc.yml",
+  ".babelrc", ".babelrc.js", ".babelrc.json",
+  ".editorconfig", ".nvmrc", ".node-version",
+  ".gitignore", ".gitattributes",
+  ".dockerignore", "Dockerfile",
+]);
+
+/** Returns true if this name should be shown in the file tree */
+function shouldShow(name: string): boolean {
+  if (SKIP.has(name)) return false;
+  if (!name.startsWith(".")) return true;       // normal files always shown
+  return ALLOWED_DOTFILES.has(name);            // dotfiles: only whitelisted ones
+}
 
 function ext2lang(filename: string): string {
   const e = filename.split(".").pop()?.toLowerCase() ?? "";
@@ -50,7 +70,7 @@ export async function GET(req: NextRequest) {
 
     if (stat.isDirectory()) {
       const entries = fs.readdirSync(absPath)
-        .filter(name => !SKIP.has(name) && !name.startsWith("."))
+        .filter(name => shouldShow(name))
         .map(name => {
           const childAbs  = path.join(absPath, name);
           const childRel  = path.relative(ROOT, childAbs);
