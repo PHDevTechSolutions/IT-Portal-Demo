@@ -54,20 +54,53 @@ export async function GET(req: NextRequest) {
 
     // ── Search mode ───────────────────────────────────────────────────────────
     if (search) {
-      let q = supabase
-        .from("history")
-        .select(COLS.join(","), { count: "exact" })
-        .or(`activity_reference_number.ilike.%${search}%,company_name.ilike.%${search}%,ticket_reference_number.ilike.%${search}%`)
-        .order("date_created", { ascending: false })
-        .range(from, to);
+      // PostgREST's .or() parser breaks on commas inside values (e.g. "Company, Inc.").
+      // Fix: run each column as a separate parallel query then merge server-side.
+      // This fully avoids the PostgREST comma-in-value parsing bug.
+      const cols = [
+        "activity_reference_number",
+        "company_name",
+        "ticket_reference_number",
+        "contact_person",
+        "contact_number",
+        "referenceid",
+      ];
 
-      if (dateFrom) q = q.gte("date_created", dateFrom);
-      if (dateTo)   q = q.lte("date_created", dateTo);
+      // Run each column as a separate query then merge — avoids the comma parsing bug
+      const promises = cols.map(col =>
+        supabase
+          .from("history")
+          .select(COLS.join(","), { count: "exact" })
+          .ilike(col, `%${search}%`)
+          .order("date_created", { ascending: false })
+          .range(0, 999), // fetch up to 1000 per column, dedupe after
+      );
 
-      const { data, error, count } = await q;
-      if (error) throw new Error(error.message);
+      const results = await Promise.all(promises);
+      const errors  = results.filter(r => r.error);
+      if (errors.length === cols.length) throw new Error(errors[0].error!.message);
 
-      return NextResponse.json({ success: true, data: data ?? [], total: count ?? 0, page, pageSize, mode: "search" });
+      // Merge, dedupe by id, sort by date_created desc
+      const seen = new Set<string>();
+      const merged: any[] = [];
+      for (const r of results) {
+        for (const row of r.data ?? []) {
+          if (!seen.has(row.id)) { seen.add(row.id); merged.push(row); }
+        }
+      }
+      merged.sort((a, b) =>
+        new Date(b.date_created ?? 0).getTime() - new Date(a.date_created ?? 0).getTime(),
+      );
+
+      // Apply date filters client-side after merge
+      let filtered = merged;
+      if (dateFrom) filtered = filtered.filter(r => r.date_created >= dateFrom);
+      if (dateTo)   filtered = filtered.filter(r => r.date_created <= dateTo);
+
+      const total  = filtered.length;
+      const paged  = filtered.slice(from, to + 1);
+
+      return NextResponse.json({ success: true, data: paged, total, page, pageSize, mode: "search" });
     }
 
     // ── Column mode ───────────────────────────────────────────────────────────

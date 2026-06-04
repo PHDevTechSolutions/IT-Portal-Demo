@@ -152,7 +152,10 @@ function statusBadge(status: string) {
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
-function KanbanCard({ act, onClick }: { act: Activity; onClick: () => void }) {
+function KanbanCard({ act, onClick, userNames }: {
+  act: Activity; onClick: () => void; userNames: Record<string, string>;
+}) {
+  const resolvedName = act.referenceid ? userNames[act.referenceid] : null;
   return (
     <div
       onClick={onClick}
@@ -179,6 +182,19 @@ function KanbanCard({ act, onClick }: { act: Activity; onClick: () => void }) {
         {act.contact_person && (
           <p className="text-[10px] truncate" style={{ color: C.dim }}>{act.contact_person}</p>
         )}
+        {/* Reference ID + resolved user name */}
+        {act.referenceid && (
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="text-[9px] font-mono font-bold" style={{ color: "#60a5fa" }}>
+              {act.referenceid}
+            </span>
+            {resolvedName && (
+              <span className="text-[9px]" style={{ color: C.dim }}>
+                — {resolvedName}
+              </span>
+            )}
+          </div>
+        )}
         {act.ticket_reference_number && (
           <p className="text-[9px] font-mono truncate" style={{ color: C.muted }}>
             {act.ticket_reference_number}
@@ -188,12 +204,15 @@ function KanbanCard({ act, onClick }: { act: Activity; onClick: () => void }) {
           <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 border ${statusBadge(act.status)}`}>
             {act.status || "—"}
           </span>
-          {act.agent && (
-            <span className="text-[9px] font-mono truncate max-w-[80px]" style={{ color: C.muted }}>
-              {act.agent}
+          {act.type_activity && (
+            <span className="text-[8px] uppercase tracking-widest truncate max-w-[90px]" style={{ color: C.dim }}>
+              {act.type_activity}
             </span>
           )}
         </div>
+        {act.agent && (
+          <p className="text-[9px] font-mono truncate" style={{ color: C.muted }}>{act.agent}</p>
+        )}
       </div>
     </div>
   );
@@ -201,7 +220,7 @@ function KanbanCard({ act, onClick }: { act: Activity; onClick: () => void }) {
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────
 function KanbanColumn({
-  col, cards, total, isLoading, onViewMore, onCardClick, hasMore,
+  col, cards, total, isLoading, onViewMore, onCardClick, hasMore, userNames,
 }: {
   col: typeof COLUMNS[number];
   cards: Activity[];
@@ -210,6 +229,7 @@ function KanbanColumn({
   onViewMore: () => void;
   onCardClick: (act: Activity) => void;
   hasMore: boolean;
+  userNames: Record<string, string>;
 }) {
   const Icon = col.icon;
   return (
@@ -244,7 +264,7 @@ function KanbanColumn({
           </div>
         ) : (
           cards.map(act => (
-            <KanbanCard key={`${col.key}-${act.id}`} act={act} onClick={() => onCardClick(act)} />
+            <KanbanCard key={`${col.key}-${act.id}`} act={act} onClick={() => onCardClick(act)} userNames={userNames} />
           ))
         )}
         {hasMore && (
@@ -292,6 +312,9 @@ export default function ProgressLogsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo]     = useState("");
 
+  // User name cache: { [ReferenceID]: "Firstname Lastname" }
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+
   const [selectedAct, setSelectedAct] = useState<Activity | null>(null);
   const [editForm, setEditForm]       = useState<Partial<Activity>>({});
   const [isSaving, setIsSaving]       = useState(false);
@@ -301,6 +324,24 @@ export default function ProgressLogsPage() {
   useEffect(() => {
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); };
   }, []);
+
+  // ── Resolve user names by ReferenceID (batch, cached) ───────────────────
+  const resolveUserNames = useCallback(async (activities: Activity[]) => {
+    const ids = activities
+      .map(a => a.referenceid)
+      .filter(Boolean)
+      .filter(id => !userNames[id]); // only fetch missing ones
+
+    if (ids.length === 0) return;
+    const unique = [...new Set(ids)];
+    try {
+      const res  = await fetch(`/api/taskflow/user-lookup?ids=${unique.join(",")}`);
+      const json = await res.json();
+      if (json.users) {
+        setUserNames(prev => ({ ...prev, ...json.users }));
+      }
+    } catch { /* silent */ }
+  }, [userNames]);
 
   // ── Fetch a single column ──────────────────────────────────────────────────
   const fetchColumn = useCallback(async (col: ColumnKey, page = 1, append = false) => {
@@ -322,6 +363,8 @@ export default function ProgressLogsPage() {
       }));
       setColTotals(prev => ({ ...prev, [col]: json.total ?? 0 }));
       setColPages(prev => ({ ...prev, [col]: page }));
+      // Resolve names for the newly loaded cards
+      resolveUserNames(json.data ?? []);
     } catch (err: any) {
       toast.error(`Failed to load ${col}: ${err.message}`);
     } finally {
@@ -356,6 +399,8 @@ export default function ProgressLogsPage() {
       else setSearchResults(prev => [...prev, ...(json.data ?? [])]);
       setSearchTotal(json.total ?? 0);
       setSearchPage(page);
+      // Resolve user names for search results
+      resolveUserNames(json.data ?? []);
     } catch (err: any) {
       toast.error("Search failed: " + err.message);
     } finally {
@@ -575,7 +620,7 @@ export default function ProgressLogsPage() {
                       <div
                         key={act.id}
                         onClick={() => openEdit(act)}
-                        className="flex items-center gap-4 px-4 py-3 border cursor-pointer transition-colors"
+                        className="flex items-center gap-3 px-4 py-3 border cursor-pointer transition-colors"
                         style={{ borderColor: C.border, backgroundColor: C.panel }}
                         onMouseEnter={e => (e.currentTarget.style.borderColor = C.accent)}
                         onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
@@ -583,9 +628,24 @@ export default function ProgressLogsPage() {
                         <span className="text-[10px] font-bold font-mono shrink-0" style={{ color: C.accent }}>
                           {act.activity_reference_number || "—"}
                         </span>
-                        <span className="flex-1 text-[11px] font-bold uppercase truncate" style={{ color: C.text }}>
-                          {act.company_name || "—"}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-bold uppercase truncate" style={{ color: C.text }}>
+                            {act.company_name || "—"}
+                          </p>
+                          {act.referenceid && (
+                            <p className="text-[9px] font-mono" style={{ color: "#60a5fa" }}>
+                              {act.referenceid}
+                              {userNames[act.referenceid] && (
+                                <span style={{ color: C.dim }}> — {userNames[act.referenceid]}</span>
+                              )}
+                            </p>
+                          )}
+                          {act.type_activity && (
+                            <p className="text-[8px] uppercase tracking-widest" style={{ color: C.dim }}>
+                              {act.type_activity}
+                            </p>
+                          )}
+                        </div>
                         <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 border shrink-0 ${statusBadge(act.status)}`}>
                           {act.status || "—"}
                         </span>
@@ -623,6 +683,7 @@ export default function ProgressLogsPage() {
                       hasMore={colCards[col.key].length < colTotals[col.key]}
                       onViewMore={() => handleViewMore(col.key)}
                       onCardClick={openEdit}
+                      userNames={userNames}
                     />
                   ))}
                 </div>
