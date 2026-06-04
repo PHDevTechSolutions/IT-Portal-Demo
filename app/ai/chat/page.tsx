@@ -2857,6 +2857,94 @@ function KnowledgePanel({
   );
 }
 
+/* ─── Runnable Bash Block ─────────────────────────────────────────── */
+/**
+ * Detects ```bash / ```sh code blocks in AI responses and renders them
+ * with a "Run in Terminal" button that sends the command to the terminal.
+ */
+function RunnableBashBlock({ code, onRun }: { code: string; onRun: (cmd: string) => void }) {
+  const [ran,    setRan]    = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const lines = code.trim().split("\n").filter(l => l.trim());
+
+  return (
+    <div className="my-2 border overflow-hidden" style={{ borderColor: `${C.success}30`, backgroundColor: `${C.success}05` }}>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-2 py-1 border-b"
+        style={{ borderColor: `${C.success}20`, backgroundColor: `${C.success}08` }}>
+        <TerminalSquare className="size-3 shrink-0" style={{ color: C.success }} />
+        <span className="text-[8px] uppercase font-bold flex-1" style={{ color: C.success }}>bash</span>
+        <button
+          onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+          className="flex items-center gap-1 text-[8px] transition-colors"
+          style={{ color: C.dim }}
+          onMouseEnter={e => (e.currentTarget.style.color = C.text)}
+          onMouseLeave={e => (e.currentTarget.style.color = C.dim)}>
+          {copied ? <><Check className="size-2.5" style={{ color: C.success }} /> Copied</> : <><Copy className="size-2.5" /> Copy</>}
+        </button>
+        {lines.length === 1 ? (
+          // Single command — one Run button
+          <button
+            onClick={() => { onRun(lines[0]); setRan(true); setTimeout(() => setRan(false), 2000); }}
+            className="flex items-center gap-1 h-5 px-2 text-[8px] font-bold uppercase border transition-colors"
+            style={{
+              borderColor: ran ? `${C.success}60` : C.accent,
+              color:       ran ? C.success : "#fff",
+              backgroundColor: ran ? `${C.success}10` : C.accent,
+            }}>
+            {ran ? <><Check className="size-2.5" /> Ran</> : <><Play className="size-2.5" /> Run</>}
+          </button>
+        ) : (
+          // Multiple commands — run all sequentially
+          <button
+            onClick={() => {
+              // Join with && for sequential execution
+              onRun(lines.join(" && "));
+              setRan(true);
+              setTimeout(() => setRan(false), 2000);
+            }}
+            className="flex items-center gap-1 h-5 px-2 text-[8px] font-bold uppercase border transition-colors"
+            style={{
+              borderColor: ran ? `${C.success}60` : C.accent,
+              color:       ran ? C.success : "#fff",
+              backgroundColor: ran ? `${C.success}10` : C.accent,
+            }}>
+            {ran ? <><Check className="size-2.5" /> Ran</> : <><Play className="size-2.5" /> Run All</>}
+          </button>
+        )}
+      </div>
+      {/* Code */}
+      <pre className="px-3 py-2 text-[10px] leading-5 overflow-x-auto"
+        style={{ color: C.success, fontFamily: C.font, margin: 0, whiteSpace: "pre-wrap" }}>
+        {code.trim()}
+      </pre>
+    </div>
+  );
+}
+
+/**
+ * Splits content into text + bash block segments and renders them.
+ * Bash blocks get Run buttons; other code blocks stay plain.
+ */
+function ContentRenderer({ content, onRunCommand }: { content: string; onRunCommand: (cmd: string) => void }) {
+  // Split on ```bash or ```sh blocks
+  const parts = content.split(/(```(?:bash|sh)\n[\s\S]*?```)/g);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        const bashMatch = part.match(/^```(?:bash|sh)\n([\s\S]*?)```$/);
+        if (bashMatch) {
+          return <RunnableBashBlock key={i} code={bashMatch[1]} onRun={onRunCommand} />;
+        }
+        // Regular text — pass through ThinkRenderer for <think> handling
+        return part ? <ThinkRenderer key={i} content={part} /> : null;
+      })}
+    </>
+  );
+}
+
 /* ─── Think Renderer ────────────────────────────────────────────── */
 /**
  * Renders AI responses that contain <think>...</think> blocks.
@@ -3000,7 +3088,18 @@ export default function TrainingGroundPage() {
   // Terminal — default false/220, restored from localStorage in the client-only useEffect below
   const [showTerminal,   setShowTerminal]   = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(220);
-  const termDragRef = useRef<{ startY: number; startH: number } | null>(null);
+  const termDragRef    = useRef<{ startY: number; startH: number } | null>(null);
+  const terminalRunRef = useRef<((cmd: string) => void) | null>(null);
+
+  // Multi-terminal tabs
+  interface TermTab { id: string; label: string; cwd: string; }
+  const [termTabs,      setTermTabs]      = useState<TermTab[]>([{ id: "t1", label: "Terminal 1", cwd: "" }]);
+  const [activeTermTab, setActiveTermTab] = useState("t1");
+
+  // Multi-chat tabs
+  interface ChatTab { id: string; label: string; messages: Message[]; sessionId: string | null; }
+  const [chatTabs,      setChatTabs]      = useState<ChatTab[]>([{ id: "c1", label: "Chat 1", messages: [], sessionId: null }]);
+  const [activeChatTab, setActiveChatTab] = useState("c1");
 
   // Persist terminal visibility and height
   useEffect(() => {
@@ -3149,6 +3248,14 @@ export default function TrainingGroundPage() {
   }, [sessionId, selectedModel]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  // Sync active messages back to the chat tab whenever they change
+  useEffect(() => {
+    setChatTabs(prev => prev.map(t =>
+      t.id === activeChatTab ? { ...t, messages, sessionId } : t,
+    ));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, sessionId]);
 
   const loadDir = useCallback(async (p: string): Promise<any[]> => {
     if (dirCache[p]) return dirCache[p];
@@ -3434,8 +3541,7 @@ export default function TrainingGroundPage() {
   };
 
   /* ── Send ── */
-  const handleSend = async (override?: string) => {
-    const text = (override ?? input).trim();
+  const handleSend = async (override?: string) => {    const text = (override ?? input).trim();
     if (!text || isStreaming) return;
 
     // ── NLP Analysis ──────────────────────────────────────────────
@@ -3922,32 +4028,48 @@ export default function TrainingGroundPage() {
                 </button>
               </div>
               {/* Code viewer body + resizable terminal */}
-              <div className="flex-1 overflow-auto min-h-0">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                 {fileLoading ? (
                   <div className="flex items-center justify-center h-full gap-2">
                     <Loader2 className="size-4 animate-spin" style={{ color: C.accent }} />
                   </div>
                 ) : fileContent ? (
-                  <div className="relative h-full flex">
-                    {/* Line numbers */}
-                    <div className="select-none text-right pt-4 pb-4 pr-2 pl-3 shrink-0 overflow-hidden"
-                      style={{ color: C.muted, fontSize: 10, fontFamily: C.font, lineHeight: "20px", minWidth: 44, backgroundColor: C.panel }}>
-                      {fileContent.split("\n").map((_, i) => (
-                        <div key={i} style={{ height: 20 }}>{i + 1}</div>
-                      ))}
-                    </div>
-                    {/* Editable textarea */}
-                    <textarea
-                      value={fileContent}
-                      onChange={e => setFileContent(e.target.value)}
-                      spellCheck={false}
-                      className="flex-1 p-4 pl-2 text-[11px] focus:outline-none resize-none w-full"
-                      style={{
-                        backgroundColor: C.bg, border: "none",
-                        color: C.text, fontFamily: C.font,
-                        lineHeight: "20px", whiteSpace: "pre",
-                        overflowWrap: "normal", overflowX: "auto",
-                      }} />
+                  <div className="relative flex-1 flex overflow-hidden min-h-0">
+                    {/* Line numbers — synced with textarea scroll */}
+                    {(() => {
+                      const lineNumRef = { current: null as HTMLDivElement | null };
+                      return (
+                        <>
+                          <div
+                            ref={el => { lineNumRef.current = el; }}
+                            className="select-none text-right pt-4 pb-4 pr-2 pl-3 shrink-0 overflow-hidden pointer-events-none"
+                            style={{ color: C.muted, fontSize: 10, fontFamily: C.font, lineHeight: "20px", minWidth: 44, backgroundColor: C.panel }}>
+                            {fileContent.split("\n").map((_, i) => (
+                              <div key={i} style={{ height: 20 }}>{i + 1}</div>
+                            ))}
+                          </div>
+                          {/* Editable textarea — fills remaining space and scrolls */}
+                          <textarea
+                            value={fileContent}
+                            onChange={e => setFileContent(e.target.value)}
+                            onScroll={e => {
+                              // Sync line numbers scroll position
+                              if (lineNumRef.current) {
+                                lineNumRef.current.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
+                              }
+                            }}
+                            spellCheck={false}
+                            className="flex-1 p-4 pl-2 text-[11px] focus:outline-none resize-none"
+                            style={{
+                              backgroundColor: C.bg, border: "none",
+                              color: C.text, fontFamily: C.font,
+                              lineHeight: "20px", whiteSpace: "pre",
+                              overflowWrap: "normal", overflowX: "auto", overflowY: "auto",
+                              height: "100%",
+                            }} />
+                        </>
+                      );
+                    })()}
                     {/* Save button */}
                     <button
                       onClick={async () => {
@@ -3976,7 +4098,7 @@ export default function TrainingGroundPage() {
                 )}
               </div>
 
-              {/* ── Resizable Terminal ── */}
+              {/* ── Resizable Terminal with tabs ── */}
               {showTerminal && (
                 <>
                   {/* Drag handle */}
@@ -4000,11 +4122,68 @@ export default function TrainingGroundPage() {
                     }}>
                     <div className="w-8 h-0.5 rounded-full" style={{ backgroundColor: C.border }} />
                   </div>
-                  <div className="shrink-0 overflow-hidden" style={{ height: terminalHeight }}>
-                    <TerminalPanel
-                      initialCwd={selectedFolder ?? ""}
-                      onSendToAI={handleSend}
-                    />
+                  <div className="shrink-0 flex flex-col overflow-hidden" style={{ height: terminalHeight }}>
+                    {/* Terminal tab bar */}
+                    <div className="flex items-center border-b shrink-0 overflow-x-auto"
+                      style={{ borderColor: C.border, backgroundColor: C.panel, minHeight: 26 }}>
+                      {termTabs.map(tab => (
+                        <div key={tab.id}
+                          className="flex items-center shrink-0 border-r"
+                          style={{ borderColor: C.border }}>
+                          <button
+                            onClick={() => setActiveTermTab(tab.id)}
+                            className="flex items-center gap-1 px-2 h-6 text-[8px] transition-colors"
+                            style={{
+                              color: activeTermTab === tab.id ? C.success : C.dim,
+                              backgroundColor: activeTermTab === tab.id ? `${C.success}08` : "transparent",
+                              borderBottom: activeTermTab === tab.id ? `2px solid ${C.success}` : "2px solid transparent",
+                            }}>
+                            <TerminalSquare className="size-2.5" />
+                            {tab.label}
+                          </button>
+                          {termTabs.length > 1 && (
+                            <button
+                              onClick={() => {
+                                const remaining = termTabs.filter(t => t.id !== tab.id);
+                                setTermTabs(remaining);
+                                if (activeTermTab === tab.id) setActiveTermTab(remaining[remaining.length - 1].id);
+                              }}
+                              className="px-1 h-6 flex items-center"
+                              style={{ color: C.muted }}
+                              onMouseEnter={e => (e.currentTarget.style.color = C.error)}
+                              onMouseLeave={e => (e.currentTarget.style.color = C.muted)}>
+                              <X className="size-2.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {/* Add new terminal tab */}
+                      <button
+                        onClick={() => {
+                          const id    = `t${Date.now()}`;
+                          const label = `Terminal ${termTabs.length + 1}`;
+                          setTermTabs(prev => [...prev, { id, label, cwd: selectedFolder ?? "" }]);
+                          setActiveTermTab(id);
+                        }}
+                        className="flex items-center justify-center h-6 w-6 ml-0.5 transition-colors shrink-0"
+                        style={{ color: C.muted }}
+                        title="New terminal"
+                        onMouseEnter={e => (e.currentTarget.style.color = C.success)}
+                        onMouseLeave={e => (e.currentTarget.style.color = C.muted)}>
+                        <Play className="size-2.5 rotate-90" />
+                      </button>
+                    </div>
+                    {/* Active terminal panel */}
+                    {termTabs.map(tab => (
+                      <div key={tab.id}
+                        className="flex-1 overflow-hidden"
+                        style={{ display: activeTermTab === tab.id ? "flex" : "none", flexDirection: "column" }}>
+                        <TerminalPanel
+                          initialCwd={tab.cwd || (selectedFolder ?? "")}
+                          onSendToAI={handleSend}
+                        />
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
@@ -4012,6 +4191,93 @@ export default function TrainingGroundPage() {
 
             {/* ── Col 3: Chat ── */}
             <div className="w-96 shrink-0 flex flex-col overflow-hidden" style={{ backgroundColor: C.panel }}>
+              {/* Chat tab bar */}
+              <div className="flex items-center border-b shrink-0 overflow-x-auto"
+                style={{ borderColor: C.border, backgroundColor: C.bg, minHeight: 28 }}>
+                {chatTabs.map(tab => (
+                  <div key={tab.id} className="flex items-center shrink-0 border-r"
+                    style={{ borderColor: C.border }}>
+                    <button
+                      onClick={() => {
+                        setActiveChatTab(tab.id);
+                        // Load this tab's messages
+                        setMessages(tab.messages);
+                        setSessionId(tab.sessionId);
+                      }}
+                      className="flex items-center gap-1 px-2 h-7 text-[8px] transition-colors"
+                      style={{
+                        color: activeChatTab === tab.id ? C.accent : C.dim,
+                        backgroundColor: activeChatTab === tab.id ? `${C.accent}08` : "transparent",
+                        borderBottom: activeChatTab === tab.id ? `2px solid ${C.accent}` : "2px solid transparent",
+                      }}>
+                      <Bot className="size-2.5" />
+                      {tab.label}
+                      {tab.messages.length > 0 && (
+                        <span className="text-[7px] px-0.5" style={{ color: C.muted }}>
+                          {tab.messages.filter(m => m.role !== "system").length}
+                        </span>
+                      )}
+                    </button>
+                    {chatTabs.length > 1 && (
+                      <button
+                        onClick={() => {
+                          const remaining = chatTabs.filter(t => t.id !== tab.id);
+                          setChatTabs(remaining);
+                          if (activeChatTab === tab.id) {
+                            const next = remaining[remaining.length - 1];
+                            setActiveChatTab(next.id);
+                            setMessages(next.messages);
+                            setSessionId(next.sessionId);
+                          }
+                        }}
+                        className="px-1 h-7 flex items-center"
+                        style={{ color: C.muted }}
+                        onMouseEnter={e => (e.currentTarget.style.color = C.error)}
+                        onMouseLeave={e => (e.currentTarget.style.color = C.muted)}>
+                        <X className="size-2.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {/* New chat tab button */}
+                <button
+                  onClick={() => {
+                    // Save current messages to active tab first
+                    setChatTabs(prev => prev.map(t =>
+                      t.id === activeChatTab ? { ...t, messages, sessionId } : t,
+                    ));
+                    const id    = `c${Date.now()}`;
+                    const label = `Chat ${chatTabs.length + 1}`;
+                    const newTab = { id, label, messages: [], sessionId: null };
+                    setChatTabs(prev => [...prev, newTab]);
+                    setActiveChatTab(id);
+                    setMessages([]);
+                    setSessionId(null);
+                  }}
+                  className="flex items-center justify-center h-7 w-7 ml-0.5 transition-colors shrink-0"
+                  style={{ color: C.muted }}
+                  title="New chat tab"
+                  onMouseEnter={e => (e.currentTarget.style.color = C.accent)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.muted)}>
+                  <Play className="size-2.5 rotate-90" />
+                </button>
+                {/* Refresh / reload current chat */}
+                <button
+                  onClick={() => {
+                    setMessages([]);
+                    setSessionId(null);
+                    setChatTabs(prev => prev.map(t =>
+                      t.id === activeChatTab ? { ...t, messages: [], sessionId: null } : t,
+                    ));
+                  }}
+                  className="flex items-center justify-center h-7 w-7 transition-colors shrink-0"
+                  style={{ color: C.muted }}
+                  title="Clear this chat"
+                  onMouseEnter={e => (e.currentTarget.style.color = C.warn)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.muted)}>
+                  <RefreshCw className="size-2.5" />
+                </button>
+              </div>
               {/* Chat header */}
               <div className="flex items-center gap-2 px-3 py-2.5 border-b shrink-0"
                 style={{ borderColor: C.border, backgroundColor: C.bg, position: "relative", zIndex: 20 }}>
@@ -4213,7 +4479,22 @@ export default function TrainingGroundPage() {
                           wordBreak: "break-word", fontFamily: C.font,
                         }}>
                         {msg.content
-                          ? <ThinkRenderer content={msg.content} />
+                          ? <ContentRenderer
+                              content={msg.content}
+                              onRunCommand={(cmd) => {
+                                // Show terminal if hidden, then run command
+                                setShowTerminal(true);
+                                // Small delay to let terminal mount
+                                setTimeout(() => {
+                                  if (terminalRunRef.current) {
+                                    terminalRunRef.current(cmd);
+                                  } else {
+                                    // Fallback: put in input of active terminal by toast hint
+                                    toast.info(`Run in terminal: ${cmd}`);
+                                  }
+                                }, 150);
+                              }}
+                            />
                           : (isStreaming && (
                             <span className="inline-block w-1.5 h-3.5 bg-orange-400 animate-pulse align-middle" />
                           ))}
