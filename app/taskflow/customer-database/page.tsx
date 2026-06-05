@@ -21,7 +21,6 @@ import { Calendar } from "@/components/taskflow/customer-database/calendar";
 import { AuditDialog } from "@/components/taskflow/customer-database/audit-dialog";
 import { DeleteDialog } from "@/components/taskflow/customer-database/delete";
 import { TransferDialog } from "@/components/taskflow/customer-database/transfer";
-import { OthersDialog } from "@/components/taskflow/customer-database/others-dialog";
 import { toast } from "sonner";
 import {
   Loader2, Search, ArrowRight, Check, ChevronsUpDown,
@@ -294,9 +293,9 @@ export default function AccountPage() {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
 
   /* ── Dialogs ── */
-  const [showOthersDialog,  setShowOthersDialog] = useState(false);
   const [showImportDialog,  setShowImportDialog] = useState(false);
   const [showFilterDialog,  setShowFilterDialog] = useState(false);
+  const [showOthersDialog,  setShowOthersDialog] = useState(false);
   const [isGenerating,      setIsGenerating]     = useState(false);
 
   /* ── AI Insights ── */
@@ -767,7 +766,7 @@ export default function AccountPage() {
                   <Upload className="size-4 mr-1" /> Import
                 </Button>
                 <Download data={filtered} filename="CustomerDatabase" />
-                <Button variant="outline" size="sm" onClick={()=>setShowOthersDialog(true)}
+                <Button variant="outline" size="sm" onClick={() => setShowOthersDialog(true)}
                   className="bg-[#0d1117] border-slate-800 text-[11px] text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 uppercase tracking-wider font-mono">
                   <Settings className="size-4 mr-1" /> Others
                 </Button>
@@ -863,6 +862,7 @@ export default function AccountPage() {
                         {label:"Actions",          w:"w-20"},
                         {label:"Status",           w:"min-w-[100px]"},
                         {label:"Company",          w:"min-w-[180px]"},
+                        {label:"Account Reference Number", w:"min-w-[160px]"},
                         {label:"Company Group",    w:"min-w-[120px]"},
                         {label:"Contact Person",   w:"min-w-[130px]"},
                         {label:"Contact No.",      w:"min-w-[120px]"},
@@ -947,10 +947,9 @@ export default function AccountPage() {
                               (isDuplicate||isMissingType||isMissingStatus)&&"line-through decoration-red-500/70 decoration-2")}>
                               {c.company_name||"—"}
                             </div>
-                            {c.account_reference_number && (
-                              <div className="text-[9px] font-mono text-orange-500/40 normal-case mt-0.5">{c.account_reference_number}</div>
-                            )}
                           </TableCell>
+
+                          <TableCell className={cn(cb,"min-w-[160px] text-slate-400 font-mono text-[11px]")}>{c.account_reference_number||"—"}</TableCell>
 
                           <TableCell className={cn(cb,"min-w-[120px] text-slate-500")}>{c.company_group||"—"}</TableCell>
                           <TableCell className={cn(cb,"min-w-[130px] text-slate-300 capitalize")}>{c.contact_person||"—"}</TableCell>
@@ -1170,7 +1169,6 @@ export default function AccountPage() {
         setAccountsAction={(updateFn)=>setCustomers(prev=>updateFn(prev))}
         tsas={tsas} tsms={tsms} managers={managers} onSuccessAction={handleTransferSuccess}
       />
-      <OthersDialog open={showOthersDialog} onOpenChange={setShowOthersDialog} setAccountsAction={(updateFn)=>setCustomers(prev=>updateFn(prev))} />
 
       {/* ── Import Dialog ── */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
@@ -1280,6 +1278,29 @@ export default function AccountPage() {
           </div>
           <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex justify-end">
             <Button onClick={()=>setShowFilterDialog(false)} className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5 uppercase tracking-wider">Apply</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Others Dialog ── */}
+      <Dialog open={showOthersDialog} onOpenChange={setShowOthersDialog}>
+        <DialogContent className="max-w-md bg-[#0d1117] border-none text-slate-100 rounded-none p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-[#0d1117]">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-500/10 border border-orange-500/30">
+                <Settings className="w-4 h-4 text-orange-400" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">Others</DialogTitle>
+                <p className="text-[11px] text-slate-500 mt-0.5">Additional options</p>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="px-6 py-8">
+            <p className="text-sm text-slate-300 text-center font-mono">This is Others Dialog</p>
+          </div>
+          <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex justify-end">
+            <Button onClick={()=>setShowOthersDialog(false)} className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5 uppercase tracking-wider">Close</Button>
           </div>
         </DialogContent>
       </Dialog>
