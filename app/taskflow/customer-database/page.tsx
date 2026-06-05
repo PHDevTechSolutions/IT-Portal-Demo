@@ -144,6 +144,49 @@ async function parseExcelForFile(
   });
 }
 
+async function parseExcelForBulkUpdate(file: File): Promise<{ data: any[], columns: string[] }> {
+  const reader = new FileReader();
+  return new Promise<{ data: any[], columns: string[] }>((resolve, reject) => {
+    reader.onload = async (event) => {
+      try {
+        const data = event.target?.result as ArrayBuffer;
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(data);
+        const ws = workbook.worksheets[0];
+        const parsed: any[] = [];
+        const columns: string[] = [];
+        
+        // Get header row
+        const headerRow = ws.getRow(1);
+        headerRow.eachCell((cell, colNumber) => {
+          const headerValue = cell.value?.toString().trim().toLowerCase();
+          if (headerValue) {
+            columns.push(headerValue);
+          }
+        });
+
+        // Parse data rows
+        ws.eachRow((row, rowNumber) => {
+          if (rowNumber === 1) return;
+          const rowData: any = {};
+          row.eachCell((cell, colNumber) => {
+            const header = columns[colNumber - 1];
+            if (header) {
+              rowData[header] = cell.value || "";
+            }
+          });
+          if (Object.keys(rowData).length > 0) {
+            parsed.push(rowData);
+          }
+        });
+
+        resolve({ data: parsed, columns });
+      } catch (err) { reject(err); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 /* ─── Combobox ───────────────────────────────────────────────────── */
 
 function Combobox({ options, value, onValueChange, placeholder = "Select…", disabled = false, emptyText = "No results.", className }: {
@@ -297,6 +340,18 @@ export default function AccountPage() {
   const [showFilterDialog,  setShowFilterDialog] = useState(false);
   const [showOthersDialog,  setShowOthersDialog] = useState(false);
   const [isGenerating,      setIsGenerating]     = useState(false);
+
+  /* ── Bulk Update by Reference ── */
+  const [bulkUpdateFile,      setBulkUpdateFile]      = useState<File|null>(null);
+  const [bulkUpdateFileName,  setBulkUpdateFileName]  = useState<string|null>(null);
+  const [bulkUpdatePreview,   setBulkUpdatePreview]   = useState<any[]>([]);
+  const [bulkUpdateColumns,   setBulkUpdateColumns]   = useState<string[]>([]);
+  const [isBulkUpdateLoading, setIsBulkUpdateLoading] = useState(false);
+  const [bulkUpdateLog,       setBulkUpdateLog]       = useState<{type:"info"|"warn"|"ok"|"err";msg:string}[]>([]);
+  const [isBulkUpdateParsing, setIsBulkUpdateParsing] = useState(false);
+  const bulkUpdateLogEndRef = useRef<HTMLDivElement>(null);
+  const addBulkUpdateLog = useCallback((type:"info"|"warn"|"ok"|"err", msg:string) => setBulkUpdateLog(prev=>[...prev,{type,msg}]), []);
+  useEffect(() => { bulkUpdateLogEndRef.current?.scrollIntoView({behavior:"smooth"}); }, [bulkUpdateLog]);
 
   /* ── AI Insights ── */
   interface CDBAnalysis {
@@ -624,6 +679,69 @@ export default function AccountPage() {
       const a=Object.assign(document.createElement("a"),{href:url,download:`${importOriginalFileName||"failed_rows"}.xlsx`});
       document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     });
+  };
+
+  /* ── Bulk Update handlers ── */
+  const handleBulkUpdateFileSelect = async (file: File) => {
+    setBulkUpdateFile(file); setBulkUpdateFileName(file.name.replace(/\.[^/.]+$/,"")); setBulkUpdateLog([]); setIsBulkUpdateParsing(true);
+    addBulkUpdateLog("info",`📂 Reading "${file.name}"…`);
+    try {
+      const { data, columns } = await parseExcelForBulkUpdate(file);
+      addBulkUpdateLog("ok",`✅ Parsed ${data.length} row(s)`);
+      addBulkUpdateLog("info",`  → Columns found: ${columns.join(", ")}`);
+      
+      // Check if account_reference_number column exists
+      if (!columns.includes("account_reference_number")) {
+        addBulkUpdateLog("err",`❌ Missing required column: account_reference_number`);
+        toast.error("Excel file must contain 'account_reference_number' column");
+        setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]);
+      } else {
+        addBulkUpdateLog("ok",`🚀 Ready — ${data.length} record(s) queued for update`);
+        setBulkUpdatePreview(data);
+        setBulkUpdateColumns(columns);
+      }
+    } catch { addBulkUpdateLog("err",`❌ Failed to parse "${file.name}"`); toast.error("Failed to parse Excel file."); }
+    finally { setIsBulkUpdateParsing(false); }
+  };
+
+  const handleBulkUpdateUpload = async () => {
+    if (!bulkUpdateFile) return toast.error("Please select a file.");
+    if (!bulkUpdatePreview.length) return toast.error("No data to update.");
+    setIsBulkUpdateLoading(true); setBulkUpdateLog([]);
+    addBulkUpdateLog("info",`🚀 Starting bulk update...`);
+    try {
+      const total = bulkUpdatePreview.length; const batchSize = 10;
+      let successCount = 0; let failCount = 0;
+      
+      for (let i=0;i<total;i+=batchSize) {
+        const batch=bulkUpdatePreview.slice(i,i+batchSize);
+        addBulkUpdateLog("info",`  → Processing ${i+1}–${Math.min(i+batchSize,total)}/${total}...`);
+        
+        const res=await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/BulkUpdateByReference",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({updates:batch})});
+        const result=await res.json();
+        
+        if (result.success) {
+          successCount += result.updated;
+          failCount += result.failed;
+          addBulkUpdateLog("ok",`  ✓ Updated ${result.updated}, Failed ${result.failed}`);
+          if (result.errors?.length > 0) {
+            result.errors.forEach((err: any) => addBulkUpdateLog("warn",`    ⚠ ${err.error}: ${err.account_reference_number}`));
+          }
+        } else {
+          addBulkUpdateLog("err",`  ❌ Batch failed: ${result.error}`);
+        }
+      }
+      
+      addBulkUpdateLog("ok",`✅ Complete — ${successCount} updated, ${failCount} failed`);
+      if (failCount > 0) {
+        toast.error(`Bulk update completed with ${failCount} failures.`);
+      } else {
+        toast.success(`Successfully updated ${successCount} records.`);
+      }
+      
+      setBulkUpdateFile(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]); setBulkUpdateLog([]);
+    } catch { addBulkUpdateLog("err",`❌ Bulk update failed`); toast.error("Failed to perform bulk update."); }
+    finally { setIsBulkUpdateLoading(false); }
   };
 
   /* ── Bulk delete ── */
@@ -1284,23 +1402,73 @@ export default function AccountPage() {
 
       {/* ── Others Dialog ── */}
       <Dialog open={showOthersDialog} onOpenChange={setShowOthersDialog}>
-        <DialogContent className="max-w-md bg-[#0d1117] border-none text-slate-100 rounded-none p-0 gap-0">
+        <DialogContent className="max-w-2xl bg-[#0d1117] border-none text-slate-100 rounded-none p-0 gap-0">
           <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-[#0d1117]">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-orange-500/10 border border-orange-500/30">
                 <Settings className="w-4 h-4 text-orange-400" />
               </div>
               <div>
-                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">Others</DialogTitle>
-                <p className="text-[11px] text-slate-500 mt-0.5">Additional options</p>
+                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">Bulk Update by Account Reference</DialogTitle>
+                <p className="text-[11px] text-slate-500 mt-0.5">Update accounts using account_reference_number as identifier</p>
               </div>
+              {(bulkUpdateFile||bulkUpdatePreview.length>0) && (
+                <Button variant="ghost" size="sm" disabled={isBulkUpdateLoading} className="ml-auto h-7 text-[9px] uppercase font-bold text-slate-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-none"
+                  onClick={()=>{ setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]); setBulkUpdateLog([]); }}>
+                  <RotateCcw className="mr-1 h-3 w-3" /> Reset
+                </Button>
+              )}
             </div>
           </DialogHeader>
-          <div className="px-6 py-8">
-            <p className="text-sm text-slate-300 text-center font-mono">This is Others Dialog</p>
+          <div className="px-6 py-4 space-y-4 overflow-y-auto max-h-[70vh]">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Excel/CSV File <span className="text-red-400">*</span></label>
+              <DropZone file={bulkUpdateFile} fileName={bulkUpdateFileName} onFileSelect={handleBulkUpdateFileSelect} onClear={()=>{ setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]); setBulkUpdateLog([]); }} disabled={isBulkUpdateLoading} />
+            </div>
+            {bulkUpdateLog.length>0 && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Update Log {isBulkUpdateParsing&&<Loader2 className="w-3 h-3 animate-spin" />}</label>
+                <div className="border border-zinc-700 bg-zinc-950 overflow-hidden rounded-none">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border-b border-zinc-800">
+                    <span className="w-2 h-2 rounded-full bg-red-500" /><span className="w-2 h-2 rounded-full bg-yellow-500" /><span className="w-2 h-2 rounded-full bg-green-500" />
+                    <span className="font-mono text-[10px] text-zinc-500 ml-1 select-none">bulk-update — bash</span>
+                  </div>
+                  <div className="px-3 py-2 font-mono text-[10px] space-y-0.5 max-h-36 overflow-y-auto">
+                    {bulkUpdateLog.map((line,i)=><div key={i} className={cn("leading-relaxed",parseLogColor(line.type))}>{line.msg}</div>)}
+                    {(isBulkUpdateParsing||isBulkUpdateLoading)&&<span className="inline-block w-1.5 h-3 bg-emerald-400 animate-pulse align-middle" />}
+                    <div ref={bulkUpdateLogEndRef} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {bulkUpdatePreview.length>0 && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase text-slate-500">Preview ({bulkUpdatePreview.length} rows)</label>
+                <div className="overflow-auto max-h-44 border border-slate-700 rounded-none text-[10px]">
+                  <table className="w-full whitespace-nowrap">
+                    <thead className="bg-slate-800 sticky top-0">
+                      <tr>
+                        {bulkUpdateColumns.slice(0,8).map(col=><th key={col} className="px-2 py-1.5 text-left font-semibold text-slate-400 uppercase tracking-wider">{col}</th>)}
+                        {bulkUpdateColumns.length>8&&<th className="px-2 py-1.5 text-left font-semibold text-slate-400 uppercase tracking-wider">...</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {bulkUpdatePreview.slice(0,10).map((row,i)=><tr key={i} className="hover:bg-slate-800/40 text-slate-300">
+                        {bulkUpdateColumns.slice(0,8).map(col=><td key={col} className="px-2 py-1 truncate max-w-[100px]">{row[col]||""}</td>)}
+                        {bulkUpdateColumns.length>8&&<td className="px-2 py-1 text-slate-500">...</td>}
+                      </tr>)}
+                      {bulkUpdatePreview.length>10&&<tr><td colSpan={bulkUpdateColumns.length>8?9:8} className="px-2 py-1.5 text-center text-slate-500 italic">+{bulkUpdatePreview.length-10} more rows</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex justify-end">
-            <Button onClick={()=>setShowOthersDialog(false)} className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5 uppercase tracking-wider">Close</Button>
+          <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-between gap-2">
+            <Button variant="ghost" onClick={()=>setShowOthersDialog(false)} className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700">Close</Button>
+            <Button onClick={handleBulkUpdateUpload} disabled={isBulkUpdateLoading||!bulkUpdateFile||!bulkUpdatePreview.length} className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5 gap-2 uppercase tracking-wider">
+              {isBulkUpdateLoading?<><Loader2 className="h-3.5 w-3.5 animate-spin" />Updating...</>:<><Upload className="h-3.5 w-3.5" />Update Records</>}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
