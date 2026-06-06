@@ -12,7 +12,7 @@ import { toast } from "sonner"
 import {
   Loader2, Search, Trash, FileDown, BadgeCheck, AlertTriangle,
   Clock, XCircle, PauseCircle, UserX, UserCheck, CheckCircle2,
-  XOctagon, ChevronDown, ChevronUp,
+  XOctagon, ChevronDown, ChevronUp, History, ArrowRight,
 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
@@ -37,6 +37,171 @@ interface Customer {
   email_address: string; address: string; region: string; type_client: string;
   referenceid: string; tsm: string; manager: string; status: string; remarks: string;
   date_created: string; date_updated: string; next_available_date?: string; transfer_to: string;
+  account_reference_number?: string;
+}
+
+interface EditHistoryRow {
+  id: number;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_at: string;
+  changed_by: string;
+  reason: string | null;
+  account_reference_number: string;
+}
+
+// ─── Changes Dialog ───────────────────────────────────────────────────────────
+function ChangesDialog({
+  customer,
+  onClose,
+}: {
+  customer: Customer;
+  onClose: () => void;
+}) {
+  const [rows,    setRows]    = useState<EditHistoryRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState("")
+
+  const ref = customer.account_reference_number || (customer as any).referenceid
+
+  useEffect(() => {
+    if (!ref) { setLoading(false); setError("No account reference number found."); return }
+    setLoading(true); setError("")
+    fetch(`/api/taskflow/account-edit-history?account_reference_number=${encodeURIComponent(ref)}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.error) throw new Error(json.error)
+        setRows(json.data ?? [])
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [ref])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+      <div
+        className="flex flex-col border border-violet-500/20 bg-[#0d1117] shadow-2xl"
+        style={{ width: "min(900px, 96vw)", maxHeight: "88vh" }}>
+
+        {/* Header */}
+        <div className="shrink-0 px-6 py-4 border-b border-violet-500/20 bg-[#0a0d14] flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-violet-500/10 border border-violet-500/20">
+              <History className="w-4 h-4 text-violet-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-widest text-violet-400 font-mono">
+                Pending Changes
+              </h2>
+              <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                <span className="text-slate-300">{customer.company_name}</span>
+                {ref && <span className="text-violet-400/60"> · {ref}</span>}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 w-7 h-7 flex items-center justify-center text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-colors text-lg leading-none">
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-auto">
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-16 gap-2">
+              <Loader2 className="size-5 animate-spin text-violet-400/40" />
+              <span className="text-[9px] font-mono uppercase tracking-widest text-slate-600">Loading changes…</span>
+            </div>
+          )}
+          {!loading && error && (
+            <div className="px-6 py-8 text-center">
+              <p className="text-[11px] font-mono text-red-400">{error}</p>
+            </div>
+          )}
+          {!loading && !error && rows.length === 0 && (
+            <div className="px-6 py-12 text-center">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-slate-600">
+                No change history found for this account.
+              </p>
+            </div>
+          )}
+          {!loading && !error && rows.length > 0 && (
+            <table className="w-full text-[11px] font-mono" style={{ minWidth: 700 }}>
+              <thead className="sticky top-0 bg-[#0a0d14] z-10">
+                <tr className="border-b border-violet-500/15">
+                  <th className="px-5 py-3 text-left text-[9px] uppercase tracking-widest text-violet-400/50 font-bold"
+                    style={{ width: "22%" }}>Field</th>
+                  <th className="px-5 py-3 text-left text-[9px] uppercase tracking-widest text-red-400/50 font-bold"
+                    style={{ width: "28%" }}>Old Value</th>
+                  <th className="px-2 py-3 text-center text-slate-700"
+                    style={{ width: "4%" }}>→</th>
+                  <th className="px-5 py-3 text-left text-[9px] uppercase tracking-widest text-emerald-400/50 font-bold"
+                    style={{ width: "28%" }}>New Value</th>
+                  <th className="px-5 py-3 text-left text-[9px] uppercase tracking-widest text-slate-600 font-bold whitespace-nowrap"
+                    style={{ width: "18%" }}>Date Changed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr
+                    key={row.id}
+                    className={cn(
+                      "border-b border-violet-500/5 transition-colors hover:bg-violet-500/[0.04]",
+                      i % 2 === 0 ? "bg-transparent" : "bg-violet-500/[0.02]",
+                    )}>
+                    {/* Field */}
+                    <td className="px-5 py-3 text-violet-300/70 capitalize whitespace-nowrap">
+                      {row.field_name?.replace(/_/g, " ") ?? "—"}
+                    </td>
+                    {/* Old value */}
+                    <td className="px-5 py-3 text-red-400/70 line-through decoration-red-500/30 max-w-[180px]">
+                      <span className="block truncate" title={row.old_value ?? ""}>
+                        {row.old_value || <span className="text-slate-600 no-underline not-italic">empty</span>}
+                      </span>
+                    </td>
+                    {/* Arrow */}
+                    <td className="px-2 py-3 text-center text-slate-600">
+                      <ArrowRight className="size-3.5 mx-auto" />
+                    </td>
+                    {/* New value */}
+                    <td className="px-5 py-3 text-emerald-400 font-semibold max-w-[180px]">
+                      <span className="block truncate" title={row.new_value ?? ""}>
+                        {row.new_value || <span className="text-slate-600 font-normal">empty</span>}
+                      </span>
+                    </td>
+                    {/* Date — full format, no wrapping */}
+                    <td className="px-5 py-3 text-slate-500 whitespace-nowrap">
+                      {row.changed_at
+                        ? new Date(row.changed_at).toLocaleDateString("en-PH", {
+                            month: "short", day: "numeric", year: "numeric",
+                          })
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 px-6 py-3 border-t border-violet-500/10 bg-[#0a0d14] flex items-center justify-between">
+          <span className="text-[9px] font-mono text-slate-600">
+            {rows.length > 0
+              ? `${rows.length} change${rows.length !== 1 ? "s" : ""} pending review`
+              : ""}
+          </span>
+          <button
+            onClick={onClose}
+            className="px-5 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-slate-700 text-slate-400 hover:border-violet-500/50 hover:text-violet-400 transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── StatusBadge ──────────────────────────────────────────────────────────────
@@ -124,6 +289,9 @@ export default function AccountPage() {
   const [showApproveDialog, setShowApproveDialog] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [hasExported, setHasExported] = useState(false)
+
+  // Changes dialog
+  const [changesTarget, setChangesTarget] = useState<Customer | null>(null)
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -448,7 +616,13 @@ export default function AccountPage() {
                           <div className="flex items-center gap-2 px-3 py-2 border-b border-violet-500/10 bg-[#0a0d14]">
                             <input type="checkbox" checked={isSel} onChange={() => toggleApproval(c.id)} className="accent-violet-500" />
                             <span className="text-[9px] font-mono text-violet-500/30 flex-1 truncate">{c.company_name}</span>
-                            <StatusBadge status={c.status} />
+                            {/* Clickable badge → opens changes dialog */}
+                            <button
+                              onClick={() => setChangesTarget(c)}
+                              title="View pending changes"
+                              className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 border border-violet-500/30 bg-violet-500/10 text-violet-400 uppercase tracking-widest hover:bg-violet-500/20 hover:border-violet-400/60 transition-colors">
+                              <Clock className="size-3" /> For Approval
+                            </button>
                           </div>
                           <div className="p-3 space-y-1.5">
                             {[["Contact", c.contact_person], ["Phone", c.contact_number], ["Email", c.email_address], ["Type", c.type_client], ["Region", c.region], ["TSM", c.tsm], ["Manager", c.manager]].map(([label, value]) => (
@@ -461,6 +635,12 @@ export default function AccountPage() {
                               <span className="text-[9px] font-mono uppercase text-violet-500/40">Created</span>
                               <span className="text-[10px] font-mono text-slate-500">{new Date(c.date_created).toLocaleDateString()}</span>
                             </div>
+                            {/* View changes link */}
+                            <button
+                              onClick={() => setChangesTarget(c)}
+                              className="w-full flex items-center justify-center gap-1.5 mt-1 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-violet-500/20 text-violet-400/60 hover:border-violet-500/50 hover:text-violet-400 transition-colors">
+                              <History className="size-3" /> View Changes
+                            </button>
                           </div>
                         </div>
                       )
@@ -619,6 +799,11 @@ export default function AccountPage() {
           )}
 
           <DeleteDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog} selectedCount={activeDeleteIds.size} onConfirm={executeBulkDelete} />
+
+          {/* Changes dialog */}
+          {changesTarget && (
+            <ChangesDialog customer={changesTarget} onClose={() => setChangesTarget(null)} />
+          )}
 
         </SidebarInset>
       </SidebarProvider>
