@@ -85,7 +85,8 @@ export async function GET(req: NextRequest) {
       const merged: any[] = [];
       for (const r of results) {
         for (const row of r.data ?? []) {
-          if (!seen.has(row.id)) { seen.add(row.id); merged.push(row); }
+          const id = (row as any).id;
+          if (!seen.has(id)) { seen.add(id); merged.push(row); }
         }
       }
       merged.sort((a, b) =>
