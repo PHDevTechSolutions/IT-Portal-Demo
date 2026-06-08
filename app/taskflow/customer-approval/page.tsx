@@ -293,6 +293,133 @@ export default function AccountPage() {
   // Changes dialog
   const [changesTarget, setChangesTarget] = useState<Customer | null>(null)
 
+  // ── Auto-refresh + duplicate detection + auto-approve ─────────────────────
+  const [autoApproveLog, setAutoApproveLog] = useState<{ name: string; id: number }[]>([])
+  const [pendingAutoApprove, setPendingAutoApprove] = useState<Set<number>>(new Set())
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [refreshCountdown, setRefreshCountdown] = useState(30)
+  const AUTO_APPROVE_DELAY = 30_000 // 30 seconds
+
+  /**
+   * Returns true if `a` and `b` are "similar enough" company names to be
+   * considered potential duplicates.
+   * Examples: "Ecoshift Corp" ↔ "Ecoshift Corporation"
+   */
+  const isSimilarName = (a: string, b: string): boolean => {
+    if (a === b) return true
+    // Normalize: lowercase, strip punctuation, collapse spaces
+    const norm = (s: string) => s.toLowerCase()
+      .replace(/[.,]/g, "")
+      .replace(/\b(corp|corporation|inc|incorporated|co|company|ltd|limited|ent|enterprise|enterprises)\b/g, "")
+      .replace(/\s+/g, " ").trim()
+    const na = norm(a), nb = norm(b)
+    if (na === nb) return true
+    // One starts with the other (e.g. "Ecoshift" vs "Ecoshift Corp")
+    if (na.startsWith(nb) || nb.startsWith(na)) return true
+    // Levenshtein distance ≤ 3 for similar short names
+    const len = Math.max(na.length, nb.length)
+    if (len === 0) return true
+    const dist = levenshtein(na, nb)
+    return dist <= Math.min(3, Math.floor(len * 0.25))
+  }
+
+  const levenshtein = (a: string, b: string): number => {
+    const m = a.length, n = b.length
+    const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+    for (let j = 0; j <= n; j++) dp[0][j] = j
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
+        dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+    return dp[m][n]
+  }
+
+  /**
+   * For each "For Approval" record, check if its company_name matches any
+   * OTHER non-"For Approval" customer.  If duplicate found → flag for manual.
+   * If unique → schedule auto-approve after 30s.
+   */
+  const runDuplicateCheck = (allCustomers: Customer[], approvalList: Customer[]) => {
+    const others = allCustomers.filter(c => c.status !== "For Approval")
+    const autoIds = new Set<number>()
+
+    for (const app of approvalList) {
+      const name = (app.company_name ?? "").trim()
+      if (!name) continue
+      const hasDuplicate = others.some(o =>
+        o.id !== app.id && isSimilarName(name, (o.company_name ?? "").trim()),
+      ) || approvalList.filter(a => a.id !== app.id).some(a =>
+        isSimilarName(name, (a.company_name ?? "").trim()),
+      )
+      if (!hasDuplicate) autoIds.add(app.id)
+    }
+    setPendingAutoApprove(autoIds)
+    return autoIds
+  }
+
+  // Re-run duplicate check whenever approval list changes
+  useEffect(() => {
+    const approvalList = customers.filter(c => c.status === "For Approval")
+    runDuplicateCheck(customers, approvalList)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers])
+
+  // Schedule auto-approve for unique entries
+  useEffect(() => {
+    if (pendingAutoApprove.size === 0) return
+    const timer = setTimeout(async () => {
+      const ids = Array.from(pendingAutoApprove)
+      if (ids.length === 0) return
+      try {
+        const res = await fetch(
+          "/api/Data/Applications/Taskflow/CustomerDatabase/BulkApproveTransfer",
+          { method: "PUT", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userIds: ids, status: "Active", updateReferenceIdFromTransferTo: false }) },
+        )
+        const result = await res.json()
+        if (result.success) {
+          const approved = customers
+            .filter(c => ids.includes(c.id))
+            .map(c => ({ name: c.company_name, id: c.id }))
+          setCustomers(prev => prev.map(c =>
+            ids.includes(c.id) ? { ...c, status: "Active", date_updated: new Date().toISOString() } : c,
+          ))
+          setAutoApproveLog(prev => [...approved, ...prev].slice(0, 20))
+          setPendingAutoApprove(new Set())
+          toast.success(`Auto-approved ${ids.length} unique customer${ids.length !== 1 ? "s" : ""}.`)
+        }
+      } catch { /* silent — will retry on next refresh */ }
+    }, AUTO_APPROVE_DELAY)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAutoApprove])
+
+  // ── Auto-refresh every 30s ─────────────────────────────────────────────────
+  const refreshApprovalData = async () => {
+    try {
+      const res = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/Fetch", { cache: "no-store" })
+      const json = await res.json()
+      if (json.success) {
+        setCustomers(json.data || [])
+        setLastRefresh(new Date())
+        setRefreshCountdown(30)
+      }
+    } catch { /* silent */ }
+  }
+
+  useEffect(() => {
+    const interval = setInterval(refreshApprovalData, 30_000)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Countdown timer display
+  useEffect(() => {
+    const tick = setInterval(() => {
+      setRefreshCountdown(prev => prev <= 1 ? 30 : prev - 1)
+    }, 1_000)
+    return () => clearInterval(tick)
+  }, [])
+
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/UserManagement/FetchTSA?Role=Territory%20Sales%20Associate")
@@ -575,6 +702,36 @@ export default function AccountPage() {
 
             {!approvalCollapsed && (
               <div className="px-4 sm:px-6 py-3 space-y-3">
+                {/* Auto-refresh + auto-approve status bar */}
+                <div className="flex items-center gap-3 px-3 py-2 border border-violet-500/10 bg-violet-500/[0.03]">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+                    <span className="text-[9px] font-mono text-violet-400/60 uppercase tracking-widest">
+                      Auto-refresh in {refreshCountdown}s
+                    </span>
+                  </div>
+                  {pendingAutoApprove.size > 0 && (
+                    <>
+                      <div className="w-px h-3 bg-slate-700" />
+                      <span className="text-[9px] font-mono text-emerald-400/70 uppercase tracking-widest">
+                        {pendingAutoApprove.size} unique → auto-approving in ~{refreshCountdown}s
+                      </span>
+                    </>
+                  )}
+                  {autoApproveLog.length > 0 && (
+                    <>
+                      <div className="w-px h-3 bg-slate-700" />
+                      <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest">
+                        Last: {autoApproveLog[0].name}
+                      </span>
+                    </>
+                  )}
+                  <button
+                    onClick={refreshApprovalData}
+                    className="ml-auto text-[9px] font-mono uppercase tracking-widest text-slate-600 hover:text-violet-400 transition-colors flex items-center gap-1">
+                    <Loader2 className="size-2.5" /> Refresh now
+                  </button>
+                </div>
                 {/* Section toolbar */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {selectedApprovalIds.size > 0 && (<>
@@ -610,12 +767,33 @@ export default function AccountPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {approvalCurrent.map((c) => {
                       const isSel = selectedApprovalIds.has(c.id)
+                      const willAutoApprove = pendingAutoApprove.has(c.id)
+                      // Check if this card has a duplicate company name
+                      const hasDuplicate = !willAutoApprove
                       return (
                         <div key={c.id} className={cn("border transition-colors",
-                          isSel ? "border-violet-500/40 bg-violet-500/[0.06]" : "border-violet-500/10 bg-[#0d1117] hover:border-violet-500/30")}>
+                          hasDuplicate ? "border-amber-500/20 bg-amber-500/[0.03]" :
+                          willAutoApprove ? "border-emerald-500/20 bg-emerald-500/[0.03]" :
+                          isSel ? "border-violet-500/40 bg-violet-500/[0.06]" :
+                          "border-violet-500/10 bg-[#0d1117] hover:border-violet-500/30")}>
                           <div className="flex items-center gap-2 px-3 py-2 border-b border-violet-500/10 bg-[#0a0d14]">
                             <input type="checkbox" checked={isSel} onChange={() => toggleApproval(c.id)} className="accent-violet-500" />
-                            <span className="text-[9px] font-mono text-violet-500/30 flex-1 truncate">{c.company_name}</span>
+                            <span className="text-[9px] font-mono flex-1 truncate"
+                              style={{ color: hasDuplicate ? "#fbbf24" : willAutoApprove ? "#34d399" : "rgba(167,139,250,0.3)" }}>
+                              {c.company_name}
+                            </span>
+                            {/* Duplicate warning */}
+                            {hasDuplicate && (
+                              <span className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-amber-500/30 bg-amber-500/10 text-amber-400 uppercase">
+                                ⚠ Duplicate
+                              </span>
+                            )}
+                            {/* Auto-approve indicator */}
+                            {willAutoApprove && (
+                              <span className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 uppercase">
+                                ✓ Auto
+                              </span>
+                            )}
                             {/* Clickable badge → opens changes dialog */}
                             <button
                               onClick={() => setChangesTarget(c)}
