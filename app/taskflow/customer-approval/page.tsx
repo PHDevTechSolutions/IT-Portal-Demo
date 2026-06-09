@@ -297,8 +297,8 @@ export default function AccountPage() {
   const [autoApproveLog, setAutoApproveLog] = useState<{ name: string; id: number }[]>([])
   const [pendingAutoApprove, setPendingAutoApprove] = useState<Set<number>>(new Set())
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
-  const [refreshCountdown, setRefreshCountdown] = useState(30)
-  const AUTO_APPROVE_DELAY = 30_000 // 30 seconds
+  const [refreshCountdown, setRefreshCountdown] = useState(5)
+  const AUTO_APPROVE_DELAY = 5_000 // 5 seconds
 
   /**
    * Returns true if `a` and `b` are "similar enough" company names to be
@@ -401,13 +401,13 @@ export default function AccountPage() {
       if (json.success) {
         setCustomers(json.data || [])
         setLastRefresh(new Date())
-        setRefreshCountdown(30)
+        setRefreshCountdown(5)
       }
     } catch { /* silent */ }
   }
 
   useEffect(() => {
-    const interval = setInterval(refreshApprovalData, 30_000)
+    const interval = setInterval(refreshApprovalData, 5_000)
     return () => clearInterval(interval)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -415,7 +415,7 @@ export default function AccountPage() {
   // Countdown timer display
   useEffect(() => {
     const tick = setInterval(() => {
-      setRefreshCountdown(prev => prev <= 1 ? 30 : prev - 1)
+      setRefreshCountdown(prev => prev <= 1 ? 5 : prev - 1)
     }, 1_000)
     return () => clearInterval(tick)
   }, [])
