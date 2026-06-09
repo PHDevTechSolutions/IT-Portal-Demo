@@ -6,7 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { toast } from "sonner";
 import {
   Loader2, Search, X, RefreshCw, ClipboardList,
-  ChevronDown, AlertCircle, CheckCircle2, XCircle,
+  ChevronDown, AlertCircle, CheckCircle2, XCircle, FileDown,
 } from "lucide-react";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink,
@@ -311,6 +311,9 @@ export default function ProgressLogsPage() {
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo]     = useState("");
+  const [typeActivity, setTypeActivity] = useState("all");
+  const [activityTypes, setActivityTypes] = useState<string[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
 
   // User name cache: { [ReferenceID]: "Firstname Lastname" }
   const [userNames, setUserNames] = useState<Record<string, string>>({});
@@ -320,6 +323,16 @@ export default function ProgressLogsPage() {
   const [isSaving, setIsSaving]       = useState(false);
 
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Fetch distinct activity types from DB
+    fetch("/api/taskflow/progress-logs?mode=types")
+      .then(r => r.json())
+      .then(json => {
+        if (json.success) setActivityTypes(json.types ?? []);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); };
@@ -332,15 +345,18 @@ export default function ProgressLogsPage() {
       .filter(Boolean)
       .filter(id => !userNames[id]); // only fetch missing ones
 
-    if (ids.length === 0) return;
+    if (ids.length === 0) return userNames;
     const unique = [...new Set(ids)];
     try {
       const res  = await fetch(`/api/taskflow/user-lookup?ids=${unique.join(",")}`);
       const json = await res.json();
       if (json.users) {
-        setUserNames(prev => ({ ...prev, ...json.users }));
+        const newNames = { ...userNames, ...json.users };
+        setUserNames(newNames);
+        return newNames;
       }
     } catch { /* silent */ }
+    return userNames;
   }, [userNames]);
 
   // ── Fetch a single column ──────────────────────────────────────────────────
@@ -352,6 +368,7 @@ export default function ProgressLogsPage() {
       });
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo)   params.set("dateTo", dateTo);
+      if (typeActivity !== "all") params.set("typeActivity", typeActivity);
 
       const res  = await fetch(`/api/taskflow/progress-logs?${params}`, { cache: "no-store" });
       const json = await res.json();
@@ -370,16 +387,7 @@ export default function ProgressLogsPage() {
     } finally {
       setColLoading(prev => ({ ...prev, [col]: false }));
     }
-  }, [dateFrom, dateTo]);
-
-  // ── Load all columns ───────────────────────────────────────────────────────
-  const loadAll = useCallback(() => {
-    setIsSearchMode(false);
-    setSearch("");
-    COLUMNS.forEach(col => fetchColumn(col.key, 1, false));
-  }, [fetchColumn]);
-
-  useEffect(() => { loadAll(); }, [loadAll]);
+  }, [dateFrom, dateTo, typeActivity, resolveUserNames]);
 
   // ── Search ─────────────────────────────────────────────────────────────────
   const doSearch = useCallback(async (q: string, page = 1) => {
@@ -390,6 +398,7 @@ export default function ProgressLogsPage() {
       const params = new URLSearchParams({ search: q, page: String(page), pageSize: String(PAGE_SIZE) });
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo)   params.set("dateTo", dateTo);
+      if (typeActivity !== "all") params.set("typeActivity", typeActivity);
 
       const res  = await fetch(`/api/taskflow/progress-logs?${params}`, { cache: "no-store" });
       const json = await res.json();
@@ -406,7 +415,20 @@ export default function ProgressLogsPage() {
     } finally {
       setIsSearching(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, typeActivity, resolveUserNames]);
+
+  // ── Load all columns ───────────────────────────────────────────────────────
+  const loadAll = useCallback(() => {
+    if (isSearchMode && search.trim()) {
+      doSearch(search, 1);
+    } else {
+      COLUMNS.forEach(col => fetchColumn(col.key, 1, false));
+    }
+  }, [fetchColumn, doSearch, isSearchMode, search]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll, dateFrom, dateTo, typeActivity]);
 
   const handleSearchChange = (val: string) => {
     setSearch(val);
@@ -418,6 +440,132 @@ export default function ProgressLogsPage() {
   const clearSearch = () => { setSearch(""); setIsSearchMode(false); setSearchResults([]); };
 
   const handleViewMore = (col: ColumnKey) => { fetchColumn(col, colPages[col] + 1, true); };
+
+  // ── Export to Excel ────────────────────────────────────────────────────────
+  const exportToExcel = async () => {
+    setIsExporting(true);
+    const tid = toast.loading("Preparing Excel export...");
+    try {
+      // Fetch all matching records (using a large pageSize)
+      const params = new URLSearchParams({
+        pageSize: "5000", // Fetch up to 5000 records for export
+      });
+      if (search) params.set("search", search);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo)   params.set("dateTo", dateTo);
+      if (typeActivity !== "all") params.set("typeActivity", typeActivity);
+
+      // If not searching, we might need to fetch all columns or just a general "all" list.
+      // But the current API requires a 'column' or 'search'.
+      // If we are on the board (not search mode), we'll fetch from all columns.
+      let allData: Activity[] = [];
+      
+      if (isSearchMode) {
+        const res = await fetch(`/api/taskflow/progress-logs?${params}`, { cache: "no-store" });
+        const json = await res.json();
+        if (json.success) allData = json.data ?? [];
+      } else {
+        // Fetch from each column and merge
+        const colPromises = COLUMNS.map(col => {
+          const p = new URLSearchParams(params);
+          p.set("column", col.key);
+          return fetch(`/api/taskflow/progress-logs?${p}`).then(r => r.json());
+        });
+        const results = await Promise.all(colPromises);
+        const seen = new Set<string>();
+        results.forEach(json => {
+          if (json.success && json.data) {
+            json.data.forEach((act: Activity) => {
+              if (!seen.has(act.id)) {
+                seen.add(act.id);
+                allData.push(act);
+              }
+            });
+          }
+        });
+        // Sort by date_created desc
+        allData.sort((a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime());
+      }
+
+      if (allData.length === 0) {
+        toast.error("No data found for the current filters.", { id: tid });
+        return;
+      }
+
+      // Ensure all user names are resolved before export
+      const finalNames = await resolveUserNames(allData);
+
+      const ExcelJS = (await import("exceljs")).default;
+      const { saveAs } = await import("file-saver");
+      const wb = new ExcelJS.Workbook();
+      const sheet = wb.addWorksheet("Progress Logs");
+
+      sheet.columns = [
+        { header: "Date Created", key: "date_created", width: 18 },
+        { header: "Activity Ref", key: "activity_reference_number", width: 20 },
+        { header: "Personnel Name", key: "personnel_name", width: 25 },
+        { header: "Company Name", key: "company_name", width: 35 },
+        { header: "Contact Person", key: "contact_person", width: 25 },
+        { header: "Contact Number", key: "contact_number", width: 20 },
+        { header: "Email Address", key: "email_address", width: 30 },
+        { header: "Project Name", key: "project_name", width: 30 },
+        { header: "Type Activity", key: "type_activity", width: 18 },
+        { header: "Status", key: "status", width: 20 },
+        { header: "Remarks", key: "remarks", width: 40 },
+        { header: "TSM", key: "tsm", width: 20 },
+        { header: "Manager", key: "manager", width: 20 },
+        { header: "Agent", key: "agent", width: 20 },
+      ];
+
+      // Style header
+      const headerRow = sheet.getRow(1);
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+      });
+
+      allData.forEach((act, i) => {
+        const row = sheet.addRow({
+          date_created: formatDate(act.date_created),
+          activity_reference_number: act.activity_reference_number,
+          personnel_name: finalNames[act.referenceid] || act.referenceid || "—",
+          company_name: act.company_name?.toUpperCase(),
+          contact_person: act.contact_person,
+          contact_number: act.contact_number,
+          email_address: act.email_address,
+          project_name: act.project_name,
+          type_activity: act.type_activity,
+          status: act.status,
+          remarks: act.remarks,
+          tsm: act.tsm,
+          manager: act.manager,
+          agent: act.agent,
+        });
+
+        const bgColor = i % 2 === 0 ? "FFFFFFFF" : "FFF0F4FA";
+        row.eachCell((cell) => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } };
+          cell.alignment = { vertical: "middle", wrapText: true };
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFD0D0D0" } },
+            left: { style: "thin", color: { argb: "FFD0D0D0" } },
+            bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+            right: { style: "thin", color: { argb: "FFD0D0D0" } },
+          };
+        });
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const typeStr = typeActivity !== "all" ? `-${typeActivity.replace(/\s+/g, "-").toLowerCase()}` : "";
+      saveAs(new Blob([buffer]), `progress-logs${typeStr}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(`Exported ${allData.length} records.`, { id: tid });
+    } catch (err: any) {
+      toast.error("Export failed: " + err.message, { id: tid });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // ── Edit dialog ────────────────────────────────────────────────────────────
   const openEdit = (act: Activity) => {
@@ -515,10 +663,34 @@ export default function ProgressLogsPage() {
               </p>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <select
+                value={typeActivity}
+                onChange={e => setTypeActivity(e.target.value)}
+                className="h-7 text-[10px] px-2 focus:outline-none border font-bold uppercase tracking-wider"
+                style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.dim, fontFamily: C.font }}
+                onFocus={e => (e.currentTarget.style.borderColor = C.accent)}
+                onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+              >
+                <option value="all">All Activities</option>
+                {activityTypes.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
               <Calendar
                 startDate={dateFrom} endDate={dateTo}
                 setStartDateAction={setDateFrom} setEndDateAction={setDateTo}
               />
+              <button
+                onClick={exportToExcel}
+                disabled={isExporting}
+                className="flex items-center gap-1.5 h-7 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors disabled:opacity-40"
+                style={{ borderColor: "#34d39940", color: "#34d399", backgroundColor: "rgba(52,211,153,0.05)" }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(52,211,153,0.15)"; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = "rgba(52,211,153,0.05)"; }}
+              >
+                {isExporting ? <Loader2 className="size-3 animate-spin" /> : <FileDown className="size-3" />}
+                {isExporting ? "Exporting…" : "Export Excel"}
+              </button>
               <button
                 onClick={loadAll}
                 className="flex items-center gap-1.5 h-7 px-3 text-[10px] font-bold uppercase tracking-wider border transition-colors"
@@ -745,7 +917,18 @@ export default function ProgressLogsPage() {
                 <Field label="Product Category"  value={editForm.product_category ?? ""}  onChange={v => setEditForm(p => ({ ...p, product_category: v }))} />
                 <Field label="Project Type"      value={editForm.project_type ?? ""}      onChange={v => setEditForm(p => ({ ...p, project_type: v }))} />
                 <Field label="Source"            value={editForm.source ?? ""}            onChange={v => setEditForm(p => ({ ...p, source: v }))} />
-                <Field label="Type Activity"     value={editForm.type_activity ?? ""}     onChange={v => setEditForm(p => ({ ...p, type_activity: v }))} />
+                <div className="space-y-1">
+                  <label className="text-[9px] font-mono uppercase tracking-widest" style={{ color: "#e8630a80" }}>Type Activity</label>
+                  <select
+                    value={editForm.type_activity ?? ""}
+                    onChange={e => setEditForm(p => ({ ...p, type_activity: e.target.value }))}
+                    className="w-full h-8 px-2 text-[11px] focus:outline-none border font-bold uppercase tracking-wider"
+                    style={{ backgroundColor: "#0d1117", border: `1px solid #1a2535`, color: "#c8d8e8", fontFamily: C.font }}
+                  >
+                    <option value="">— Select Type —</option>
+                    {activityTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
                 <Field label="Target Quota"      value={editForm.target_quota ?? ""}      onChange={v => setEditForm(p => ({ ...p, target_quota: v }))} />
                 <Field label="Start Date"        value={editForm.start_date ?? ""}        onChange={v => setEditForm(p => ({ ...p, start_date: v }))}        type="date" />
                 <Field label="End Date"          value={editForm.end_date ?? ""}          onChange={v => setEditForm(p => ({ ...p, end_date: v }))}          type="date" />

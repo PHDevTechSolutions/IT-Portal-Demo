@@ -22,7 +22,7 @@ export interface ScrapedLead {
 }
 
 interface ScrapeTarget {
-  type:    "businesslist" | "yellowpages" | "google" | "direct";
+  type:    "businesslist" | "yellowpages" | "google" | "direct" | "facebook" | "linkedin" | "sec" | "companyhouse";
   url:     string;
   reason?: string; // AI's explanation why it picked this URL
 }
@@ -44,29 +44,42 @@ interface AIRefinePlan {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI helpers — Ollama (local, no rate limits) with Groq fallback
+// AI helpers — Cloud Models (Qwen, GLM, etc.) with Groq fallback
 // ─────────────────────────────────────────────────────────────────────────────
 
-const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
+const AI_BASE_URL  = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+const AI_MODEL     = process.env.AI_MODEL        || "qwen3.5:cloud";
+const AI_API_KEY   = process.env.OLLAMA_API_KEY  || "";
 
-async function ollamaCall(
+async function cloudCall(
   prompt:      string,
+  model?:      string,
   temperature = 0.1,
 ): Promise<string> {
-  const res = await fetch(`${OLLAMA_BASE}/api/generate`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model:  OLLAMA_MODEL,
-      prompt,
-      stream: false,
-      options: { temperature, num_predict: 2048 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Ollama call failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
-  const data = await res.json();
-  return data.response ?? "";
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for cloud models
+
+  try {
+    const res = await fetch(`${AI_BASE_URL}/api/chat`, {
+      method:  "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        ...(AI_API_KEY ? { "Authorization": `Bearer ${AI_API_KEY}` } : {}),
+      },
+      body: JSON.stringify({
+        model:  model || AI_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        stream: false,
+        options: { temperature, num_predict: 2048 },
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`Cloud AI failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    const data = await res.json();
+    return data.message?.content ?? data.response ?? "";
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function groqCall(
@@ -90,18 +103,19 @@ async function groqCall(
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-// Try Ollama first, fall back to Groq if Ollama is not running
+// Use Cloud AI first (Qwen/GLM), fall back to Groq if needed
 async function aiCall(
   prompt:      string,
   temperature = 0.1,
   maxTokens   = 2048,
   groqKey?:    string,
+  model?:      string,
 ): Promise<string> {
   try {
-    return await ollamaCall(prompt, temperature);
-  } catch (ollamaErr: any) {
-    console.warn("[AI] Ollama unavailable, falling back to Groq:", ollamaErr.message);
-    if (!groqKey) throw new Error("Ollama unavailable and no Groq key provided");
+    return await cloudCall(prompt, model, temperature);
+  } catch (err: any) {
+    console.warn("[AI] Cloud provider failed, falling back to Groq:", err.message);
+    if (!groqKey) throw new Error("Cloud provider failed and no Groq key provided");
     return await groqCall(groqKey, prompt, temperature, maxTokens);
   }
 }
@@ -127,6 +141,7 @@ async function aiPlanScraping(
   industry: string,
   location: string,
   limit:    number,
+  model?:   string,
 ): Promise<AIPlan> {
   const locationStr = location || "Philippines";
   const prompt = `You are an expert lead researcher for the Philippine B2B market.
@@ -136,17 +151,21 @@ A user wants to find ${limit} real business leads with the following criteria:
 - Industry: "${industry || "any"}"
 - Location: "${locationStr}" ← THIS IS CRITICAL. Only find businesses physically located in ${locationStr}.
 
-IMPORTANT: The location filter is STRICT. Every search query and scrape target MUST include "${locationStr}" to ensure results are from that specific area only.
+IMPORTANT: The location filter is EXTREMELY STRICT. Every search query and scrape target MUST include "${locationStr}" to ensure results are from that specific area only. If the query implies a different city than ${locationStr}, IGNORE the other city and stick to ${locationStr}.
 
 Generate a JSON plan with:
 1. "search_queries": 4-6 targeted Google search queries that MUST include "${locationStr}" in every query. Format: "{industry/query} in ${locationStr} contact email phone"
-2. "scrape_targets": 4-8 direct URLs. For BusinessList.ph use the location slug. For Yellow Pages include the location in the query param. For Google always include "${locationStr}" in the q param.
-   Each target: { "type": "businesslist"|"yellowpages"|"google"|"direct", "url": "...", "reason": "..." }
+2. "scrape_targets": 4-8 direct URLs. 
+   - For BusinessList.ph use the location slug. 
+   - For Yellow Pages include the location in the query param. 
+   - For Google always include "${locationStr}" in the q param.
+   - For Facebook/LinkedIn/SEC/CompanyHouse, provide the direct search result URL.
+   Each target: { "type": "businesslist"|"yellowpages"|"google"|"direct"|"facebook"|"linkedin"|"sec"|"companyhouse", "url": "...", "reason": "..." }
 3. "reasoning": brief explanation
 
 Return ONLY valid JSON. No markdown.`;
 
-  const raw  = await aiCall(prompt, 0.2, 1500, groqKey);
+  const raw  = await aiCall(prompt, 0.2, 1500, groqKey, model);
   const plan = parseJson<AIPlan>(raw);
 
   if (!plan || !Array.isArray(plan.scrape_targets)) {
@@ -204,18 +223,18 @@ async function executeScrapePlan(
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     locale: "en-PH",
   });
-  const page  = await context.newPage();
+  
   const leads: ScrapedLead[] = [];
   const seen  = new Set<string>();
 
-  const addLead = (r: RawLead) => {
+  const addLead = (r: RawLead & { contact_person?: string }) => {
     const key = r.name.toLowerCase().trim();
     if (key.length < 3 || seen.has(key) || leads.length >= limit) return;
     seen.add(key);
     const filled = [r.phone, r.email, r.address, r.website].filter(Boolean).length;
     leads.push({
       company_name:   r.name,
-      contact_person: "",
+      contact_person: r.contact_person || "",
       contact_number: r.phone,
       email_address:  r.email,
       address:        r.address,
@@ -226,15 +245,37 @@ async function executeScrapePlan(
     });
   };
 
+  // Helper for parallel page processing
+  const processInParallel = async <T>(items: T[], processor: (item: T, p: any) => Promise<void>, concurrency = 3) => {
+    const chunks = [];
+    for (let i = 0; i < items.length; i += concurrency) {
+      chunks.push(items.slice(i, i + concurrency));
+    }
+    for (const chunk of chunks) {
+      if (leads.length >= limit) break;
+      await Promise.all(chunk.map(async (item) => {
+        const p = await context.newPage();
+        try {
+          await processor(item, p);
+        } catch (err: any) {
+          console.warn(`[Playwright] Parallel process failed:`, err.message);
+        } finally {
+          await p.close();
+        }
+      }));
+    }
+  };
+
+  const mainPage = await context.newPage();
+
   for (const target of targets) {
     if (leads.length >= limit) break;
 
     try {
       if (target.type === "businesslist") {
         // ── BusinessList.ph ────────────────────────────────────────────────
-        // Step 1: Get company list + profile URLs from the listing page
-        await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: 25000 });
-        const listRows = await page.evaluate(() => {
+        await mainPage.goto(target.url, { waitUntil: "domcontentloaded", timeout: 20000 });
+        const listRows = await mainPage.evaluate(() => {
           const results: any[] = [];
           document.querySelectorAll("h3").forEach(h3 => {
             const name = h3.textContent?.trim() ?? "";
@@ -269,81 +310,55 @@ async function executeScrapePlan(
           return results;
         });
 
-        // Step 2: Visit each profile page to get email, contact person, phone
-        for (const row of listRows.slice(0, Math.min(listRows.length, limit - leads.length + 3))) {
-          if (leads.length >= limit) break;
+        // Parallel visit profile pages
+        const toProcess = listRows.slice(0, Math.min(listRows.length, (limit - leads.length) + 5));
+        await processInParallel(toProcess, async (row, p) => {
           if (row.profileUrl) {
-            try {
-              await page.goto(row.profileUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
-              const profile = await page.evaluate(() => {
-                const text = document.body.innerText;
-                // Email — look for mailto links first, then regex
-                const emailEl = document.querySelector("a[href^='mailto:']") as HTMLAnchorElement | null;
-                const email   = emailEl?.href?.replace("mailto:", "")
-                  ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
-                       ?.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test"))
-                  ?? "";
-                // Phone — look for tel links first
-                const telEl = document.querySelector("a[href^='tel:']") as HTMLAnchorElement | null;
-                const phone = telEl?.href?.replace("tel:", "").replace(/\s/g, "")
-                  ?? text.match(/(\+63[\d\s\-]{9,12}|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10}|[\d]{3,4}[-\s][\d]{4})/)?.[0]?.trim()
-                  ?? "";
-                // Contact person — look for "Manager", "Owner", "Contact" labels
-                const contactMatch = text.match(/(?:Manager|Owner|Contact Person|Director|President)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/);
-                const contactPerson = contactMatch?.[1] ?? "";
-                // Website
-                const websiteEl = document.querySelector("a[href^='http']:not([href*='businesslist'])") as HTMLAnchorElement | null;
-                const website   = websiteEl?.href ?? "";
-                return { email, phone, contactPerson, website };
-              });
-              addLead({
-                name:    row.name,
-                phone:   profile.phone || row.phone,
-                email:   profile.email,
-                address: row.address,
-                website: profile.website || row.website,
-                source:  row.profileUrl,
-              });
-              // Attach contact person if found
-              if (profile.contactPerson && leads.length > 0) {
-                leads[leads.length - 1].contact_person = profile.contactPerson;
-              }
-            } catch {
-              // Profile visit failed — use listing data
-              addLead(row);
-            }
+            await p.goto(row.profileUrl, { waitUntil: "domcontentloaded", timeout: 10000 });
+            const profile = await p.evaluate(() => {
+              const text = document.body.innerText;
+              const emailEl = document.querySelector("a[href^='mailto:']") as HTMLAnchorElement | null;
+              const email = emailEl?.href?.replace("mailto:", "")
+                ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
+                     ?.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test"))
+                ?? "";
+              const telEl = document.querySelector("a[href^='tel:']") as HTMLAnchorElement | null;
+              const phone = telEl?.href?.replace("tel:", "").replace(/\s/g, "")
+                ?? text.match(/(\+63[\d\s\-]{9,12}|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10}|[\d]{3,4}[-\s][\d]{4})/)?.[0]?.trim()
+                ?? "";
+              const contactMatch = text.match(/(?:Manager|Owner|Contact Person|Director|President)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/);
+              const contactPerson = contactMatch?.[1] ?? "";
+              const websiteEl = document.querySelector("a[href^='http']:not([href*='businesslist'])") as HTMLAnchorElement | null;
+              const website = websiteEl?.href ?? "";
+              return { email, phone, contactPerson, website };
+            });
+            addLead({
+              name:           row.name,
+              phone:          profile.phone || row.phone,
+              email:          profile.email,
+              address:        row.address,
+              website:        profile.website || row.website,
+              source:         row.profileUrl,
+              contact_person: profile.contactPerson,
+            });
           } else {
             addLead(row);
           }
-        }
+        }, 4);
 
       } else if (target.type === "yellowpages") {
         // ── Yellow Pages PH ────────────────────────────────────────────────
-        await page.goto(target.url, { waitUntil: "networkidle", timeout: 30000 });
-        await page.waitForTimeout(2500);
-        const rows = await page.evaluate((sourceUrl: string) => {
+        await mainPage.goto(target.url, { waitUntil: "domcontentloaded", timeout: 20000 });
+        const rows = await mainPage.evaluate((sourceUrl: string) => {
           const results: any[] = [];
-          const candidates = [
-            ...Array.from(document.querySelectorAll(".listing")),
-            ...Array.from(document.querySelectorAll(".business-listing")),
-            ...Array.from(document.querySelectorAll("[class*='listing-item']")),
-            ...Array.from(document.querySelectorAll("[class*='business-card']")),
-            ...Array.from(document.querySelectorAll("article")),
-          ];
-          const unique = [...new Set(candidates)];
-          unique.forEach(item => {
+          const items = document.querySelectorAll(".listing, .business-listing, [class*='listing-item'], [class*='business-card'], article");
+          items.forEach(item => {
             const el   = item as HTMLElement;
-            const name = (
-              el.querySelector("h2, h3, .business-name, [class*='name']") ??
-              el.querySelector("a[href*='/business/']")
-            )?.textContent?.trim() ?? "";
+            const name = (el.querySelector("h2, h3, .business-name, [class*='name']") ?? el.querySelector("a[href*='/business/']"))?.textContent?.trim() ?? "";
             if (!name || name.length < 3) return;
             const text  = el.innerText ?? "";
             const phone = text.match(/(\+63|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10})/)?.[0] ?? "";
-            const email = (
-              el.querySelector("a[href^='mailto:']")?.getAttribute("href")?.replace("mailto:", "") ??
-              text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/)?.[0] ?? ""
-            );
+            const email = (el.querySelector("a[href^='mailto:']")?.getAttribute("href")?.replace("mailto:", "") ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/)?.[0] ?? "");
             const address = el.querySelector(".address, [class*='address'], [class*='location']")?.textContent?.trim() ?? "";
             const website = (el.querySelector("a[href^='http']:not([href*='yellowpages'])") as HTMLAnchorElement)?.href ?? "";
             results.push({ name, phone, email, address, website, source: sourceUrl });
@@ -353,11 +368,10 @@ async function executeScrapePlan(
         rows.forEach(addLead);
 
       } else if (target.type === "google") {
-        // ── Google Search — get URLs then visit each for contact details ───
-        await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: 20000 });
+        // ── Google Search ──────────────────────────────────────────────────
+        await mainPage.goto(target.url, { waitUntil: "domcontentloaded", timeout: 15000 });
 
-        // Extract local pack cards (have phone/address inline)
-        const localCards = await page.evaluate((sourceUrl: string) => {
+        const localCards = await mainPage.evaluate((sourceUrl: string) => {
           const results: any[] = [];
           document.querySelectorAll(".VkpGBb, .rllt__details, [data-cid]").forEach(card => {
             const el   = card as HTMLElement;
@@ -371,8 +385,7 @@ async function executeScrapePlan(
         }, target.url);
         localCards.forEach(r => addLead({ ...r, name: r.name.replace(/ [-|–].*$/, "").trim() }));
 
-        // Extract organic result URLs and visit them for contact details
-        const resultUrls = await page.$$eval("a[href]", (anchors: any[]) =>
+        const resultUrls = await mainPage.$$eval("a[href]", (anchors: any[]) =>
           anchors.map(a => a.href as string)
             .filter(href =>
               href.startsWith("http") &&
@@ -382,56 +395,50 @@ async function executeScrapePlan(
               !href.includes("wikipedia.org") &&
               !href.includes("businesslist.ph") &&
               !href.includes("yellowpages.com.ph")
-            ).slice(0, 5)
+            ).slice(0, 6)
         );
 
-        for (const url of resultUrls) {
-          if (leads.length >= limit) break;
-          try {
-            await page.goto(url, { waitUntil: "domcontentloaded", timeout: 12000 });
-            const data = await page.evaluate(() => {
-              const text = document.body.innerText.slice(0, 5000);
-              const title = document.title;
-              const emailEl = document.querySelector("a[href^='mailto:']") as HTMLAnchorElement | null;
-              const email   = emailEl?.href?.replace("mailto:", "")
-                ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
-                     ?.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test"))
-                ?? "";
-              const telEl = document.querySelector("a[href^='tel:']") as HTMLAnchorElement | null;
-              const phone = telEl?.href?.replace("tel:", "").replace(/\s/g, "")
-                ?? text.match(/(\+63[\d\s\-]{9,12}|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10})/)?.[0]?.trim()
-                ?? "";
-              const contactMatch = text.match(/(?:Manager|Owner|Contact Person|Director|President)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/);
-              const contactPerson = contactMatch?.[1] ?? "";
-              const addrMatch = text.match(/\d+\s+[A-Z][a-z]+.*(?:Street|St\.|Avenue|Ave\.|Road|Rd\.|Blvd|Drive|Dr\.)[^,\n]*/i);
-              const address = addrMatch?.[0]?.trim() ?? "";
-              return { title, email, phone, contactPerson, address };
+        await processInParallel(resultUrls, async (url, p) => {
+          await p.goto(url, { waitUntil: "domcontentloaded", timeout: 8000 });
+          const data = await p.evaluate(() => {
+            const text = document.body.innerText.slice(0, 4000);
+            const title = document.title;
+            const emailEl = document.querySelector("a[href^='mailto:']") as HTMLAnchorElement | null;
+            const email = emailEl?.href?.replace("mailto:", "")
+              ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
+                   ?.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test"))
+              ?? "";
+            const telEl = document.querySelector("a[href^='tel:']") as HTMLAnchorElement | null;
+            const phone = telEl?.href?.replace("tel:", "").replace(/\s/g, "")
+              ?? text.match(/(\+63[\d\s\-]{9,12}|0[89]\d{9}|\(\d{2,3}\)\s*[\d\s\-]{7,10})/)?.[0]?.trim()
+              ?? "";
+            const contactMatch = text.match(/(?:Manager|Owner|Contact Person|Director|President)[:\s]+([A-Z][a-z]+ [A-Z][a-z]+)/);
+            const contactPerson = contactMatch?.[1] ?? "";
+            const addrMatch = text.match(/\d+\s+[A-Z][a-z]+.*(?:Street|St\.|Avenue|Ave\.|Road|Rd\.|Blvd|Drive|Dr\.)[^,\n]*/i);
+            const address = addrMatch?.[0]?.trim() ?? "";
+            return { title, email, phone, contactPerson, address };
+          });
+          if (data.title && (data.email || data.phone)) {
+            addLead({
+              name:           data.title.replace(/ [-|–].*$/, "").trim(),
+              phone:          data.phone,
+              email:          data.email,
+              address:        data.address,
+              website:        url,
+              source:         url,
+              contact_person: data.contactPerson,
             });
-            if (data.title && (data.email || data.phone)) {
-              const lead: RawLead = {
-                name:    data.title.replace(/ [-|–].*$/, "").trim(),
-                phone:   data.phone,
-                email:   data.email,
-                address: data.address,
-                website: url,
-                source:  url,
-              };
-              addLead(lead);
-              if (data.contactPerson && leads.length > 0) {
-                leads[leads.length - 1].contact_person = data.contactPerson;
-              }
-            }
-          } catch { /* skip */ }
-        }
+          }
+        }, 3);
 
-      } else if (target.type === "direct") {
-        // ── Direct page visit ──────────────────────────────────────────────
-        await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: 15000 });
-        const raw = await page.evaluate(() => {
-          const text  = document.body.innerText.slice(0, 5000);
+      } else if (["direct", "facebook", "linkedin", "sec", "companyhouse"].includes(target.type)) {
+        // ── Direct page visit (or social/sec) ──────────────────────────────
+        await mainPage.goto(target.url, { waitUntil: "domcontentloaded", timeout: 12000 });
+        const raw = await mainPage.evaluate(() => {
+          const text  = document.body.innerText.slice(0, 4000);
           const title = document.title;
           const emailEl = document.querySelector("a[href^='mailto:']") as HTMLAnchorElement | null;
-          const email   = emailEl?.href?.replace("mailto:", "")
+          const email = emailEl?.href?.replace("mailto:", "")
             ?? text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g)
                  ?.find(e => !e.includes("example") && !e.includes("noreply") && !e.includes("test"))
             ?? "";
@@ -447,16 +454,14 @@ async function executeScrapePlan(
         });
         if (raw.title && (raw.email || raw.phone)) {
           addLead({
-            name:    raw.title.replace(/ [-|–].*$/, "").trim(),
-            phone:   raw.phone,
-            email:   raw.email,
-            address: raw.address,
-            website: target.url,
-            source:  target.url,
+            name:           raw.title.replace(/ [-|–].*$/, "").trim(),
+            phone:          raw.phone,
+            email:          raw.email,
+            address:        raw.address,
+            website:        target.url,
+            source:         target.url,
+            contact_person: raw.contactPerson,
           });
-          if (raw.contactPerson && leads.length > 0) {
-            leads[leads.length - 1].contact_person = raw.contactPerson;
-          }
         }
       }
     } catch (e: any) {
@@ -480,6 +485,7 @@ async function aiExtractLeads(
   location:    string,
   limit:       number,
   existing:    ScrapedLead[],
+  model?:      string,
 ): Promise<ScrapedLead[]> {
   const existingNames = existing.map(l => l.company_name).join(", ");
   const locationStr   = location || "Philippines";
@@ -508,23 +514,14 @@ company_name, contact_person, contact_number, email_address, address, website, i
 Scraped content:
 ${rawBlock.slice(0, 14000)}`;
 
-  const raw   = await aiCall(prompt, 0.05, 4096, groqKey);
+  const raw   = await aiCall(prompt, 0.05, 4096, groqKey, model);
   const leads = parseJson<ScrapedLead[]>(raw);
   if (!Array.isArray(leads)) return [];
 
-  // Hard post-filter: if location was specified, drop leads whose address
+  // Hard post-filter: if location was detected/specified, drop leads whose address/name
   // doesn't contain the location string (case-insensitive)
   if (location) {
-    const locLower = location.toLowerCase();
-    return leads
-      .filter(l => {
-        const addr = (l.address ?? "").toLowerCase();
-        // Keep if address contains the location, or address is empty (AI already filtered)
-        return !addr || addr.includes(locLower) ||
-          // Also accept common aliases (e.g. "Mandaluyong" matches "Mandaluyong City")
-          locLower.split(/\s+/).some(word => word.length > 3 && addr.includes(word));
-      })
-      .slice(0, limit);
+    return filterByLocation(leads, location).slice(0, limit);
   }
 
   return leads.slice(0, limit);
@@ -543,6 +540,7 @@ async function aiRefinePlan(
   location:  string,
   found:     ScrapedLead[],
   stillNeed: number,
+  model?:    string,
 ): Promise<AIRefinePlan> {
   const foundSummary = found.map(l =>
     `- ${l.company_name} (${l.confidence}) from ${l.source}`
@@ -570,20 +568,49 @@ Return ONLY valid JSON:
   "reasoning": "..."
 }`;
 
-  const raw  = await aiCall(prompt, 0.2, 1200, groqKey);
+  const raw  = await aiCall(prompt, 0.2, 1200, groqKey, model);
   const plan = parseJson<AIRefinePlan>(raw);
   return plan ?? { additional_queries: [], additional_targets: [], reasoning: "parse failed" };
 }
 
+// ─── Location detection ──────────────────────────────────────────────────────
+const PH_LOCATIONS = [
+  "Metro Manila", "NCR", "Manila", "Quezon City", "Makati", "Pasig", "Taguig",
+  "Mandaluyong", "Caloocan", "Marikina", "Las Piñas", "Muntinlupa", "Valenzuela",
+  "Malabon", "Navotas", "San Juan", "Pateros", "Cebu", "Davao", "Iloilo",
+  "Bacolod", "Cagayan de Oro", "Zamboanga", "General Santos", "Bagui", "Laguna",
+  "Cavite", "Batangas", "Pampanga", "Bulacan", "Rizal", "Tacloban",
+];
+
+function detectLocation(query: string, industry: string, providedLocation: string): string {
+  if (providedLocation && providedLocation.toLowerCase() !== "all") return providedLocation;
+  
+  const fullText = `${query} ${industry}`.toLowerCase();
+  for (const loc of PH_LOCATIONS) {
+    if (fullText.includes(loc.toLowerCase())) return loc;
+  }
+  return "";
+}
+
 // ─── Location filter ─────────────────────────────────────────────────────────
 function filterByLocation(leads: ScrapedLead[], location: string): ScrapedLead[] {
-  if (!location) return leads;
+  if (!location || location.toLowerCase() === "philippines") return leads;
+  
   const locLower = location.toLowerCase();
   const locWords = locLower.split(/\s+/).filter(w => w.length > 3);
+  
+  // Stricter filtering: if address exists, it MUST contain the location or one of its major words
   return leads.filter(l => {
     const addr = (l.address ?? "").toLowerCase();
-    if (!addr) return true; // no address — keep, let AI decide
-    return addr.includes(locLower) || locWords.some(w => addr.includes(w));
+    const name = (l.company_name ?? "").toLowerCase();
+    
+    // If address is missing, we trust the source/name for now, but if address exists, we verify
+    if (!addr) return true;
+    
+    const hasLocMatch = addr.includes(locLower) || locWords.some(w => addr.includes(w));
+    const hasNameLocMatch = name.includes(locLower) || locWords.some(w => name.includes(w));
+    
+    return hasLocMatch || hasNameLocMatch;
   });
 }
 
@@ -605,12 +632,13 @@ function dedup(leads: ScrapedLead[]): ScrapedLead[] {
 
 export async function POST(req: NextRequest) {
   try {
-    const { query, industry = "", location = "", limit = 10 } = await req.json();
+    const { query, industry = "", location: providedLocation = "", limit = 10, model = "" } = await req.json();
 
     if (!query?.trim()) {
       return NextResponse.json({ success: false, error: "Query is required" }, { status: 400 });
     }
 
+    const location = detectLocation(query, industry, providedLocation);
     const cap      = Math.min(Number(limit), 50);
     // Try to get Groq key for fallback — non-fatal if missing
     let groqKey: string | undefined;
@@ -619,7 +647,7 @@ export async function POST(req: NextRequest) {
 
     // ── Loop 1 ───────────────────────────────────────────────────────────────
     console.log("[Agentic] Loop 1 — AI planning scrape...");
-    const plan1   = await aiPlanScraping(groqKey ?? "", query, industry, location, cap);
+    const plan1   = await aiPlanScraping(groqKey ?? "", query, industry, location, cap, model);
     console.log(`[Agentic] Plan: ${plan1.scrape_targets.length} targets. Reasoning: ${plan1.reasoning}`);
 
     const raw1    = await executeScrapePlan(plan1.scrape_targets, industry, cap);
@@ -631,7 +659,7 @@ export async function POST(req: NextRequest) {
       text: `Company: ${l.company_name} | Phone: ${l.contact_number} | Email: ${l.email_address} | Address: ${l.address} | Website: ${l.website}`,
     }));
 
-    const extracted1 = await aiExtractLeads(groqKey ?? "", structuredText1, industry, location, cap, []);
+    const extracted1 = await aiExtractLeads(groqKey ?? "", structuredText1, industry, location, cap, [], model);
     allLeads = dedup([...filteredRaw1, ...extracted1]);
     console.log(`[Agentic] After loop 1 extraction: ${allLeads.length} leads`);
 
@@ -640,7 +668,7 @@ export async function POST(req: NextRequest) {
       const stillNeed = cap - allLeads.length;
       console.log(`[Agentic] Loop 2 — need ${stillNeed} more leads, refining plan...`);
 
-      const plan2   = await aiRefinePlan(groqKey ?? "", query, industry, location, allLeads, stillNeed);
+      const plan2   = await aiRefinePlan(groqKey ?? "", query, industry, location, allLeads, stillNeed, model);
       console.log(`[Agentic] Refined plan: ${plan2.additional_targets.length} new targets. Reasoning: ${plan2.reasoning}`);
 
       if (plan2.additional_targets.length > 0) {
@@ -656,7 +684,7 @@ export async function POST(req: NextRequest) {
           text: `Company: ${l.company_name} | Phone: ${l.contact_number} | Email: ${l.email_address} | Address: ${l.address} | Website: ${l.website}`,
         }));
 
-        const extracted2 = await aiExtractLeads(groqKey ?? "", structuredText2, industry, location, stillNeed, allLeads);
+        const extracted2 = await aiExtractLeads(groqKey ?? "", structuredText2, industry, location, stillNeed, allLeads, model);
         allLeads = dedup([...allLeads, ...filteredRaw2, ...extracted2]);
         console.log(`[Agentic] After loop 2: ${allLeads.length} leads total`);
       }

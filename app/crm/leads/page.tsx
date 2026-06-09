@@ -46,6 +46,13 @@ const LOCATIONS = [
   "Iloilo", "Cagayan de Oro", "Zamboanga", "General Santos",
 ];
 
+const AI_MODELS = [
+  { value: "qwen3.5:cloud", label: "Qwen 3.5 Cloud" },
+  { value: "deepseek-v3:cloud", label: "DeepSeek V3" },
+  { value: "llama-3.3-70b-versatile", label: "Llama 3.3 (Groq)" },
+  { value: "glm-4:cloud", label: "GLM-4 Cloud" },
+];
+
 const CONFIDENCE_STYLE: Record<string, { color: string; icon: any }> = {
   high:   { color: "#34d399", icon: CheckCircle2 },
   medium: { color: "#fbbf24", icon: AlertTriangle },
@@ -186,6 +193,7 @@ export default function LeadsGenerationPage() {
   const [industry, setIndustry] = useState("");
   const [location, setLocation] = useState("");
   const [limit,    setLimit]    = useState(10);
+  const [model,    setModel]    = useState("qwen3.5:cloud");
 
   const [leads,       setLeads]       = useState<ScrapedLead[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -238,7 +246,7 @@ export default function LeadsGenerationPage() {
     try {
       const res  = await fetch("/api/taskflow/leads-generation", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, industry, location, limit }),
+        body: JSON.stringify({ query, industry, location, limit, model }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Search failed");
@@ -393,6 +401,11 @@ export default function LeadsGenerationPage() {
                   className="h-8 text-[11px] px-2 focus:outline-none"
                   style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
                   {[5, 10, 15, 20, 25, 30, 40, 50].map(n => <option key={n} value={n}>{n} results</option>)}
+                </select>
+                <select value={model} onChange={e => setModel(e.target.value)}
+                  className="h-8 text-[11px] px-2 focus:outline-none"
+                  style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.font }}>
+                  {AI_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
                 {(industry || location) && (
                   <button onClick={() => { setIndustry(""); setLocation(""); }}

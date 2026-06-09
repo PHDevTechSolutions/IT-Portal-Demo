@@ -38,6 +38,10 @@ interface Customer {
   referenceid: string; tsm: string; manager: string; status: string; remarks: string;
   date_created: string; date_updated: string; next_available_date?: string; transfer_to: string;
   account_reference_number?: string;
+  industry?: string;
+  source?: string;
+  website?: string;
+  confidence?: "high" | "medium" | "low";
 }
 
 interface EditHistoryRow {
@@ -508,7 +512,7 @@ export default function AccountPage() {
 
   const cellBase = "py-2 px-3 border-r border-orange-500/5 last:border-r-0"
 
-  const TABLE_HEADERS = ["Company","Contact","Email","Type","Status","Area","Transfer From","Transfer To","TSM","Manager","Date Created","Date Updated","Next Available"]
+  const TABLE_HEADERS = ["Company","Contact","Email","Type","Industry","Website","Status","Area","Transfer From","Transfer To","TSM","Manager","Date Created","Date Updated","Next Available"]
   const APPROVAL_HEADERS = ["Company","Contact","Email","Type","Status","Area","TSM","Manager","Date Created","Date Updated"]
 
   // ── Selection helpers ──────────────────────────────────────────────────────
@@ -604,18 +608,38 @@ export default function AccountPage() {
     sheet.columns = [
       { header: "Company", key: "company_name", width: 35 }, { header: "Contact Person", key: "contact_person", width: 25 },
       { header: "Email", key: "email_address", width: 30 }, { header: "Type", key: "type_client", width: 18 },
+      { header: "Industry", key: "industry", width: 20 }, { header: "Website", key: "website", width: 30 },
       { header: "Status", key: "status", width: 22 }, { header: "Area", key: "region", width: 20 },
       { header: "Transfer From", key: "transfer_from", width: 25 }, { header: "Transfer To", key: "transfer_to_name", width: 25 },
       { header: "TSM", key: "tsm", width: 20 }, { header: "Manager", key: "manager", width: 20 },
       { header: "Date Created", key: "date_created", width: 18 }, { header: "Date Updated", key: "date_updated", width: 18 },
       { header: "Next Available", key: "next_available_date", width: 18 },
+      { header: "Source", key: "source", width: 30 }, { header: "Confidence", key: "confidence", width: 15 },
     ]
     const hr = sheet.getRow(1)
     hr.eachCell((cell) => { cell.font = { bold: true, color: { argb: "FFFFFFFF" } }; cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } }; cell.alignment = { vertical: "middle", horizontal: "center" }; cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } } })
     hr.height = 20
     const exportData = selectedTransferIds.size > 0 ? transferFiltered.filter((c) => selectedTransferIds.has(c.id)) : transferFiltered
     exportData.forEach((c, i) => {
-      const row = sheet.addRow({ company_name: c.company_name?.toUpperCase() || "", contact_person: c.contact_person || "", email_address: c.email_address || "", type_client: c.type_client || "—", status: c.status || "—", region: c.region || "", transfer_from: tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-", transfer_to_name: tsaMap[c.transfer_to?.trim().toLowerCase()] || c.transfer_to || "-", tsm: c.tsm || "", manager: c.manager || "", date_created: c.date_created ? new Date(c.date_created).toLocaleDateString() : "", date_updated: c.date_updated ? new Date(c.date_updated).toLocaleDateString() : "", next_available_date: c.next_available_date ? new Date(c.next_available_date).toLocaleDateString() : "-" })
+      const row = sheet.addRow({ 
+        company_name: c.company_name?.toUpperCase() || "", 
+        contact_person: c.contact_person || "", 
+        email_address: c.email_address || "", 
+        type_client: c.type_client || "—", 
+        industry: c.industry || "—",
+        website: c.website || "—",
+        status: c.status || "—", 
+        region: c.region || "", 
+        transfer_from: tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || "-", 
+        transfer_to_name: tsaMap[c.transfer_to?.trim().toLowerCase()] || c.transfer_to || "-", 
+        tsm: c.tsm || "", 
+        manager: c.manager || "", 
+        date_created: c.date_created ? new Date(c.date_created).toLocaleDateString() : "", 
+        date_updated: c.date_updated ? new Date(c.date_updated).toLocaleDateString() : "", 
+        next_available_date: c.next_available_date ? new Date(c.next_available_date).toLocaleDateString() : "-",
+        source: c.source || "—",
+        confidence: c.confidence || "—"
+      })
       const bg = i % 2 === 0 ? "FFFFFFFF" : "FFF0F4FA"
       row.eachCell((cell) => { cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } }; cell.alignment = { vertical: "middle", wrapText: true }; cell.border = { top: { style: "thin", color: { argb: "FFD0D0D0" } }, left: { style: "thin", color: { argb: "FFD0D0D0" } }, bottom: { style: "thin", color: { argb: "FFD0D0D0" } }, right: { style: "thin", color: { argb: "FFD0D0D0" } } } })
     })
@@ -803,12 +827,50 @@ export default function AccountPage() {
                             </button>
                           </div>
                           <div className="p-3 space-y-1.5">
-                            {[["Contact", c.contact_person], ["Phone", c.contact_number], ["Email", c.email_address], ["Type", c.type_client], ["Region", c.region], ["TSM", c.tsm], ["Manager", c.manager]].map(([label, value]) => (
+                            {[
+                              ["Contact", c.contact_person],
+                              ["Phone", c.contact_number],
+                              ["Email", c.email_address],
+                              ["Type", c.type_client],
+                              ["Region", c.region],
+                              ["Industry", c.industry],
+                              ["TSM", c.tsm],
+                              ["Manager", c.manager]
+                            ].map(([label, value]) => (
                               <div key={label} className="flex items-start justify-between gap-2">
                                 <span className="text-[9px] font-mono uppercase text-violet-500/40 shrink-0">{label}</span>
                                 <span className="text-[10px] font-mono text-slate-300 text-right truncate max-w-[160px]">{value || "—"}</span>
                               </div>
                             ))}
+                            {c.source && (
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-[9px] font-mono uppercase text-violet-500/40 shrink-0">Source</span>
+                                <a href={c.source.startsWith("http") ? c.source : "#"} target="_blank" rel="noopener noreferrer" 
+                                   className="text-[10px] font-mono text-violet-400 hover:underline truncate max-w-[160px]">
+                                  {c.source.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
+                                </a>
+                              </div>
+                            )}
+                            {c.website && (
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-[9px] font-mono uppercase text-violet-500/40 shrink-0">Website</span>
+                                <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" 
+                                   className="text-[10px] font-mono text-violet-400 hover:underline truncate max-w-[160px]">
+                                  {c.website.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
+                                </a>
+                              </div>
+                            )}
+                            {c.confidence && (
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="text-[9px] font-mono uppercase text-violet-500/40">Confidence</span>
+                                <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 border uppercase tracking-widest",
+                                  c.confidence === "high" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" :
+                                  c.confidence === "medium" ? "border-amber-500/30 bg-amber-500/10 text-amber-400" :
+                                  "border-red-500/30 bg-red-500/10 text-red-400")}>
+                                  {c.confidence}
+                                </span>
+                              </div>
+                            )}
                             <div className="flex items-center justify-between pt-1.5 border-t border-violet-500/10">
                               <span className="text-[9px] font-mono uppercase text-violet-500/40">Created</span>
                               <span className="text-[10px] font-mono text-slate-500">{new Date(c.date_created).toLocaleDateString()}</span>
@@ -890,6 +952,14 @@ export default function AccountPage() {
                                   <TableCell className={cn(cellBase, "min-w-[140px] capitalize text-slate-300")}>{c.contact_person}</TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[180px] text-slate-500 font-mono text-[10px]")}>{c.email_address}</TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[100px] text-slate-300")}>{c.type_client || <span className="text-slate-600">—</span>}</TableCell>
+                                  <TableCell className={cn(cellBase, "min-w-[100px] text-slate-300")}>{c.industry || <span className="text-slate-600">—</span>}</TableCell>
+                                  <TableCell className={cn(cellBase, "min-w-[140px] text-violet-400 font-mono text-[10px]")}>
+                                    {c.website ? (
+                                      <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                        {c.website.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
+                                      </a>
+                                    ) : <span className="text-slate-600">—</span>}
+                                  </TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[130px]")}><StatusBadge status={c.status} /></TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[100px] text-slate-300")}>{c.region}</TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[130px] text-slate-400 font-mono text-[10px]")}>{tsaMap[c.referenceid?.trim().toLowerCase()] || c.referenceid || <span className="text-slate-600">—</span>}</TableCell>

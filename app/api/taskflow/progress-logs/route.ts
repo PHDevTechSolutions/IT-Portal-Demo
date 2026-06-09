@@ -42,21 +42,35 @@ const COLS = [
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl;
+    const mode     = searchParams.get("mode");
+
+    // ── Mode: types (fetch distinct activity types) ──────────────────────────
+    if (mode === "types") {
+      const { data, error } = await supabase
+        .from("history")
+        .select("type_activity")
+        .not("type_activity", "is", null);
+      
+      if (error) throw new Error(error.message);
+      
+      // Unique and sorted types
+      const types = [...new Set(data.map(d => d.type_activity))].sort();
+      return NextResponse.json({ success: true, types });
+    }
+
     const column   = searchParams.get("column");
     const page     = parseInt(searchParams.get("page") ?? "1", 10);
     const pageSize = parseInt(searchParams.get("pageSize") ?? "10", 10);
     const search   = searchParams.get("search")?.trim() ?? "";
     const dateFrom = searchParams.get("dateFrom");
     const dateTo   = searchParams.get("dateTo");
+    const typeActivity = searchParams.get("typeActivity");
 
     const from = (page - 1) * pageSize;
     const to   = from + pageSize - 1;
 
     // ── Search mode ───────────────────────────────────────────────────────────
     if (search) {
-      // PostgREST's .or() parser breaks on commas inside values (e.g. "Company, Inc.").
-      // Fix: run each column as a separate parallel query then merge server-side.
-      // This fully avoids the PostgREST comma-in-value parsing bug.
       const cols = [
         "activity_reference_number",
         "company_name",
@@ -67,14 +81,20 @@ export async function GET(req: NextRequest) {
       ];
 
       // Run each column as a separate query then merge — avoids the comma parsing bug
-      const promises = cols.map(col =>
-        supabase
+      // We don't use { count: "exact" } here because it's slow on search fragments
+      const promises = cols.map(col => {
+        let q = supabase
           .from("history")
-          .select(COLS.join(","), { count: "exact" })
+          .select(COLS.join(","))
           .ilike(col, `%${search}%`)
           .order("date_created", { ascending: false })
-          .range(0, 999), // fetch up to 1000 per column, dedupe after
-      );
+          .range(0, 499); // Reduced range for faster merging
+        
+        if (typeActivity && typeActivity !== "all") {
+          q = q.ilike("type_activity", typeActivity);
+        }
+        return q;
+      });
 
       const results = await Promise.all(promises);
       const errors  = results.filter(r => r.error);
@@ -112,15 +132,17 @@ export async function GET(req: NextRequest) {
     const patterns  = COLUMN_PATTERNS[column];
     const orFilter  = patterns.map(p => `status.ilike.${p}`).join(",");
 
+    // Use count: "planned" instead of "exact" for better performance
     let q = supabase
       .from("history")
-      .select(COLS.join(","), { count: "exact" })
+      .select(COLS.join(","), { count: "planned" })
       .or(orFilter)
       .order("date_created", { ascending: false })
       .range(from, to);
 
     if (dateFrom) q = q.gte("date_created", dateFrom);
     if (dateTo)   q = q.lte("date_created", dateTo);
+    if (typeActivity && typeActivity !== "all") q = q.ilike("type_activity", typeActivity);
 
     const { data, error, count } = await q;
     if (error) throw new Error(error.message);
