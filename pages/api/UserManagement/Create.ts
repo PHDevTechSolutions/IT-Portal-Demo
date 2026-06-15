@@ -56,16 +56,6 @@ export default async function handler(
 
     try {
       const result = await AddUser(req.body);
-        Password,
-        Role,
-        Position,
-        Department,
-        Location,
-        Company,
-        Status,
-        LoginAttempts,
-        LockUntil,
-      });
       
       // Log audit
       const actor = getActorFromRequest(req);
