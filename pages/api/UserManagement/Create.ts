@@ -3,7 +3,15 @@ import { supabase } from "@/utils/supabase";
 import bcrypt from "bcrypt";
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
-// ... (helpers)
+// Helper to get actor from request headers
+function getActorFromRequest(req: NextApiRequest): AuditActor {
+  return {
+    uid:   (req.headers["x-user-id"]    as string) || null,
+    email: (req.headers["x-user-email"] as string) || "system",
+    role:  (req.headers["x-user-role"]  as string) || "unknown",
+    name:  (req.headers["x-user-name"]  as string) || null,
+  };
+}
 
 async function AddUser(userData: any) {
   const { Email, userName, Password } = userData;
