@@ -113,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Generate ReferenceID
         const finalReferenceID = generateReferenceID(Firstname, Lastname, Location)
 
-        // Build new user object
+        // Build new user object — only include fields that exist in the Supabase schema
         const newUser: any = {
             Firstname,
             Lastname,
@@ -129,7 +129,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             TargetQuota: Department === "Sales" ? TargetQuota || null : null,
             createdAt: new Date(),
             updatedAt: new Date(),
-            Directories: Array.isArray(Directories) ? Directories : [],
             ManagerName,
             TSMName,
             ContactNumber,
@@ -160,37 +159,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             newUser.TSM = TSM || null
         }
 
-        // Save to Supabase
-        const { error: insertError } = await supabase
-            .from('users')
-            .insert([newUser]);
+        // Try to include Directories — if column doesn't exist, skip it
+        if (Array.isArray(Directories) && Directories.length > 0) {
+            newUser.Directories = Directories
+        }
+
+        // Save to Supabase — if Directories column missing, retry without it
+        let insertError: any = null;
+
+        const { error: err1 } = await supabase.from('users').insert([newUser]);
+        if (err1) {
+            if (err1.message?.includes("Directories")) {
+                // Column doesn't exist yet — insert without it
+                const { Directories: _omit, ...userWithoutDirs } = newUser;
+                const { error: err2 } = await supabase.from('users').insert([userWithoutDirs]);
+                insertError = err2;
+            } else {
+                insertError = err1;
+            }
+        }
 
         if (insertError) throw insertError;
 
-        // Log audit after successful creation
-        const actor = getActorFromRequest(req)
-        const { ipAddress, userAgent } = getRequestContext(req)
-        const targetUserName = `${Firstname} ${Lastname}`
-        const actorName = actor.name || actor.email || 'Unknown'
-        await logSystemAudit({
-          action: "create",
-          module: "UserManagement",
-          page: "/admin/roles",
-          resourceType: "user",
-          resourceId: finalReferenceID,
-          resourceName: `${targetUserName} (created by: ${actorName})`,
-          actor,
-          ipAddress,
-          userAgent,
-          source: "UserCreateAPI",
-          metadata: {
-            targetUser: targetUserName,
-            targetEmail: Email,
-            targetRole: Role,
-            targetDepartment: Department,
-            targetPosition: Position,
-          },
-        })
+        // Log audit after successful creation (non-blocking — don't fail creation if audit fails)
+        try {
+          const actor = getActorFromRequest(req)
+          const { ipAddress, userAgent } = getRequestContext(req)
+          const targetUserName = `${Firstname} ${Lastname}`
+          const actorName = actor.name || actor.email || 'Unknown'
+          await logSystemAudit({
+            action: "create",
+            module: "UserManagement",
+            page: "/admin/roles",
+            resourceType: "user",
+            resourceId: finalReferenceID,
+            resourceName: `${targetUserName} (created by: ${actorName})`,
+            actor,
+            ipAddress,
+            userAgent,
+            source: "UserCreateAPI",
+            metadata: {
+              targetUser: targetUserName,
+              targetEmail: Email,
+              targetRole: Role,
+              targetDepartment: Department,
+              targetPosition: Position,
+            },
+          })
+        } catch (auditErr) {
+          console.warn("Audit log failed (non-fatal):", auditErr)
+        }
 
         // Huwag isama password sa response
         const userToReturn = { ...newUser, _id: finalReferenceID }
@@ -201,11 +219,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             message: "User created successfully",
             data: userToReturn,
         })
-    } catch (error) {
+    } catch (error: any) {
         console.error("Create User Error:", error)
         res.status(500).json({
             success: false,
-            message: "Server error creating user",
+            message: error?.message || "Server error creating user",
         })
     }
 }
