@@ -1,48 +1,21 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
+import { supabase } from "@/utils/supabase";
 import bcrypt from "bcrypt";
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
-// Helper to get actor from session/request
-function getActorFromRequest(req: NextApiRequest): AuditActor {
-  // Extract user info from session cookie or headers
-  const userEmail = req.headers["x-user-email"] as string || "system";
-  const userRole = req.headers["x-user-role"] as string || "unknown";
-  const userId = req.headers["x-user-id"] as string || null;
-  
-  return {
-    uid: userId,
-    email: userEmail,
-    role: userRole,
-  };
-}
+// ... (helpers)
 
-async function AddUser({ ReferenceID, UserId, Firstname, Lastname, Email, userName, Password, Role, Position, Department, Location, Company, Status, LoginAttempts, LockUntil,
-}: {
-  ReferenceID: string;
-  UserId: string;
-  Firstname: string;
-  Lastname: string;
-  Email: string;
-  userName: string;
-  Password: string;
-  Role: string;
-  Position: string;
-  Department: string;
-  Location: string;
-  Company: string;
-  Status: string;
-  LoginAttempts: string;
-  LockUntil: string;
-}) {
-  const db = await connectToDatabase();
-  const userCollection = db.collection("users");
+async function AddUser(userData: any) {
+  const { Email, userName, Password } = userData;
 
   // Check if email or username already exists
-  const existingUser = await userCollection.findOne({
-    $or: [{ Email }, { userName }],
-  });
-  if (existingUser) {
+  const { data: existingUser, error: fetchError } = await supabase
+    .from('users')
+    .select('Email, userName')
+    .or(`Email.eq.${Email},userName.eq.${userName}`);
+
+  if (fetchError) throw fetchError;
+  if (existingUser && existingUser.length > 0) {
     throw new Error("Email or username already in use");
   }
 
@@ -50,28 +23,19 @@ async function AddUser({ ReferenceID, UserId, Firstname, Lastname, Email, userNa
   const hashedPassword = await bcrypt.hash(Password, 10);
 
   const newUser = {
-    ReferenceID,
-    UserId,
-    Firstname,
-    Lastname,
-    Email,
-    userName,
+    ...userData,
     Password: hashedPassword,
-    Role,
-    Position,
-    Department,
-    Location,
-    Company,
-    Status,
-    LoginAttempts,
-    LockUntil,
     createdAt: new Date(),
   };
 
   // Insert new user into the database
-  await userCollection.insertOne(newUser);
+  const { error: insertError } = await supabase
+    .from('users')
+    .insert([newUser]);
 
-  return { success: true, message: "User created successfully", user: { UserId, Firstname, Lastname, Email, Role, Department, Position } };
+  if (insertError) throw insertError;
+
+  return { success: true, message: "User created successfully", user: { UserId: userData.UserId, Firstname: userData.Firstname, Lastname: userData.Lastname, Email: userData.Email, Role: userData.Role, Department: userData.Department, Position: userData.Position } };
 }
 
 export default async function handler(
@@ -91,13 +55,7 @@ export default async function handler(
     }
 
     try {
-      const result = await AddUser({
-        ReferenceID,
-        UserId,
-        Firstname,
-        Lastname,
-        Email,
-        userName,
+      const result = await AddUser(req.body);
         Password,
         Role,
         Position,

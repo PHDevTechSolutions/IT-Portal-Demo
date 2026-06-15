@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 import bcrypt from "bcrypt";
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
@@ -27,17 +26,6 @@ function getRequestContext(req: NextApiRequest) {
   }
 }
 
-/**
- * PUT /api/UserManagement/UserUpdate
- *
- * Bug fix: only $set fields that are explicitly included in the request body.
- * Previously, undefined/missing fields like Manager, TSM, TargetQuota were
- * being passed as `undefined` inside $set, which overwrites existing values
- * in MongoDB with null/undefined.
- *
- * Fix: build the $set payload selectively — only include keys that are
- * present in the request body.
- */
 export default async function updateAccount(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -68,9 +56,29 @@ export default async function updateAccount(
       LoginAttempts,
       LockUntil,
       Directories,
+      ContactNumber,
+      profilePicture,
+      Address,
+      AnotherNumber,
+      Birthday,
+      Gender,
+      OtherEmail,
+      Connection,
+      signatureImage,
+      SecondaryEmail,
+      pin,
+      registrationMethod,
+      twoFactorEnabled,
+      otp,
+      otpExpiry,
+      permissions,
+      credentials,
+      faceDescriptors,
+      faceVerificationEnabled,
+      DeviceId,
     } = req.body;
 
-    if (!id || !ObjectId.isValid(id)) {
+    if (!id) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid or missing user ID." });
@@ -82,61 +90,102 @@ export default async function updateAccount(
         .json({ success: false, message: "Directories must be an array." });
     }
 
-    const db = await connectToDatabase();
-    const userCollection = db.collection("users");
+    // Get existing user data first from Supabase
+    // id could be the numeric primary key 'id' or the custom 'ReferenceID' string
+    let fetchQuery = supabase.from('users').select('*');
+    if (!isNaN(Number(id))) {
+      fetchQuery = fetchQuery.or(`id.eq.${id},ReferenceID.eq.${id}`);
+    } else {
+      fetchQuery = fetchQuery.eq('ReferenceID', id);
+    }
 
-    // Get existing user data first to track changes
-    const existingUser = await userCollection.findOne({ _id: new ObjectId(id) });
-    if (!existingUser) {
+    const { data: existingUsers, error: fetchError } = await fetchQuery;
+
+    if (fetchError) throw fetchError;
+
+    if (!existingUsers || existingUsers.length === 0) {
       return res
         .status(404)
         .json({ success: false, message: `User not found for ID: ${id}` });
     }
+    const existingUser = existingUsers[0] as any;
 
-    // Build $set payload selectively — only include fields present in the body.
-    // This prevents overwriting existing DB values with undefined/null.
-    const setPayload: Record<string, unknown> = {
-      updatedAt: new Date(),
+    // Build the updates
+    const updates: any = {
+      Firstname: Firstname ?? existingUser.Firstname,
+      Lastname: Lastname ?? existingUser.Lastname,
+      Email: Email ?? existingUser.Email,
+      Department: Department ?? existingUser.Department,
+      Company: Company ?? existingUser.Company,
+      Position: Position ?? existingUser.Position,
+      Role: Role ?? existingUser.Role,
+      Status: Status ?? existingUser.Status,
+      Manager: Manager ?? existingUser.Manager,
+      ManagerName: ManagerName ?? existingUser.ManagerName,
+      TSM: TSM ?? existingUser.TSM,
+      TSMName: TSMName ?? existingUser.TSMName,
+      TargetQuota: TargetQuota ?? existingUser.TargetQuota,
+      LoginAttempts: LoginAttempts ?? existingUser.LoginAttempts,
+      LockUntil: LockUntil ?? existingUser.LockUntil,
+      ContactNumber: ContactNumber ?? existingUser.ContactNumber,
+      profilePicture: profilePicture ?? existingUser.profilePicture,
+      Address: Address ?? existingUser.Address,
+      AnotherNumber: AnotherNumber ?? existingUser.AnotherNumber,
+      Birthday: Birthday ?? existingUser.Birthday,
+      Gender: Gender ?? existingUser.Gender,
+      OtherEmail: OtherEmail ?? existingUser.OtherEmail,
+      Connection: Connection ?? existingUser.Connection,
+      signatureImage: signatureImage ?? existingUser.signatureImage,
+      SecondaryEmail: SecondaryEmail ?? existingUser.SecondaryEmail,
+      pin: pin ?? existingUser.pin,
+      registrationMethod: registrationMethod ?? existingUser.registrationMethod,
+      twoFactorEnabled: twoFactorEnabled ?? existingUser.twoFactorEnabled,
+      otp: otp ?? existingUser.otp,
+      otpExpiry: otpExpiry ? new Date(otpExpiry) : existingUser.otpExpiry,
+      permissions: permissions !== undefined ? permissions : existingUser.permissions,
+      credentials: credentials !== undefined ? credentials : existingUser.credentials,
+      faceDescriptors: faceDescriptors !== undefined ? faceDescriptors : existingUser.faceDescriptors,
+      faceVerificationEnabled: faceVerificationEnabled ?? existingUser.faceVerificationEnabled,
+      DeviceId: DeviceId ?? existingUser.DeviceId,
+      Directories: Directories !== undefined ? Directories : existingUser.Directories,
+      updatedAt: new Date()
     };
 
-    if (Firstname !== undefined) setPayload.Firstname = Firstname;
-    if (Lastname !== undefined) setPayload.Lastname = Lastname;
-    if (Email !== undefined) setPayload.Email = Email;
-    if (Department !== undefined) setPayload.Department = Department;
-    if (Company !== undefined) setPayload.Company = Company;
-    if (Position !== undefined) setPayload.Position = Position;
-    if (Role !== undefined) setPayload.Role = Role;
-    if (Status !== undefined) setPayload.Status = Status;
-    if (Manager !== undefined) setPayload.Manager = Manager;
-    if (ManagerName !== undefined) setPayload.ManagerName = ManagerName;
-    if (TSM !== undefined) setPayload.TSM = TSM;
-    if (TSMName !== undefined) setPayload.TSMName = TSMName;
-    if (TargetQuota !== undefined) setPayload.TargetQuota = TargetQuota;
-    if (LoginAttempts !== undefined) setPayload.LoginAttempts = LoginAttempts;
-    if (LockUntil !== undefined) setPayload.LockUntil = LockUntil;
-    if (Directories !== undefined) setPayload.Directories = Directories;
-
-    // Only hash and include password if a non-empty value was sent
     if (Password?.trim()) {
-      setPayload.Password = await bcrypt.hash(Password, 10);
+      updates.Password = await bcrypt.hash(Password, 10);
     }
 
-    const result = await userCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: setPayload },
-    );
+    const { error: updateError } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', existingUser.id); // Use the actual numeric ID for the update to be safe
 
-    if (result.matchedCount === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: `User not found for ID: ${id}` });
-    }
+    if (updateError) throw updateError;
 
     // Build changes object with before/after values
     const changes: Record<string, { before: unknown; after: unknown }> = {};
-    for (const [key, afterValue] of Object.entries(setPayload)) {
-      if (key === 'updatedAt') continue; // Skip timestamp
-      const beforeValue = existingUser[key];
+    // Create a comparison object
+    const updateFields = {
+      Firstname, Lastname, Email, Department, Company, Position, Role, Status,
+      Manager, ManagerName, TSM, TSMName, TargetQuota, LoginAttempts, LockUntil,
+      Directories, ContactNumber, profilePicture, Address, AnotherNumber,
+      Birthday, Gender, OtherEmail, Connection, signatureImage, SecondaryEmail,
+      pin, registrationMethod, twoFactorEnabled, otp, otpExpiry, permissions,
+      credentials, faceDescriptors, faceVerificationEnabled, DeviceId
+    };
+    for (const [key, afterValue] of Object.entries(updateFields)) {
+      if (afterValue === undefined) continue;
+      // Handle JSON fields
+      let beforeValue = existingUser[key];
+      let afterCompare = afterValue;
+      if (['permissions', 'credentials', 'faceDescriptors', 'Directories'].includes(key)) {
+        if (typeof beforeValue === 'string') {
+          try { beforeValue = JSON.parse(beforeValue); } catch { /* keep as string */ }
+        }
+        if (typeof afterCompare !== 'string') {
+          afterCompare = JSON.stringify(afterCompare);
+        }
+      }
       if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
         changes[key] = { before: beforeValue, after: afterValue };
       }

@@ -1,10 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "GET") {
-    const db = await connectToDatabase();
-
     try {
       const { Role } = req.query;
 
@@ -13,18 +11,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Fetch users with the role "Manager" AND Department "Sales"
-      const users = await db.collection("users")
-        .find({ Role, Department: "Sales" })
-        .project({ Firstname: 1, Lastname: 1, ReferenceID: 1, _id: 0 }) // Include ReferenceID
-        .toArray();
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('Firstname, Lastname, ReferenceID')
+        .eq('Role', Role)
+        .eq('Department', 'Sales');
 
-      if (users.length === 0) {
+      if (error) throw error;
+
+      if (!users || users.length === 0) {
         return res.status(404).json({ error: "No users found with this role" });
       }
 
       return res.status(200).json(users);
-    } catch (error) {
-      console.error("Error fetching managers:", error);
+    } catch (error: any) {
+      console.error("Error fetching managers:", error.message);
       return res.status(500).json({ error: "Server error" });
     }
   } else {

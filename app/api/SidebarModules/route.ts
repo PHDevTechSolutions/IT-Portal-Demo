@@ -41,6 +41,7 @@ const DEFAULT_SIDEBAR_MODULES = [
     items: [
       { title: "Tickets", url: "/ticketing/tickets" },
       { title: "Service Catalogue", url: "/ticketing/service-catalogue" },
+      { title: "Credentials", url: "/ticketing/credentials" },
     ],
   },
   {

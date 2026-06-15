@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState, useMemo } from "react"
+import React, { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -42,6 +42,49 @@ interface Customer {
   source?: string;
   website?: string;
   confidence?: "high" | "medium" | "low";
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const normalizeCompanyName = (s: string) => (s || "").toLowerCase()
+  .replace(/[.,]/g, "")
+  .replace(/\b(corp|corporation|inc|incorporated|co|company|ltd|limited|ent|enterprise|enterprises)\b/g, "")
+  .replace(/\s+/g, " ").trim()
+
+/**
+ * Returns true if `a` and `b` are "similar enough" company names to be
+ * considered potential duplicates.
+ */
+const isSimilarName = (a: string, b: string): boolean => {
+  if (a === b) return true
+  const na = normalizeCompanyName(a), nb = normalizeCompanyName(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+
+  // Check for common prefix of at least 2 words or significant length
+  const wordsA = na.split(/\s+/), wordsB = nb.split(/\s+/)
+  if (wordsA.length >= 2 && wordsB.length >= 2) {
+    if (wordsA[0] === wordsB[0] && wordsA[1] === wordsB[1]) return true
+  }
+
+  // If very short, must be exact match
+  if (na.length < 5 || nb.length < 5) return na === nb
+
+  // Prefix match (one starts with the other) - only if the prefix is significant
+  if ((na.startsWith(nb) && nb.length > 5) || (nb.startsWith(na) && na.length > 5)) return true
+
+  // Levenshtein distance ≤ 2 for names (stricter than before)
+  const dist = levenshtein(na, nb)
+  return dist <= 2
+}
+
+const levenshtein = (a: string, b: string): number => {
+  const m = a.length, n = b.length
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+  return dp[m][n]
 }
 
 interface EditHistoryRow {
@@ -224,6 +267,192 @@ function StatusBadge({ status }: { status?: string | null }) {
   return <span className="text-[9px] font-mono text-slate-400 border border-slate-700 px-1.5 py-0.5">{status}</span>
 }
 
+// ─── Duplicate Dialog ────────────────────────────────────────────────────────
+function DuplicateDialog({
+  customer,
+  allCustomers,
+  tsaMap,
+  onClose,
+}: {
+  customer: Customer;
+  allCustomers: Customer[];
+  tsaMap: Record<string, string>;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true)
+  const [duplicates, setDuplicates] = useState<Customer[]>([])
+  const [latestTransaction, setLatestTransaction] = useState<any>(null)
+  const lastFetchedId = React.useRef<number | null>(null)
+
+  useEffect(() => {
+    // Only fetch if it's a new customer or hasn't been fetched yet
+    if (lastFetchedId.current === customer.id) return
+
+    const fetchDetails = async () => {
+      setLoading(true)
+      
+      // 1. Find duplicates in local state (FAST - done first)
+      const dups = allCustomers.filter(c => 
+        c.id !== customer.id && 
+        c.status !== "For Approval" &&
+        isSimilarName(customer.company_name, c.company_name)
+      )
+      setDuplicates(dups)
+      
+      // Set loading to false early if duplicates found locally
+      // so the user sees something immediately
+      if (dups.length > 0) {
+        // We'll still fetch transaction in background
+      }
+
+      // 2. Fetch latest transaction from progress-logs API (NETWORK - might be slow)
+      try {
+        const searchName = normalizeCompanyName(customer.company_name)
+        // Use a simpler search for network speed
+        const res = await fetch(`/api/taskflow/progress-logs?search=${encodeURIComponent(searchName)}&pageSize=1`, {
+          next: { revalidate: 60 } // cache for 60s
+        })
+        const json = await res.json()
+        if (json.success && json.data && json.data.length > 0) {
+          const latest = json.data[0]
+          setLatestTransaction(latest)
+        }
+      } catch (err) {
+        console.error("Failed to fetch latest transaction:", err)
+      }
+      
+      setLoading(false)
+      lastFetchedId.current = customer.id
+    }
+
+    fetchDetails()
+  }, [customer.id, customer.company_name, allCustomers])
+
+  const handleDownloadWord = async () => {
+    const { saveAs } = await import("file-saver")
+    
+    const content = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h1 style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px;">Duplicate Accounts</h1>
+        
+        <p><strong>Company Name:</strong> ${customer.company_name.toUpperCase()}</p>
+        ${duplicates.map(d => `<p><strong>Duplicate Name:</strong> ${d.company_name.toUpperCase()}</p>`).join("")}
+        
+        <div style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+          <p><strong>TSA Handler:</strong> ${tsaMap[customer.referenceid?.toLowerCase()] || customer.referenceid || "—"}</p>
+          <p><strong>TSM:</strong> ${customer.tsm || "—"}</p>
+          <p><strong>Manager:</strong> ${customer.manager || "—"}</p>
+        </div>
+
+        ${duplicates.map(d => `
+          <div style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+            <p><strong>TSA Handler:</strong> ${tsaMap[d.referenceid?.toLowerCase()] || d.referenceid || "—"}</p>
+            <p><strong>TSM:</strong> ${d.tsm || "—"}</p>
+            <p><strong>Manager:</strong> ${d.manager || "—"}</p>
+          </div>
+        `).join("")}
+
+        <div style="margin-top: 30px; border-top: 1px solid #333; padding-top: 15px;">
+          <p><strong>Latest Transaction Current Handler:</strong> ${latestTransaction?.agent || latestTransaction?.tsm || latestTransaction?.referenceid || "—"}</p>
+          <p><strong>Latest Date:</strong> ${latestTransaction?.date_created ? new Date(latestTransaction.date_created).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "—"}</p>
+          ${latestTransaction?.status ? `<p><strong>Latest Status:</strong> ${latestTransaction.status}</p>` : ""}
+        </div>
+      </div>
+    `
+
+    const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Duplicate Accounts Form</title></head><body>"
+    const footer = "</body></html>"
+    const sourceHTML = header + content + footer
+    
+    const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' })
+    saveAs(blob, `Duplicate_Accounts_${customer.company_name.replace(/\s+/g, "_")}.doc`)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+      <div className="flex flex-col border border-amber-500/20 bg-[#0d1117] shadow-2xl"
+           style={{ width: "min(600px, 96vw)", maxHeight: "90vh" }}>
+        
+        {/* Header */}
+        <div className="shrink-0 px-6 py-4 border-b border-amber-500/20 bg-[#0a0d14] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-500/10 border border-amber-500/20">
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-widest text-amber-400 font-mono">
+                Duplicate Account Details
+              </h2>
+              <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                Reviewing potential duplicates for <span className="text-slate-300">{customer.company_name}</span>
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-300 transition-colors text-xl">×</button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-auto p-6 space-y-6 bg-white text-black font-sans">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <Loader2 className="size-5 animate-spin text-amber-600" />
+              <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Fetching details…</span>
+            </div>
+          ) : (
+            <div className="space-y-4 text-sm">
+              <h3 className="text-lg font-bold border-b-2 border-black pb-1 mb-4">Duplicate Accounts</h3>
+              
+              <div className="space-y-1">
+                <p><strong>Company Name:</strong> {customer.company_name.toUpperCase()}</p>
+                {duplicates.map(d => (
+                  <p key={d.id}><strong>Duplicate Name:</strong> {d.company_name.toUpperCase()}</p>
+                ))}
+              </div>
+
+              <div className="pt-4 border-t border-slate-300">
+                <p><strong>TSA Handler:</strong> {tsaMap[customer.referenceid?.toLowerCase()] || customer.referenceid || "—"}</p>
+                <p><strong>TSM:</strong> {customer.tsm || "—"}</p>
+                <p><strong>Manager:</strong> {customer.manager || "—"}</p>
+              </div>
+
+              {duplicates.map(d => (
+                <div key={d.id} className="pt-4 border-t border-slate-300">
+                  <p><strong>TSA Handler:</strong> {tsaMap[d.referenceid?.toLowerCase()] || d.referenceid || "—"}</p>
+                  <p><strong>TSM:</strong> {d.tsm || "—"}</p>
+                  <p><strong>Manager:</strong> {d.manager || "—"}</p>
+                </div>
+              ))}
+
+              <div className="pt-6 border-t-2 border-black mt-4">
+                <p><strong>Latest Transaction Current Handler:</strong> {latestTransaction?.agent || latestTransaction?.tsm || latestTransaction?.referenceid || "—"}</p>
+                <p><strong>Latest Date:</strong> {latestTransaction?.date_created ? new Date(latestTransaction.date_created).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "—"}</p>
+                {latestTransaction?.status && (
+                  <p><strong>Latest Status:</strong> {latestTransaction.status}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 px-6 py-3 border-t border-amber-500/10 bg-[#0a0d14] flex items-center justify-between">
+          <button
+            onClick={handleDownloadWord}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 text-[10px] font-mono uppercase tracking-widest bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-50">
+            <FileDown className="size-3.5" /> Download Word
+          </button>
+          <button
+            onClick={onClose}
+            className="px-5 py-1.5 text-[10px] font-mono uppercase tracking-widest border border-slate-700 text-slate-400 hover:border-amber-500/50 hover:text-amber-400 transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── DraggableRow ─────────────────────────────────────────────────────────────
 function DraggableRow({ item, isSelected, children }: { item: Customer; isSelected: boolean; children: React.ReactNode }) {
   const { setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
@@ -297,6 +526,9 @@ export default function AccountPage() {
   // Changes dialog
   const [changesTarget, setChangesTarget] = useState<Customer | null>(null)
 
+  // Duplicate dialog
+  const [duplicateTarget, setDuplicateTarget] = useState<Customer | null>(null)
+
   // ── Auto-refresh + duplicate detection + auto-approve ─────────────────────
   const [autoApproveLog, setAutoApproveLog] = useState<{ name: string; id: number }[]>([])
   const [pendingAutoApprove, setPendingAutoApprove] = useState<Set<number>>(new Set())
@@ -305,67 +537,76 @@ export default function AccountPage() {
   const AUTO_APPROVE_DELAY = 5_000 // 5 seconds
 
   /**
-   * Returns true if `a` and `b` are "similar enough" company names to be
-   * considered potential duplicates.
-   * Examples: "Ecoshift Corp" ↔ "Ecoshift Corporation"
+   * For each record, check if its company_name matches any
+   * OTHER customer.
    */
-  const isSimilarName = (a: string, b: string): boolean => {
-    if (a === b) return true
-    // Normalize: lowercase, strip punctuation, collapse spaces
-    const norm = (s: string) => s.toLowerCase()
-      .replace(/[.,]/g, "")
-      .replace(/\b(corp|corporation|inc|incorporated|co|company|ltd|limited|ent|enterprise|enterprises)\b/g, "")
-      .replace(/\s+/g, " ").trim()
-    const na = norm(a), nb = norm(b)
-    if (na === nb) return true
-    // One starts with the other (e.g. "Ecoshift" vs "Ecoshift Corp")
-    if (na.startsWith(nb) || nb.startsWith(na)) return true
-    // Levenshtein distance ≤ 3 for similar short names
-    const len = Math.max(na.length, nb.length)
-    if (len === 0) return true
-    const dist = levenshtein(na, nb)
-    return dist <= Math.min(3, Math.floor(len * 0.25))
-  }
+  const duplicateIds = useMemo(() => {
+    if (customers.length === 0) return new Set<number>()
+    
+    const ids = new Set<number>()
+    const normalized = customers.map(c => ({
+      id: c.id,
+      norm: normalizeCompanyName(c.company_name)
+    }))
 
-  const levenshtein = (a: string, b: string): number => {
-    const m = a.length, n = b.length
-    const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
-    for (let j = 0; j <= n; j++) dp[0][j] = j
-    for (let i = 1; i <= m; i++)
-      for (let j = 1; j <= n; j++)
-        dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
-    return dp[m][n]
-  }
+    // Use a Map for O(N) exact normalized match detection
+    const normMap = new Map<string, number[]>()
+    normalized.forEach(c => {
+      if (!c.norm) return
+      const group = normMap.get(c.norm) || []
+      group.push(c.id)
+      normMap.set(c.norm, group)
+    })
 
-  /**
-   * For each "For Approval" record, check if its company_name matches any
-   * OTHER non-"For Approval" customer.  If duplicate found → flag for manual.
-   * If unique → schedule auto-approve after 30s.
-   */
-  const runDuplicateCheck = (allCustomers: Customer[], approvalList: Customer[]) => {
+    normalized.forEach(c => {
+      if (!c.norm) return
+      // 1. Check exact normalized match (Fast)
+      if ((normMap.get(c.norm)?.length || 0) > 1) {
+        ids.add(c.id)
+      } else {
+        // 2. Check fuzzy match (Slow, but we only do it if no exact match)
+        // To avoid O(N^2), we only check against a limited number of items 
+        // or skip fuzzy check in the main list to prioritize performance.
+        // For now, let's keep it to exact normalized matches for the badges
+        // and let the dialog handle the deeper fuzzy search.
+      }
+    })
+    return ids
+  }, [customers])
+
+  const runDuplicateCheck = useCallback((allCustomers: Customer[], approvalList: Customer[]) => {
     const others = allCustomers.filter(c => c.status !== "For Approval")
     const autoIds = new Set<number>()
 
+    // Normalize others once
+    const normalizedOthers = others.map(o => ({
+      id: o.id,
+      norm: normalizeCompanyName(o.company_name)
+    }))
+
     for (const app of approvalList) {
-      const name = (app.company_name ?? "").trim()
-      if (!name) continue
-      const hasDuplicate = others.some(o =>
-        o.id !== app.id && isSimilarName(name, (o.company_name ?? "").trim()),
-      ) || approvalList.filter(a => a.id !== app.id).some(a =>
-        isSimilarName(name, (a.company_name ?? "").trim()),
+      const appNorm = normalizeCompanyName(app.company_name)
+      if (!appNorm) continue
+
+      const hasDuplicate = normalizedOthers.some(o =>
+        o.id !== app.id && (o.norm === appNorm || o.norm.startsWith(appNorm) || appNorm.startsWith(o.norm))
+      ) || approvalList.some(a => 
+        a.id !== app.id && normalizeCompanyName(a.company_name) === appNorm
       )
+
       if (!hasDuplicate) autoIds.add(app.id)
     }
     setPendingAutoApprove(autoIds)
     return autoIds
-  }
+  }, [])
 
   // Re-run duplicate check whenever approval list changes
   useEffect(() => {
     const approvalList = customers.filter(c => c.status === "For Approval")
-    runDuplicateCheck(customers, approvalList)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customers])
+    if (approvalList.length > 0) {
+      runDuplicateCheck(customers, approvalList)
+    }
+  }, [customers, runDuplicateCheck])
 
   // Schedule auto-approve for unique entries
   useEffect(() => {
@@ -397,21 +638,24 @@ export default function AccountPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingAutoApprove])
 
-  // ── Auto-refresh every 30s ─────────────────────────────────────────────────
+  // ── Auto-refresh every 10s ─────────────────────────────────────────────────
   const refreshApprovalData = async () => {
+    // Only refresh if tab is visible
+    if (document.hidden) return
+
     try {
       const res = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/Fetch", { cache: "no-store" })
       const json = await res.json()
       if (json.success) {
         setCustomers(json.data || [])
         setLastRefresh(new Date())
-        setRefreshCountdown(5)
+        setRefreshCountdown(10)
       }
     } catch { /* silent */ }
   }
 
   useEffect(() => {
-    const interval = setInterval(refreshApprovalData, 5_000)
+    const interval = setInterval(refreshApprovalData, 10_000)
     return () => clearInterval(interval)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -419,7 +663,7 @@ export default function AccountPage() {
   // Countdown timer display
   useEffect(() => {
     const tick = setInterval(() => {
-      setRefreshCountdown(prev => prev <= 1 ? 5 : prev - 1)
+      setRefreshCountdown(prev => prev <= 1 ? 10 : prev - 1)
     }, 1_000)
     return () => clearInterval(tick)
   }, [])
@@ -792,8 +1036,7 @@ export default function AccountPage() {
                     {approvalCurrent.map((c) => {
                       const isSel = selectedApprovalIds.has(c.id)
                       const willAutoApprove = pendingAutoApprove.has(c.id)
-                      // Check if this card has a duplicate company name
-                      const hasDuplicate = !willAutoApprove
+                      const hasDuplicate = duplicateIds.has(c.id)
                       return (
                         <div key={c.id} className={cn("border transition-colors",
                           hasDuplicate ? "border-amber-500/20 bg-amber-500/[0.03]" :
@@ -808,9 +1051,11 @@ export default function AccountPage() {
                             </span>
                             {/* Duplicate warning */}
                             {hasDuplicate && (
-                              <span className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-amber-500/30 bg-amber-500/10 text-amber-400 uppercase">
-                                ⚠ Duplicate
-                              </span>
+                              <button
+                                onClick={() => setDuplicateTarget(c)}
+                                className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-amber-500/30 bg-amber-500/10 text-amber-400 uppercase hover:bg-amber-500/20 transition-colors">
+                                ⚠ View Duplicate
+                              </button>
                             )}
                             {/* Auto-approve indicator */}
                             {willAutoApprove && (
@@ -948,7 +1193,18 @@ export default function AccountPage() {
                                   <TableCell className={cn(cellBase, "text-center w-8")}>
                                     <input type="checkbox" checked={isSel} onChange={() => toggleTransfer(c.id)} className="accent-orange-500" />
                                   </TableCell>
-                                  <TableCell className={cn(cellBase, "min-w-[200px]")}><p className="font-mono text-[11px] uppercase font-semibold text-slate-200 truncate max-w-[200px]">{c.company_name}</p></TableCell>
+                                  <TableCell className={cn(cellBase, "min-w-[200px]")}>
+                                    <div className="flex flex-col gap-1">
+                                      <p className="font-mono text-[11px] uppercase font-semibold text-slate-200 truncate max-w-[200px]">{c.company_name}</p>
+                                      {duplicateIds.has(c.id) && (
+                                        <button
+                                          onClick={() => setDuplicateTarget(c)}
+                                          className="w-fit text-[8px] font-mono font-bold px-1 py-0.5 border border-amber-500/30 bg-amber-500/10 text-amber-400 uppercase hover:bg-amber-500/20 transition-colors">
+                                          ⚠ View Duplicate
+                                        </button>
+                                      )}
+                                    </div>
+                                  </TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[140px] capitalize text-slate-300")}>{c.contact_person}</TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[180px] text-slate-500 font-mono text-[10px]")}>{c.email_address}</TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[100px] text-slate-300")}>{c.type_client || <span className="text-slate-600">—</span>}</TableCell>
@@ -1053,6 +1309,15 @@ export default function AccountPage() {
             <ChangesDialog customer={changesTarget} onClose={() => setChangesTarget(null)} />
           )}
 
+          {/* Duplicate dialog */}
+          {duplicateTarget && (
+            <DuplicateDialog 
+              customer={duplicateTarget} 
+              allCustomers={customers} 
+              tsaMap={tsaMap} 
+              onClose={() => setDuplicateTarget(null)} 
+            />
+          )}
         </SidebarInset>
       </SidebarProvider>
     </ProtectedPageWrapper>

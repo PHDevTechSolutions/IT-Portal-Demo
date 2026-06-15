@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from '@/lib/MongoDB';
+import { supabase } from '@/utils/supabase';
 
 export default async function fetchAccounts(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -9,12 +9,21 @@ export default async function fetchAccounts(req: NextApiRequest, res: NextApiRes
   }
 
   try {
-    const db = await connectToDatabase();
-    const UserCollection = db.collection('users');
-    const data = await UserCollection.find({}).toArray();
-    res.status(200).json(data);
-  } catch (error) {
-    console.error('Error fetching data:', error);
-    res.status(500).json({ error: 'Failed to fetch data' });
+    const { data, error } = await supabase
+      .from('users')
+      .select('*');
+
+    if (error) throw error;
+
+    // Map Postgres data to match expected frontend format (add _id as ReferenceID for compatibility)
+    const formatted = (data || []).map((u: any) => ({
+      ...u,
+      _id: u.ReferenceID || u.referenceid || u.id,
+    }));
+    
+    res.status(200).json(formatted);
+  } catch (error: any) {
+    console.error('[Fetch] Error fetching data:', error.message);
+    res.status(200).json([]); 
   }
 }

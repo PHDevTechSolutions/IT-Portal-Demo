@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function transferUsers(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -25,25 +24,33 @@ export default async function transferUsers(req: NextApiRequest, res: NextApiRes
       return res.status(400).json({ success: false, message: "No target ID provided." });
     }
 
-    const db = await connectToDatabase();
-    const userCollection = db.collection("users");
+    const numericIds = ids.filter((id: any) => !isNaN(Number(id))).map(Number);
+    const stringIds = ids.filter((id: any) => isNaN(Number(id)));
 
-    // 🔹 Convert string IDs to ObjectId
-    const objectIds = ids.map((id: string) => new ObjectId(id));
+    let updateQuery = supabase.from('users').update({
+        [type]: targetId,
+        updatedAt: new Date()
+    });
 
-    // 🔹 Update selected users
-    const result = await userCollection.updateMany(
-      { _id: { $in: objectIds } },
-      { $set: { [type]: targetId, updatedAt: new Date() } }
-    );
+    if (numericIds.length > 0 && stringIds.length > 0) {
+      updateQuery = updateQuery.or(`id.in.(${numericIds.join(',')}),ReferenceID.in.(${stringIds.map(s => `"${s}"`).join(',')})`);
+    } else if (numericIds.length > 0) {
+      updateQuery = updateQuery.in('id', numericIds);
+    } else {
+      updateQuery = updateQuery.in('ReferenceID', stringIds);
+    }
+
+    const { error } = await updateQuery;
+
+    if (error) throw error;
 
     return res.status(200).json({
       success: true,
-      message: `Successfully transferred ${result.modifiedCount} user(s) to ${type}.`,
-      modifiedCount: result.modifiedCount,
+      message: `Successfully transferred user(s) to ${type}.`,
+      modifiedCount: ids.length,
     });
-  } catch (error) {
-    console.error("Error transferring users:", error);
+  } catch (error: any) {
+    console.error("Error transferring users:", error.message);
     return res.status(500).json({ success: false, message: "Failed to transfer users." });
   }
 }

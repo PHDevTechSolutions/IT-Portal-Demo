@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next"
-import { connectToDatabase } from "@/lib/MongoDB"
+import { supabase } from "@/utils/supabase"
 import bcrypt from "bcrypt"
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit"
 
@@ -44,9 +44,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        const db = await connectToDatabase()
-        const users = db.collection("users")
-
         const {
             Firstname,
             Lastname,
@@ -63,6 +60,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             TSM,
             ReferenceID, // optional
             Directories, // <- dito natin idadagdag
+            ManagerName,
+            TSMName,
+            ContactNumber,
+            profilePicture,
+            Address,
+            AnotherNumber,
+            Birthday,
+            Gender,
+            OtherEmail,
+            Connection,
+            signatureImage,
+            SecondaryEmail,
+            pin,
+            registrationMethod,
+            twoFactorEnabled,
+            otp,
+            otpExpiry,
+            permissions,
+            credentials,
+            faceDescriptors,
+            faceVerificationEnabled,
+            DeviceId,
         } = req.body
 
         // Validate required fields
@@ -74,8 +93,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         // Check for existing email
-        const existing = await users.findOne({ Email })
-        if (existing) {
+        const { data: existing, error: fetchError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('Email', Email);
+        
+        if (fetchError) throw fetchError;
+
+        if (existing && existing.length > 0) {
             return res.status(400).json({
                 success: false,
                 message: "Email already exists.",
@@ -104,7 +129,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             TargetQuota: Department === "Sales" ? TargetQuota || null : null,
             createdAt: new Date(),
             updatedAt: new Date(),
-            Directories: Array.isArray(Directories) ? Directories : [], // ensure array
+            Directories: Array.isArray(Directories) ? Directories : [],
+            ManagerName,
+            TSMName,
+            ContactNumber,
+            profilePicture,
+            Address,
+            AnotherNumber,
+            Birthday,
+            Gender,
+            OtherEmail,
+            Connection,
+            signatureImage,
+            SecondaryEmail,
+            pin,
+            registrationMethod,
+            twoFactorEnabled: twoFactorEnabled || false,
+            otp,
+            otpExpiry,
+            permissions: permissions || null,
+            credentials: credentials || null,
+            faceDescriptors: faceDescriptors || null,
+            faceVerificationEnabled: faceVerificationEnabled || false,
+            DeviceId,
         }
 
         // Include Manager + TSM if department is Sales
@@ -113,8 +160,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             newUser.TSM = TSM || null
         }
 
-        // Save to database
-        const result = await users.insertOne(newUser)
+        // Save to Supabase
+        const { error: insertError } = await supabase
+            .from('users')
+            .insert([newUser]);
+
+        if (insertError) throw insertError;
 
         // Log audit after successful creation
         const actor = getActorFromRequest(req)
@@ -142,13 +193,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })
 
         // Huwag isama password sa response
-        const userToReturn = { ...newUser }
+        const userToReturn = { ...newUser, _id: finalReferenceID }
         delete userToReturn.Password
 
         res.status(201).json({
             success: true,
             message: "User created successfully",
-            data: { _id: result.insertedId, ...userToReturn },
+            data: userToReturn,
         })
     } catch (error) {
         console.error("Create User Error:", error)

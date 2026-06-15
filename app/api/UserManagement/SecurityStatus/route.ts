@@ -8,8 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/MongoDB";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -23,36 +22,41 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({});
     }
 
-    const db = await connectToDatabase();
+    // 1. Fetch totpEnabled from users table
+    const { data: users, error: userError } = await supabase
+      .from('users')
+      .select('ReferenceID, twoFactorEnabled')
+      .in('ReferenceID', userIds);
 
-    // 1. Fetch totpEnabled from users collection
-    const objectIds = userIds.flatMap(id => {
-      try { return [new ObjectId(id)]; } catch { return []; }
-    });
-
-    const users = await db
-      .collection("users")
-      .find({ _id: { $in: objectIds } })
-      .project({ _id: 1, totpEnabled: 1 })
-      .toArray();
+    if (userError) throw userError;
 
     const totpMap: Record<string, boolean> = {};
-    for (const u of users) {
-      totpMap[u._id.toString()] = !!u.totpEnabled;
+    for (const u of users || []) {
+      const refId = u.ReferenceID;
+      totpMap[refId] = !!u.twoFactorEnabled;
     }
 
-    // 2. Fetch biometric credentials count per userId
-    const bioCursor = await db
-      .collection("biometric_credentials")
-      .aggregate([
-        { $match: { userId: { $in: userIds } } },
-        { $group: { _id: "$userId", count: { $sum: 1 } } },
-      ])
-      .toArray();
+    // 2. Fetch biometric credentials count per userId (ReferenceID)
+    let bioMap: Record<string, boolean> = {};
+    try {
+      const { data: bioCounts, error: bioError } = await supabase
+        .from('biometric_credentials')
+        .select('ReferenceID')
+        .in('ReferenceID', userIds);
 
-    const bioMap: Record<string, boolean> = {};
-    for (const b of bioCursor) {
-      bioMap[b._id as string] = b.count > 0;
+      if (bioError) throw bioError;
+
+      // Group by ReferenceID manually since supabase client doesn't support GROUP BY easily in simple select
+      const counts: Record<string, number> = {};
+      for (const b of bioCounts || []) {
+        counts[b.ReferenceID] = (counts[b.ReferenceID] || 0) + 1;
+      }
+      
+      for (const [refId, count] of Object.entries(counts)) {
+        bioMap[refId] = count > 0;
+      }
+    } catch (e: any) {
+      console.error("[SecurityStatus] Biometric check failed:", e.message);
     }
 
     // 3. Merge results

@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
 // Helper to get actor from request
@@ -44,16 +43,25 @@ export default async function bulkTransfer(req: NextApiRequest, res: NextApiResp
       return res.status(400).json({ error: "Invalid request: tsmReferenceID must be provided." });
     }
 
-    const db = await connectToDatabase();
-    const userCollection = db.collection("users");
+    // Update TSM for selected users in Supabase
+    // userIds can be numeric id or ReferenceID
+    const numericIds = userIds.filter((id: any) => !isNaN(Number(id))).map(Number);
+    const stringIds = userIds.filter((id: any) => isNaN(Number(id)));
 
-    const objectIds = userIds.map(id => new ObjectId(id));
+    let updateQuery = supabase.from('users').update({ TSM: tsmReferenceID }, { count: 'exact' });
 
-    // Update only the TSM field for the selected users
-    const result = await userCollection.updateMany(
-      { _id: { $in: objectIds } },
-      { $set: { TSM: tsmReferenceID } }  // Using TSM instead of TSMReferenceID
-    );
+    if (numericIds.length > 0 && stringIds.length > 0) {
+      updateQuery = updateQuery.or(`id.in.(${numericIds.join(',')}),ReferenceID.in.(${stringIds.map(s => `"${s}"`).join(',')})`);
+    } else if (numericIds.length > 0) {
+      updateQuery = updateQuery.in('id', numericIds);
+    } else {
+      updateQuery = updateQuery.in('ReferenceID', stringIds);
+    }
+
+    const { error, count: modifiedCount } = await updateQuery;
+    const safeModifiedCount = modifiedCount ?? 0;
+
+    if (error) throw error;
 
     // Log audit after successful bulk transfer
     const actor = getActorFromRequest(req);
@@ -65,11 +73,11 @@ export default async function bulkTransfer(req: NextApiRequest, res: NextApiResp
       page: "/admin/roles",
       resourceType: "user",
       resourceId: null,
-      resourceName: `${result.modifiedCount} users transferred (by: ${actorName})`,
+      resourceName: `${safeModifiedCount} users transferred (by: ${actorName})`,
       actor,
       ipAddress,
       userAgent,
-      affectedCount: result.modifiedCount,
+      affectedCount: safeModifiedCount,
       source: "UserManagementBulkTransferAPI",
       metadata: {
         userIds,
@@ -79,10 +87,10 @@ export default async function bulkTransfer(req: NextApiRequest, res: NextApiResp
 
     res.status(200).json({
       success: true,
-      message: `Transferred ${result.modifiedCount} users to TSM with ReferenceID ${tsmReferenceID}`,
+      message: `Transferred ${safeModifiedCount} users to TSM with ReferenceID ${tsmReferenceID}`,
     });
-  } catch (error) {
-    console.error("Error transferring users:", error);
+  } catch (error: any) {
+    console.error("Error transferring users:", error.message);
     res.status(500).json({ error: "Failed to transfer users" });
   }
 }

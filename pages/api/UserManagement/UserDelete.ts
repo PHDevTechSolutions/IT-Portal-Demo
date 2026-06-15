@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next"
-import { connectToDatabase } from "@/lib/MongoDB"
-import { ObjectId } from "mongodb"
+import { supabase } from "@/utils/supabase"
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit"
 
 // Helper to get actor from request
@@ -45,14 +44,27 @@ export default async function deleteAccounts(req: NextApiRequest, res: NextApiRe
       })
     }
 
-    const db = await connectToDatabase()
-    const UserCollection = db.collection("users")
+    // Delete from Supabase
+    const numericIds = ids.filter((id: any) => !isNaN(Number(id))).map(Number);
+    const stringIds = ids.filter((id: any) => isNaN(Number(id)));
 
-    const objectIds = ids.map((id) => new ObjectId(id))
-    const result = await UserCollection.deleteMany({ _id: { $in: objectIds } })
+    let deleteQuery = supabase.from('users').delete({ count: 'exact' });
+    
+    if (numericIds.length > 0 && stringIds.length > 0) {
+      deleteQuery = deleteQuery.or(`id.in.(${numericIds.join(',')}),ReferenceID.in.(${stringIds.map(s => `"${s}"`).join(',')})`);
+    } else if (numericIds.length > 0) {
+      deleteQuery = deleteQuery.in('id', numericIds);
+    } else {
+      deleteQuery = deleteQuery.in('ReferenceID', stringIds);
+    }
+
+    const { error: deleteError, count: deletedCount } = await deleteQuery;
+    const safeDeletedCount = deletedCount ?? 0;
+
+    if (deleteError) throw deleteError;
 
     // Log audit after successful deletion
-    if (result.deletedCount > 0) {
+    if (safeDeletedCount > 0) {
       const actor = getActorFromRequest(req)
       const { ipAddress, userAgent } = getRequestContext(req)
       const actorName = actor.name || actor.email || 'Unknown'
@@ -62,11 +74,11 @@ export default async function deleteAccounts(req: NextApiRequest, res: NextApiRe
         page: "/admin/roles",
         resourceType: "user",
         resourceId: null,
-        resourceName: `${result.deletedCount} users deleted (by: ${actorName})`,
+        resourceName: `${safeDeletedCount} users deleted (by: ${actorName})`,
         actor,
         ipAddress,
         userAgent,
-        affectedCount: result.deletedCount,
+        affectedCount: safeDeletedCount,
         source: "UserDeleteAPI",
         metadata: {
           deletedIds: ids,
@@ -74,7 +86,7 @@ export default async function deleteAccounts(req: NextApiRequest, res: NextApiRe
       })
     }
 
-    if (result.deletedCount === 0) {
+    if (safeDeletedCount === 0) {
       return res.status(404).json({
         success: false,
         message: "No users found to delete.",
@@ -84,7 +96,7 @@ export default async function deleteAccounts(req: NextApiRequest, res: NextApiRe
     return res.status(200).json({
       success: true,
       message: "Users deleted successfully.",
-      deletedCount: result.deletedCount,
+      deletedCount: safeDeletedCount,
     })
   } catch (error) {
     console.error("Error deleting users:", error)

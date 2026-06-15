@@ -1,4 +1,3 @@
-"use server";
 import { neon } from "@neondatabase/serverless";
 
 // Ensure DATABASE_URL is defined
@@ -9,4 +8,6 @@ if (!databaseUrl) {
 
 // Create a reusable Neon database connection function
 const sql = neon(databaseUrl);
+
+export { sql };
 

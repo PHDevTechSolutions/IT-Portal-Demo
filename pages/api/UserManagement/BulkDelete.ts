@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
 // Helper to get actor from request
@@ -39,11 +38,25 @@ export default async function bulkDelete(req: NextApiRequest, res: NextApiRespon
       return res.status(400).json({ error: "Invalid request: userIds must be a non-empty array." });
     }
 
-    const db = await connectToDatabase();
-    const userCollection = db.collection("users");
+    // Delete from Supabase
+    // userIds can be numeric id or ReferenceID
+    const numericIds = userIds.filter((id: any) => !isNaN(Number(id))).map(Number);
+    const stringIds = userIds.filter((id: any) => isNaN(Number(id)));
 
-    const objectIds = userIds.map(id => new ObjectId(id));
-    const result = await userCollection.deleteMany({ _id: { $in: objectIds } });
+    let deleteQuery = supabase.from('users').delete({ count: 'exact' });
+
+    if (numericIds.length > 0 && stringIds.length > 0) {
+      deleteQuery = deleteQuery.or(`id.in.(${numericIds.join(',')}),ReferenceID.in.(${stringIds.map(s => `"${s}"`).join(',')})`);
+    } else if (numericIds.length > 0) {
+      deleteQuery = deleteQuery.in('id', numericIds);
+    } else {
+      deleteQuery = deleteQuery.in('ReferenceID', stringIds);
+    }
+
+    const { error, count: deletedCount } = await deleteQuery;
+    const safeDeletedCount = deletedCount ?? 0;
+
+    if (error) throw error;
 
     // Log audit after successful bulk delete
     const actor = getActorFromRequest(req);
@@ -55,20 +68,20 @@ export default async function bulkDelete(req: NextApiRequest, res: NextApiRespon
       page: "/admin/roles",
       resourceType: "user",
       resourceId: null,
-      resourceName: `${result.deletedCount} users deleted (by: ${actorName})`,
+      resourceName: `${safeDeletedCount} users deleted (by: ${actorName})`,
       actor,
       ipAddress,
       userAgent,
-      affectedCount: result.deletedCount,
+      affectedCount: safeDeletedCount,
       source: "UserManagementBulkDeleteAPI",
       metadata: {
         deletedIds: userIds,
       },
     });
 
-    res.status(200).json({ success: true, message: "Users deleted successfully", deletedCount: result.deletedCount });
-  } catch (error) {
-    console.error("Error deleting users:", error);
+    res.status(200).json({ success: true, message: "Users deleted successfully", deletedCount: safeDeletedCount });
+  } catch (error: any) {
+    console.error("Error deleting users:", error.message);
     res.status(500).json({ error: "Failed to delete users" });
   }
 }

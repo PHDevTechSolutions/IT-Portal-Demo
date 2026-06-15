@@ -1,12 +1,11 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 
 /**
  * POST /api/UserManagement/ResetClientAccess
  *
  * Resets ONLY Status → "Active" and LoginAttempts → 0 for a locked user.
- * All other fields are untouched (uses $set with exactly two fields).
+ * All other fields are untouched.
  */
 export default async function resetClientAccess(
   req: NextApiRequest,
@@ -21,37 +20,30 @@ export default async function resetClientAccess(
 
   const { id } = req.body as { id?: string };
 
-  if (!id || !ObjectId.isValid(id)) {
+  if (!id) {
     return res
       .status(400)
       .json({ success: false, message: "Invalid or missing user ID." });
   }
 
   try {
-    const db = await connectToDatabase();
-    const result = await db.collection("users").updateOne(
-      { _id: new ObjectId(id) },
-      {
-        $set: {
-          Status: "Active",
-          LoginAttempts: 0,
-          LockUntil: null,
-          updatedAt: new Date(),
-        },
-      },
-    );
+    const { error } = await supabase
+      .from('users')
+      .update({
+        Status: 'Active',
+        LoginAttempts: 0,
+        LockUntil: null,
+        updatedAt: new Date()
+      })
+      .eq('ReferenceID', id);
 
-    if (result.matchedCount === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found." });
-    }
+    if (error) throw error;
 
     return res
       .status(200)
       .json({ success: true, message: "Client access reset successfully." });
-  } catch (error) {
-    console.error("[ResetClientAccess] Error:", error);
+  } catch (error: any) {
+    console.error("[ResetClientAccess] Error:", error.message);
     return res
       .status(500)
       .json({ success: false, message: "Failed to reset client access." });

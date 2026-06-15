@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { connectToDatabase } from '@/lib/MongoDB';
-import { ObjectId } from 'mongodb';
+import { supabase } from '@/utils/supabase';
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
 // Helper to get actor from session/request
@@ -26,16 +25,29 @@ export default async function DeleteUser(req: NextApiRequest, res: NextApiRespon
     const { id } = req.body;
 
     try {
-        const db = await connectToDatabase();
-        const UserCollection = db.collection('users');
-
         // Get user info before deletion for audit log
-        const userToDelete = await UserCollection.findOne({ _id: new ObjectId(id) });
+        // id could be numeric 'id' or custom 'ReferenceID'
+        let fetchQuery = supabase.from('users').select('*');
+        if (!isNaN(Number(id))) {
+          fetchQuery = fetchQuery.or(`id.eq.${id},ReferenceID.eq.${id}`);
+        } else {
+          fetchQuery = fetchQuery.eq('ReferenceID', id);
+        }
 
-        await UserCollection.deleteOne({ _id: new ObjectId(id) });
-        
-        // Log audit
+        const { data: users, error: fetchError } = await fetchQuery;
+
+        if (fetchError) throw fetchError;
+        const userToDelete = users && users.length > 0 ? users[0] : null;
+
         if (userToDelete) {
+          const { error: deleteError } = await supabase
+              .from('users')
+              .delete()
+              .eq('id', userToDelete.id); // Use the numeric id for the actual delete
+
+          if (deleteError) throw deleteError;
+          
+          // Log audit
           const actor = getActorFromRequest(req);
           await logSystemAudit({
             action: "delete",
@@ -55,8 +67,8 @@ export default async function DeleteUser(req: NextApiRequest, res: NextApiRespon
         }
         
         res.status(200).json({ success: true, message: 'Data deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting data:', error);
+    } catch (error: any) {
+        console.error('Error deleting data:', error.message);
         res.status(500).json({ error: 'Failed to delete data' });
     }
 }

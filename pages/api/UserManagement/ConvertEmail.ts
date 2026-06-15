@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function convertEmail(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
@@ -15,56 +14,57 @@ export default async function convertEmail(req: NextApiRequest, res: NextApiResp
             return res.status(400).json({ success: false, message: "No user IDs provided" });
         }
 
-        const db = await connectToDatabase();
-        const users = db.collection("users");
-
-        const bulkOps = ids.map((id: string) => ({
-            updateOne: {
-                filter: { _id: new ObjectId(id) },
-                update: [
-                    {
-                        $set: {
-                            Email: {
-                                $let: {
-                                    vars: {
-                                        local: { $arrayElemAt: [{ $split: ["$Email", "@"] }, 0] },
-                                    },
-                                    in: {
-                                        $concat: [
-                                            "$$local",
-                                            "@disruptivesolutionsinc.com" // default domain
-                                        ]
-                                    }
-                                }
-                            },
-                            Company: {
-                                $cond: [
-                                    { $regexMatch: { input: "$Email", regex: /@disruptivesolutionsinc\.com$/i } },
-                                    "Disruptive Solutions Inc",
-                                    {
-                                        $cond: [
-                                            { $regexMatch: { input: "$Email", regex: /@ecoshiftcorp\.com$/i } },
-                                            "Ecoshift Corporation",
-                                            "$Company" // keep existing if other domain
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                ]
+        let modifiedCount = 0;
+        for (const id of ids) {
+            // First get current email to compute new values
+            let fetchQuery = supabase.from('users').select('id, Email, Company');
+            if (!isNaN(Number(id))) {
+                fetchQuery = fetchQuery.or(`id.eq.${id},ReferenceID.eq.${id}`);
+            } else {
+                fetchQuery = fetchQuery.eq('ReferenceID', id);
             }
-        }));
+            
+            const { data: users, error: fetchError } = await fetchQuery;
 
-        const result = await users.bulkWrite(bulkOps);
+            if (fetchError) throw fetchError;
+            if (!users || users.length === 0) continue;
+            
+            const existingUser = users[0];
+            const currentEmail = existingUser.Email;
+            const localPart = currentEmail ? currentEmail.split('@')[0] : '';
+            const newEmail = `${localPart}@disruptivesolutionsinc.com`;
+            
+            // Determine company
+            let newCompany = existingUser.Company;
+            if (currentEmail) {
+                if (currentEmail.toLowerCase().endsWith('@disruptivesolutionsinc.com')) {
+                    newCompany = 'Disruptive Solutions Inc';
+                } else if (currentEmail.toLowerCase().endsWith('@ecoshiftcorp.com')) {
+                    newCompany = 'Ecoshift Corporation';
+                }
+            }
+            
+            const { error: updateError } = await supabase
+                .from('users')
+                .update({
+                    Email: newEmail,
+                    Company: newCompany,
+                    updatedAt: new Date()
+                })
+                .eq('id', existingUser.id);
+            
+            if (updateError) throw updateError;
+            
+            modifiedCount++;
+        }
 
         return res.status(200).json({
             success: true,
-            message: `${result.modifiedCount} emails updated successfully`
+            message: `${modifiedCount} emails updated successfully`
         });
 
-    } catch (error) {
-        console.error("Error converting emails:", error);
+    } catch (error: any) {
+        console.error("Error converting emails:", error.message);
         return res.status(500).json({ success: false, message: "Failed to convert emails" });
     }
 }

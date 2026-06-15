@@ -1263,6 +1263,154 @@ export default function AccountPage() {
                             </div>
                           </div>
                         )}
+
+                        {viewingUser.Role === "Territory Sales Manager" && (
+                          <div>
+                            <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: C.muted }}>Agents Under This TSM</p>
+                            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                              {(() => {
+                                const agents = accounts.filter(a => a.TSM === viewingUser.ReferenceID);
+                                if (agents.length === 0) {
+                                  return (
+                                    <p className="text-[10px] px-3 py-2 border" style={{ borderColor: C.border, color: C.muted }}>
+                                      No agents assigned yet.
+                                    </p>
+                                  );
+                                }
+                                return agents.map(agent => (
+                                  <div key={agent._id} className="flex items-center gap-3 px-3 py-2 border" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                                    {agent.profilePicture ? (
+                                      <img src={agent.profilePicture} alt="" className="w-8 h-8 object-cover" style={{ border: `1px solid ${C.border}` }} />
+                                    ) : (
+                                      <div className="w-8 h-8 flex items-center justify-center text-[10px] font-bold"
+                                        style={{ border: `1px solid ${C.border}`, backgroundColor: "rgba(232,99,10,0.05)", color: `${C.accent}80` }}>
+                                        {agent.Firstname?.[0]}{agent.Lastname?.[0]}
+                                      </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[11px] font-semibold truncate" style={{ color: C.text }}>
+                                        {agent.Firstname} {agent.Lastname}
+                                      </p>
+                                      <p className="text-[10px] truncate" style={{ color: C.dim }}>{agent.ReferenceID}</p>
+                                    </div>
+                                    <StatusBadge status={agent.Status} />
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                          </div>
+                        )}
+
+                        {viewingUser.Role === "Manager" && (
+                          <div>
+                            <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: C.muted }}>TSMs and Agents Under This Manager</p>
+                            <div className="space-y-3 max-h-80 overflow-y-auto">
+                              {(() => {
+                                // Get all TSMs that have this manager
+                                const tsms = accounts.filter(a => a.Manager === viewingUser.ReferenceID && a.Role === "Territory Sales Manager");
+                                // Also get all agents that directly have this manager (in case they don't have a TSM)
+                                const directAgents = accounts.filter(a => a.Manager === viewingUser.ReferenceID && a.Role !== "Territory Sales Manager" && a.Role !== "Manager");
+                                
+                                if (tsms.length === 0 && directAgents.length === 0) {
+                                  return (
+                                    <p className="text-[10px] px-3 py-2 border" style={{ borderColor: C.border, color: C.muted }}>
+                                      No TSMs or agents assigned yet.
+                                    </p>
+                                  );
+                                }
+                                
+                                return (
+                                  <>
+                                    {/* Show TSMs with their agents */}
+                                    {tsms.map(tsm => {
+                                      const tsmAgents = accounts.filter(a => a.TSM === tsm.ReferenceID);
+                                      return (
+                                        <div key={tsm._id} className="border" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                                          <div className="flex items-center gap-3 px-3 py-2 border-b" style={{ borderColor: C.border }}>
+                                            {tsm.profilePicture ? (
+                                              <img src={tsm.profilePicture} alt="" className="w-8 h-8 object-cover" style={{ border: `1px solid ${C.border}` }} />
+                                            ) : (
+                                              <div className="w-8 h-8 flex items-center justify-center text-[10px] font-bold"
+                                                style={{ border: `1px solid ${C.border}`, backgroundColor: "rgba(232,99,10,0.05)", color: `${C.accent}80` }}>
+                                                {tsm.Firstname?.[0]}{tsm.Lastname?.[0]}
+                                              </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-[11px] font-semibold truncate" style={{ color: C.text }}>
+                                                {tsm.Firstname} {tsm.Lastname}
+                                              </p>
+                                              <p className="text-[10px] truncate" style={{ color: C.dim }}>{tsm.ReferenceID} · TSM</p>
+                                            </div>
+                                            <StatusBadge status={tsm.Status} />
+                                          </div>
+                                          <div className="pl-4 pr-3 pb-3 pt-2 space-y-1.5">
+                                            {tsmAgents.length === 0 ? (
+                                              <p className="text-[10px] px-3 py-2" style={{ color: C.muted }}>
+                                                No agents under this TSM.
+                                              </p>
+                                            ) : (
+                                              tsmAgents.map(agent => (
+                                                <div key={agent._id} className="flex items-center gap-3 px-3 py-2 border" style={{ borderColor: C.border, backgroundColor: "rgba(255,255,255,0.02)" }}>
+                                                  {agent.profilePicture ? (
+                                                    <img src={agent.profilePicture} alt="" className="w-6 h-6 object-cover" style={{ border: `1px solid ${C.border}` }} />
+                                                  ) : (
+                                                    <div className="w-6 h-6 flex items-center justify-center text-[9px] font-bold"
+                                                      style={{ border: `1px solid ${C.border}`, backgroundColor: "rgba(232,99,10,0.03)", color: `${C.accent}70` }}>
+                                                      {agent.Firstname?.[0]}{agent.Lastname?.[0]}
+                                                    </div>
+                                                  )}
+                                                  <div className="flex-1 min-w-0">
+                                                    <p className="text-[10px] font-semibold truncate" style={{ color: C.text }}>
+                                                      {agent.Firstname} {agent.Lastname}
+                                                    </p>
+                                                    <p className="text-[9px] truncate" style={{ color: C.dim }}>{agent.ReferenceID}</p>
+                                                  </div>
+                                                  <StatusBadge status={agent.Status} />
+                                                </div>
+                                              ))
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    
+                                    {/* Show direct agents (if any) */}
+                                    {directAgents.length > 0 && (
+                                      <div className="border" style={{ borderColor: C.border, backgroundColor: C.bg }}>
+                                        <div className="px-3 py-2 border-b" style={{ borderColor: C.border }}>
+                                          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>
+                                            Direct Agents
+                                          </p>
+                                        </div>
+                                        <div className="p-3 space-y-1.5">
+                                          {directAgents.map(agent => (
+                                            <div key={agent._id} className="flex items-center gap-3 px-3 py-2 border" style={{ borderColor: C.border, backgroundColor: "rgba(255,255,255,0.02)" }}>
+                                              {agent.profilePicture ? (
+                                                <img src={agent.profilePicture} alt="" className="w-6 h-6 object-cover" style={{ border: `1px solid ${C.border}` }} />
+                                              ) : (
+                                                <div className="w-6 h-6 flex items-center justify-center text-[9px] font-bold"
+                                                  style={{ border: `1px solid ${C.border}`, backgroundColor: "rgba(232,99,10,0.03)", color: `${C.accent}70` }}>
+                                                  {agent.Firstname?.[0]}{agent.Lastname?.[0]}
+                                                </div>
+                                              )}
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-[10px] font-semibold truncate" style={{ color: C.text }}>
+                                                  {agent.Firstname} {agent.Lastname}
+                                                </p>
+                                                <p className="text-[9px] truncate" style={{ color: C.dim }}>{agent.ReferenceID}</p>
+                                              </div>
+                                              <StatusBadge status={agent.Status} />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <DialogFooter className="px-5 py-3 border-t flex gap-2" style={{ borderColor: C.border, backgroundColor: C.bg }}>

@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 import bcrypt from "bcrypt";
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
@@ -27,8 +26,22 @@ export default async function editAccount(req: NextApiRequest, res: NextApiRespo
   const { id, UserId, Firstname, Lastname, Email, userName, Password, Role, Position, Department, Location, Company, Status, LoginAttempts, LockUntil } = req.body;
 
   try {
-    const db = await connectToDatabase();
-    const userCollection = db.collection("users");
+    // Get existing user
+    let fetchQuery = supabase.from('users').select('*');
+    if (!isNaN(Number(id))) {
+      fetchQuery = fetchQuery.or(`id.eq.${id},ReferenceID.eq.${id}`);
+    } else {
+      fetchQuery = fetchQuery.eq('ReferenceID', id);
+    }
+
+    const { data: users, error: fetchError } = await fetchQuery;
+
+    if (fetchError) throw fetchError;
+    const existingUser = users && users.length > 0 ? users[0] : null;
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
     // Prepare updated fields
     const updatedUser: any = {
@@ -38,18 +51,16 @@ export default async function editAccount(req: NextApiRequest, res: NextApiRespo
     // Hash the password only if it is provided and not empty
     if (Password?.trim()) {
       const hashedPassword = await bcrypt.hash(Password, 10);
-      updatedUser.Password = hashedPassword; // Make sure it matches the original field name in your DB
+      updatedUser.Password = hashedPassword;
     }
 
-    // Update user data
-    const result = await userCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: updatedUser }
-    );
+    // Update user data in Supabase
+    const { error: updateError } = await supabase
+      .from('users')
+      .update(updatedUser)
+      .eq('id', existingUser.id);
 
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    if (updateError) throw updateError;
 
     // Log audit
     const actor = getActorFromRequest(req);
@@ -72,8 +83,8 @@ export default async function editAccount(req: NextApiRequest, res: NextApiRespo
     });
 
     res.status(200).json({ success: true, message: "Account updated successfully" });
-  } catch (error) {
-    console.error("Error updating account:", error);
+  } catch (error: any) {
+    console.error("Error updating account:", error.message);
     res.status(500).json({ error: "Failed to update user" });
   }
 }

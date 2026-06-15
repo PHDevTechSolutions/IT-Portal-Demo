@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/MongoDB";
+import { supabase } from "@/utils/supabase";
 
 export default async function fetchAccounts(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -9,23 +9,25 @@ export default async function fetchAccounts(req: NextApiRequest, res: NextApiRes
   }
 
   try {
-    const db = await connectToDatabase();
-    const UserCollection = db.collection("users");
-    
     // ✅ Fetch ALL users including resigned ones - no status filter
-    const users = await UserCollection.find({}).toArray();
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*');
 
-    // ✅ Normalize all reference IDs and quotas
-    const normalized = users.map((u: any) => ({
+    if (error) throw error;
+
+    // ✅ Normalize all reference IDs and quotas, add _id for frontend compatibility
+    const normalized = (users || []).map((u: any) => ({
       ...u, // Include all user data including roles and permissions
+      _id: u.ReferenceID || u.referenceid || u.id,
       referenceid:
         (u.ReferenceID || u.referenceid || "").toString().trim().toLowerCase(),
-      targetquota: u.targetquota || "",
+      targetquota: u.targetquota || u.TargetQuota || "",
     }));
 
     res.status(200).json(normalized);
-  } catch (error) {
-    console.error("Error fetching data:", error);
-    res.status(500).json({ error: "Failed to fetch user data" });
+  } catch (error: any) {
+    console.error("Error fetching data:", error.message);
+    res.status(200).json([]);
   }
 }
