@@ -622,108 +622,112 @@ function FileManager({
 
   return (
     <aside className="w-52 shrink-0 bg-[#0d1117] border-r border-slate-800/60 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 pt-3 pb-1 shrink-0">
-        <span className="text-[9px] font-mono text-orange-400/50 uppercase tracking-[0.2em]">◈ Diagrams</span>
-        <button onClick={() => setCreating(v => !v)} title="New Diagram"
-          className="p-1 text-slate-600 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors">
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* New diagram input */}
-      {creating && (
-        <div className="px-2 pb-2 shrink-0">
-          <div className="flex gap-1">
-            <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") setCreating(false); }}
-              placeholder="Diagram name…"
-              className="flex-1 bg-[#111827] border border-orange-500/40 rounded px-2 py-1 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-orange-500" />
-            <button onClick={handleCreate} className="p-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded transition-colors">
-              <Check className="w-3 h-3" />
-            </button>
-          </div>
+      {/* ── Fixed header (Diagrams + new button) ── */}
+      <div className="shrink-0">
+        <div className="flex items-center justify-between px-3 pt-3 pb-1">
+          <span className="text-[9px] font-mono text-orange-400/50 uppercase tracking-[0.2em]">◈ Diagrams</span>
+          <button onClick={() => setCreating(v => !v)} title="New Diagram"
+            className="p-1 text-slate-600 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors">
+            <Plus className="w-3.5 h-3.5" />
+          </button>
         </div>
-      )}
 
-      {/* Saving indicator */}
-      {saving && (
-        <div className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-mono text-orange-400/60 shrink-0">
-          <Loader2 className="w-3 h-3 animate-spin" /> Saving…
-        </div>
-      )}
-
-      {/* List */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar py-1">
-        {loading ? (
-          <div className="flex items-center gap-2 px-3 py-3 text-slate-600 font-mono text-[11px]">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
-          </div>
-        ) : diagrams.length === 0 ? (
-          <div className="px-3 py-3 text-slate-700 font-mono text-[11px]">No diagrams yet.</div>
-        ) : (
-          diagrams.map(d => (
-            <div key={d.id}
-              className={`group relative flex items-center gap-2 px-2 py-2 mx-1 rounded cursor-pointer transition-all
-                ${activeDiagramId === d.id
-                  ? "bg-orange-500/15 border border-orange-500/30 text-orange-300"
-                  : "hover:bg-slate-800/60 text-slate-400 hover:text-slate-200 border border-transparent"}`}
-              onClick={() => { if (renamingId !== d.id) onSelect(d.id); }}
-            >
-              <File className="w-3.5 h-3.5 shrink-0 text-orange-500/50" />
-              <div className="flex-1 min-w-0">
-                {renamingId === d.id ? (
-                  <input autoFocus value={renameVal}
-                    onChange={e => setRenameVal(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") handleRenameSubmit(d.id); if (e.key === "Escape") setRenamingId(null); }}
-                    onBlur={() => handleRenameSubmit(d.id)}
-                    className="w-full bg-transparent border-b border-orange-500/50 text-[11px] font-mono text-slate-200 focus:outline-none"
-                    onClick={e => e.stopPropagation()} />
-                ) : (
-                  <span className="truncate text-[11px] font-mono block">{d.name}</span>
-                )}
-                <span className="text-[9px] text-slate-700 font-mono">{d.nodeCount}n · {d.edgeCount}e</span>
-              </div>
-              {/* Actions */}
-              <div className="hidden group-hover:flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                <button onClick={() => { setRenamingId(d.id); setRenameVal(d.name); }}
-                  className="p-1 text-slate-600 hover:text-orange-400 rounded transition-colors" title="Rename">
-                  <Pencil className="w-2.5 h-2.5" />
-                </button>
-                <button onClick={() => onDelete(d.id)}
-                  className="p-1 text-slate-600 hover:text-red-400 rounded transition-colors" title="Delete">
-                  <Trash2 className="w-2.5 h-2.5" />
-                </button>
-              </div>
+        {creating && (
+          <div className="px-2 pb-2">
+            <div className="flex gap-1">
+              <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") setCreating(false); }}
+                placeholder="Diagram name…"
+                className="flex-1 bg-[#111827] border border-orange-500/40 rounded px-2 py-1 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-orange-500" />
+              <button onClick={handleCreate} className="p-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded transition-colors">
+                <Check className="w-3 h-3" />
+              </button>
             </div>
-          ))
+          </div>
+        )}
+
+        {saving && (
+          <div className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-mono text-orange-400/60">
+            <Loader2 className="w-3 h-3 animate-spin" /> Saving…
+          </div>
         )}
       </div>
 
-      {/* Shape palette */}
-      <div className="border-t border-slate-800/60 shrink-0">
-        <div className="px-3 pt-2 pb-1">
-          <span className="text-[9px] font-mono text-orange-400/50 uppercase tracking-[0.2em]">◈ Shapes</span>
-        </div>
-        {["Flowchart", "Network / IT", "Database"].map(cat => (
-          <div key={cat} className="px-2 pb-1">
-            <div className="text-[9px] font-mono text-slate-700 uppercase tracking-widest px-1 py-0.5">{cat}</div>
-            <div className="flex flex-col gap-0.5">
-              {SHAPE_PALETTE.filter(s => s.category === cat).map((shape, si) => (
-                <div key={`${shape.type}-${si}`} draggable
-                  onDragStart={e => { e.dataTransfer.setData("application/reactflow", shape.type); e.dataTransfer.effectAllowed = "move"; }}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded cursor-grab active:cursor-grabbing bg-[#111827] border border-slate-800 hover:border-orange-500/40 hover:bg-orange-500/5 text-slate-400 hover:text-orange-300 font-mono text-[11px] transition-all select-none"
-                  title={shape.description}>
-                  <span className="text-orange-500/60 shrink-0">{shape.icon}</span>
-                  <span className="truncate">{shape.label}</span>
-                </div>
-              ))}
+      {/* ── Single unified scroll area: diagram list + shape palette ── */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+
+        {/* Diagram list */}
+        <div className="py-1">
+          {loading ? (
+            <div className="flex items-center gap-2 px-3 py-3 text-slate-600 font-mono text-[11px]">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
             </div>
-          </div>
-        ))}
-        <div className="px-3 py-2">
-          <p className="text-[9px] font-mono text-slate-700 leading-relaxed">Drag onto canvas. Del to remove.</p>
+          ) : diagrams.length === 0 ? (
+            <div className="px-3 py-3 text-slate-700 font-mono text-[11px]">No diagrams yet.</div>
+          ) : (
+            diagrams.map(d => (
+              <div key={d.id}
+                className={`group relative flex items-center gap-2 px-2 py-2 mx-1 rounded cursor-pointer transition-all
+                  ${activeDiagramId === d.id
+                    ? "bg-orange-500/15 border border-orange-500/30 text-orange-300"
+                    : "hover:bg-slate-800/60 text-slate-400 hover:text-slate-200 border border-transparent"}`}
+                onClick={() => { if (renamingId !== d.id) onSelect(d.id); }}
+              >
+                <File className="w-3.5 h-3.5 shrink-0 text-orange-500/50" />
+                <div className="flex-1 min-w-0">
+                  {renamingId === d.id ? (
+                    <input autoFocus value={renameVal}
+                      onChange={e => setRenameVal(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleRenameSubmit(d.id); if (e.key === "Escape") setRenamingId(null); }}
+                      onBlur={() => handleRenameSubmit(d.id)}
+                      className="w-full bg-transparent border-b border-orange-500/50 text-[11px] font-mono text-slate-200 focus:outline-none"
+                      onClick={e => e.stopPropagation()} />
+                  ) : (
+                    <span className="truncate text-[11px] font-mono block">{d.name}</span>
+                  )}
+                  <span className="text-[9px] text-slate-700 font-mono">{d.nodeCount}n · {d.edgeCount}e</span>
+                </div>
+                <div className="hidden group-hover:flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                  <button onClick={() => { setRenamingId(d.id); setRenameVal(d.name); }}
+                    className="p-1 text-slate-600 hover:text-orange-400 rounded transition-colors" title="Rename">
+                    <Pencil className="w-2.5 h-2.5" />
+                  </button>
+                  <button onClick={() => onDelete(d.id)}
+                    className="p-1 text-slate-600 hover:text-red-400 rounded transition-colors" title="Delete">
+                    <Trash2 className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
+
+        {/* Shape palette — scrolls together with diagrams */}
+        <div className="border-t border-slate-800/60 pt-2">
+          <div className="px-3 pb-1">
+            <span className="text-[9px] font-mono text-orange-400/50 uppercase tracking-[0.2em]">◈ Shapes</span>
+          </div>
+          {["Flowchart", "Network / IT", "Database"].map(cat => (
+            <div key={cat} className="px-2 pb-2">
+              <div className="text-[9px] font-mono text-slate-700 uppercase tracking-widest px-1 py-0.5">{cat}</div>
+              <div className="flex flex-col gap-0.5">
+                {SHAPE_PALETTE.filter(s => s.category === cat).map((shape, si) => (
+                  <div key={`${shape.type}-${si}`} draggable
+                    onDragStart={e => { e.dataTransfer.setData("application/reactflow", shape.type); e.dataTransfer.effectAllowed = "move"; }}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded cursor-grab active:cursor-grabbing bg-[#111827] border border-slate-800 hover:border-orange-500/40 hover:bg-orange-500/5 text-slate-400 hover:text-orange-300 font-mono text-[11px] transition-all select-none"
+                    title={shape.description}>
+                    <span className="text-orange-500/60 shrink-0">{shape.icon}</span>
+                    <span className="truncate">{shape.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="px-3 pb-3">
+            <p className="text-[9px] font-mono text-slate-700 leading-relaxed">Drag onto canvas. Del to remove.</p>
+          </div>
+        </div>
+
       </div>
     </aside>
   );
@@ -902,28 +906,28 @@ function FlowCanvas({
   }, [setNodes, setEdges]);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center gap-1 px-3 py-1.5 bg-[#0d1117] border-b border-slate-800/60 shrink-0 flex-wrap">
-        <button onClick={() => zoomIn()}  title="Zoom In"  className="p-1.5 text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors"><ZoomIn  className="w-3.5 h-3.5" /></button>
-        <button onClick={() => zoomOut()} title="Zoom Out" className="p-1.5 text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors"><ZoomOut className="w-3.5 h-3.5" /></button>
-        <button onClick={() => fitView({ padding: 0.15 })} title="Fit View" className="p-1.5 text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors"><Maximize2 className="w-3.5 h-3.5" /></button>
-        <div className="w-px h-4 bg-slate-800 mx-1" />
-        <button onClick={handleDuplicate} disabled={!selNode} title="Duplicate" className="p-1.5 text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><Copy   className="w-3.5 h-3.5" /></button>
-        <button onClick={handleDelete} disabled={!selNode && !selEdge} title="Delete selected (Del / Backspace)" className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><Trash2 className="w-3.5 h-3.5" /></button>
-        <div className="w-px h-4 bg-slate-800 mx-1" />
-        <button onClick={() => setShowGrid(v => !v)} className={`px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider transition-colors ${showGrid ? "bg-orange-500/15 text-orange-400 border border-orange-500/30" : "text-slate-600 hover:text-slate-400"}`}>Grid</button>
-        <button onClick={() => setShowMinimap(v => !v)} className={`px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider transition-colors ${showMinimap ? "bg-orange-500/15 text-orange-400 border border-orange-500/30" : "text-slate-600 hover:text-slate-400"}`}>Map</button>
-        <div className="w-px h-4 bg-slate-800 mx-1" />
-        <button onClick={handleExportPng}  className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors"><Download className="w-3 h-3" /> PNG</button>
-        <button onClick={handleExportJson} className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors"><Download className="w-3 h-3" /> JSON</button>
-        <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors"><Upload className="w-3 h-3" /> Import</button>
+    <div className="flex-1 flex flex-col min-w-0" style={{ minHeight: 0 }}>
+      {/* ── Toolbar ── */}
+      <div className="flex items-center gap-1 px-2 py-1.5 bg-[#0d1117] border-b border-slate-800/60 shrink-0 overflow-x-auto">
+        <button onClick={() => zoomIn()}  title="Zoom In (+)"  className="p-1.5 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors shrink-0"><ZoomIn  className="w-3.5 h-3.5" /></button>
+        <button onClick={() => zoomOut()} title="Zoom Out (-)" className="p-1.5 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors shrink-0"><ZoomOut className="w-3.5 h-3.5" /></button>
+        <button onClick={() => fitView({ padding: 0.15 })} title="Fit View" className="p-1.5 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors shrink-0"><Maximize2 className="w-3.5 h-3.5" /></button>
+        <div className="w-px h-4 bg-slate-800 mx-1 shrink-0" />
+        <button onClick={handleDuplicate} disabled={!selNode} title="Duplicate" className="p-1.5 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"><Copy   className="w-3.5 h-3.5" /></button>
+        <button onClick={handleDelete} disabled={!selNode && !selEdge} title="Delete (Del)" className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+        <div className="w-px h-4 bg-slate-800 mx-1 shrink-0" />
+        <button onClick={() => setShowGrid(v => !v)} className={`px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider transition-colors shrink-0 ${showGrid ? "bg-orange-500/15 text-orange-400 border border-orange-500/30" : "text-slate-600 hover:text-slate-400"}`}>Grid</button>
+        <button onClick={() => setShowMinimap(v => !v)} className={`px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider transition-colors shrink-0 ${showMinimap ? "bg-orange-500/15 text-orange-400 border border-orange-500/30" : "text-slate-600 hover:text-slate-400"}`}>Map</button>
+        <div className="w-px h-4 bg-slate-800 mx-1 shrink-0" />
+        <button onClick={handleExportPng}  className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono uppercase text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors shrink-0"><Download className="w-3 h-3" /> PNG</button>
+        <button onClick={handleExportJson} className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono uppercase text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors shrink-0"><Download className="w-3 h-3" /> JSON</button>
+        <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono uppercase text-slate-500 hover:text-orange-400 hover:bg-orange-500/10 rounded transition-colors shrink-0"><Upload className="w-3 h-3" /> Import</button>
         <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
-        <span className="ml-auto text-[10px] font-mono text-slate-700">{nodes.length} nodes · {edges.length} edges</span>
+        <span className="ml-auto pl-2 text-[10px] font-mono text-slate-700 shrink-0">{nodes.length}n · {edges.length}e</span>
       </div>
 
-      {/* Canvas */}
-      <div ref={wrapperRef} className="flex-1 relative" onDragOver={onDragOver} onDrop={onDrop}>
+      {/* ── Canvas — takes all remaining space, overflow visible so Controls show ── */}
+      <div ref={wrapperRef} className="flex-1 relative" style={{ minHeight: 0 }} onDragOver={onDragOver} onDrop={onDrop}>
         <ReactFlow
           nodes={nodes} edges={edges}
           onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
@@ -939,14 +943,20 @@ function FlowCanvas({
           deleteKeyCode={["Delete", "Backspace"]}
           defaultEdgeOptions={{ type: "labeled", markerEnd: { type: MarkerType.ArrowClosed, color: "#475569" }, data: { label: "" } }}
           fitView fitViewOptions={{ padding: 0.15 }}
-          style={{ background: "#0a0d14" }} proOptions={{ hideAttribution: true }}
+          style={{ background: "#0a0d14", width: "100%", height: "100%" }}
+          proOptions={{ hideAttribution: true }}
         >
           {showGrid && <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="rgba(251,146,60,0.08)" />}
-          <Controls className="!bg-[#0d1117] !border-slate-800 !shadow-none" showInteractive={false} />
+          <Controls
+            style={{ bottom: 16, left: 16 }}
+            showInteractive={false}
+          />
           {showMinimap && (
-            <MiniMap style={{ background: "#0d1117", border: "1px solid rgba(251,146,60,0.15)" }}
+            <MiniMap
+              style={{ background: "#0d1117", border: "1px solid rgba(251,146,60,0.15)", bottom: 16, right: 16 }}
               nodeColor={n => ({ decision: "#6366f1", startEnd: "#fb923c", database: "#38bdf8", document: "#22c55e" }[n.type ?? ""] ?? "#475569")}
-              maskColor="rgba(0,0,0,0.6)" />
+              maskColor="rgba(0,0,0,0.6)"
+            />
           )}
         </ReactFlow>
 
@@ -1094,7 +1104,7 @@ function SystemProcessInner() {
   const activeName = diagrams.find(d => d.id === activeDiagramId)?.name;
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
+    <div className="flex h-full w-full" style={{ minHeight: 0 }}>
       <FileManager
         diagrams={diagrams}
         activeDiagramId={activeDiagramId}
@@ -1107,7 +1117,7 @@ function SystemProcessInner() {
       />
 
       {/* Canvas area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0" style={{ minHeight: 0 }}>
         {/* Active diagram name bar */}
         <div className="flex items-center gap-2 px-4 py-1.5 bg-[#0d1117] border-b border-slate-800/40 shrink-0">
           {activeName ? (
@@ -1162,7 +1172,7 @@ export default function SystemProcessPage() {
           headerRight={<NotificationBell />}
           bodyClassName="!overflow-hidden !p-0"
         >
-          <div className="h-full w-full" style={{ height: "calc(100vh - 88px)" }}>
+          <div className="flex flex-col" style={{ height: "calc(100vh - 88px)" }}>
             <SystemProcessInner />
           </div>
         </PageShell>
