@@ -27,10 +27,10 @@ async function bulkUpdateByReference(updates: any[]) {
         const errors = [];
 
         for (const update of updates) {
-            const { account_reference_number, ...fieldsToUpdate } = update;
+            const { id, ...fieldsToUpdate } = update;
 
-            if (!account_reference_number) {
-                errors.push({ error: "Missing account_reference_number", data: update });
+            if (!id) {
+                errors.push({ error: "Missing id", data: update });
                 continue;
             }
 
@@ -43,7 +43,7 @@ async function bulkUpdateByReference(updates: any[]) {
             }
 
             if (Object.keys(validUpdates).length === 0) {
-                errors.push({ error: "No valid columns to update", account_reference_number });
+                errors.push({ error: "No valid columns to update", id });
                 continue;
             }
 
@@ -54,19 +54,19 @@ async function bulkUpdateByReference(updates: any[]) {
             const query = `
                 UPDATE accounts
                 SET ${setClauses}, date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
-                WHERE account_reference_number = $1
+                WHERE id = $1
                 RETURNING *
             `;
 
             try {
-                const result = await sql(query, [account_reference_number, ...values]);
+                const result = await sql(query, [id, ...values]);
                 if (result && result.length > 0) {
                     results.push(result[0]);
                 } else {
-                    errors.push({ error: "Record not found", account_reference_number });
+                    errors.push({ error: "Record not found", id });
                 }
             } catch (err: any) {
-                errors.push({ error: err.message, account_reference_number });
+                errors.push({ error: err.message, id });
             }
         }
 

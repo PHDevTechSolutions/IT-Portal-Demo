@@ -1077,7 +1077,7 @@ export default function AccountPage() {
           <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-slate-800/60 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-orange-400 font-mono leading-tight">Customer Database</h1>
+                <h1 className="text-sm sm:text-base font-bold tracking-widest uppercase text-orange-400 font-mono leading-tight">Customer Database Backup</h1>
                 <p className="text-[11px] text-slate-500 font-mono mt-0.5">
                   {isFetching ? "Loading…" : <><span className="font-semibold text-slate-300">{filtered.length}</span> customer{filtered.length!==1?"s":""}</>}
                 </p>
@@ -1740,8 +1740,8 @@ export default function AccountPage() {
                 <Settings className="w-4 h-4 text-orange-400" />
               </div>
               <div>
-                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">Bulk Update by Account Reference</DialogTitle>
-                <p className="text-[11px] text-slate-500 mt-0.5">Update accounts using account_reference_number as identifier</p>
+                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">Bulk Update by ID</DialogTitle>
+                <p className="text-[11px] text-slate-500 mt-0.5">Update accounts using id as identifier</p>
               </div>
               {(bulkUpdateFile||bulkUpdatePreview.length>0) && (
                 <Button variant="ghost" size="sm" disabled={isBulkUpdateLoading} className="ml-auto h-7 text-[9px] uppercase font-bold text-slate-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-none"
