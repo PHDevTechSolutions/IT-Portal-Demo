@@ -1,105 +1,143 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+/**
+ * POST /api/Data/Applications/Taskflow/CustomerDatabase/Import
+ *
+ * Bulk-inserts accounts into the Neon PostgreSQL `accounts` table.
+ * Supports all columns: referenceid, tsm, manager, company_name,
+ * contact_person, contact_number, email_address, address,
+ * delivery_address, region, industry, remarks, status,
+ * date_created, date_updated, next_available_date, gender, type,
+ * account_reference_number, type_client, company_group,
+ * date_transferred, province, city, date_approved, date_removed,
+ * transfer_to, tin_number, reason, it_approved_date
+ */
+
+import { NextResponse }              from "next/server";
+import { neon }                      from "@neondatabase/serverless";
 import { logSystemAudit, type AuditActor } from "@/lib/audit/system-audit";
 
 export const dynamic = "force-dynamic";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE!
-);
+const Xchire_databaseUrl = process.env.TASKFLOW_DB_URL;
+if (!Xchire_databaseUrl) {
+  throw new Error("TASKFLOW_DB_URL is not set in the environment variables.");
+}
+const sql = neon(Xchire_databaseUrl);
 
 function getActorFromRequest(req: Request): AuditActor {
-  const headers = req.headers;
+  const h = req.headers;
   return {
-    uid:   headers.get("x-user-id")    || null,
-    email: headers.get("x-user-email") || "system",
-    role:  headers.get("x-user-role")  || "unknown",
-    name:  headers.get("x-user-name")  || null,
+    uid:   h.get("x-user-id")    || null,
+    email: h.get("x-user-email") || "system",
+    role:  h.get("x-user-role")  || "unknown",
+    name:  h.get("x-user-name")  || null,
   };
 }
 
-function getCompanyInitials(companyName: string): string {
-  const words = companyName.trim().split(/\s+/);
-  if (words.length === 0) return "XX";
-  if (words.length === 1) {
-    const first = words[0][0] || "X";
-    const last  = words[0].slice(-1) || first;
-    return (first + last).toUpperCase();
-  }
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+/** Generate account_reference_number like EC-NCR-0012345 */
+function generateAccountRef(companyName: string, region: string): string {
+  const words = (companyName ?? "").trim().split(/\s+/).filter(Boolean);
+  const initials = words.length >= 2
+    ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
+    : words.length === 1
+      ? (words[0][0] + (words[0].slice(-1) || words[0][0])).toUpperCase()
+      : "XX";
+  const regionCode = (region ?? "").trim().toUpperCase().replace(/\s/g, "").slice(0, 4) || "XX";
+  const num = (1 + Math.floor(Math.random() * 9_999_999)).toString().padStart(7, "0");
+  return `${initials}-${regionCode}-${num}`;
 }
 
-function generateAccountRef(companyName: string, region: string): string {
-  const initials    = getCompanyInitials(companyName);
-  const regionCode  = region?.trim() ? region.trim().toUpperCase().replace(/\s/g, "").slice(0, 4) : "XX";
-  const paddedNum   = (1 + Math.floor(Math.random() * 9999999)).toString().padStart(7, "0");
-  return `${initials}-${regionCode}-${paddedNum}`;
+/** Safe string — trim + null-coerce */
+const s = (v: any): string | null => {
+  if (v === undefined || v === null || v === "") return null;
+  return String(v).trim() || null;
+};
+
+/** Safe date — accept string/Date/ExcelJS serial, return ISO or null */
+function d(v: any): string | null {
+  if (!v) return null;
+  // ExcelJS returns Date objects for date cells
+  if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString();
+  const parsed = new Date(String(v));
+  return !isNaN(parsed.getTime()) ? parsed.toISOString() : null;
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { data } = body;
+    const body  = await req.json();
+    const rows: any[] = body.data ?? [];
 
-    if (!Array.isArray(data) || data.length === 0) {
-      return NextResponse.json({ success: false, error: "Missing data." }, { status: 400 });
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return NextResponse.json({ success: false, error: "No data provided." }, { status: 400 });
     }
 
-    const rows = data.map((account: any) => ({
-      account_reference_number: generateAccountRef(account.company_name || "XX", account.region || ""),
-      referenceid:      account.referenceid    || "",
-      manager:          account.manager        || "",
-      tsm:              account.tsm            || "",
-      company_name:     account.company_name   || "",
-      contact_person:   account.contact_person || "",
-      contact_number:   account.contact_number || "",
-      email_address:    account.email_address  || "",
-      type_client:      account.type_client    || "Prospect",
-      address:          account.address        || "",
-      delivery_address: account.delivery_address || "",
-      region:           account.region         || "",
-      status:           account.status         || "Active",
-      industry:         account.industry       || "",
-      remarks:          account.remarks        || "",
-      date_created:     new Date().toISOString(),
-    }));
+    let insertedCount = 0;
+    const failed: any[] = [];
 
-    const { data: inserted, error } = await supabase
-      .from("accounts")
-      .insert(rows)
-      .select("id");
+    for (const row of rows) {
+      try {
+        const acctRef = s(row.account_reference_number)
+          || generateAccountRef(row.company_name ?? "", row.region ?? "");
 
-    if (error) throw new Error(error.message);
+        await sql`
+          INSERT INTO accounts (
+            referenceid, tsm, manager,
+            company_name, contact_person, contact_number, email_address,
+            address, delivery_address, region,
+            industry, remarks, status,
+            date_created, date_updated, next_available_date,
+            gender, type, account_reference_number, type_client, company_group,
+            date_transferred, province, city, date_approved, date_removed,
+            transfer_to, tin_number, reason, it_approved_date
+          ) VALUES (
+            ${s(row.referenceid)},      ${s(row.tsm)},             ${s(row.manager)},
+            ${s(row.company_name)},     ${s(row.contact_person)},  ${s(row.contact_number)},  ${s(row.email_address)},
+            ${s(row.address)},          ${s(row.delivery_address)}, ${s(row.region)},
+            ${s(row.industry)},         ${s(row.remarks)},          ${s(row.status) ?? "Active"},
+            ${d(row.date_created) ?? new Date().toISOString()},
+            ${d(row.date_updated) ?? new Date().toISOString()},
+            ${d(row.next_available_date)},
+            ${s(row.gender)},           ${s(row.type)},             ${acctRef},
+            ${s(row.type_client) ?? "Prospect"},
+            ${s(row.company_group)},
+            ${d(row.date_transferred)}, ${s(row.province)},         ${s(row.city)},
+            ${d(row.date_approved)},    ${d(row.date_removed)},
+            ${s(row.transfer_to)},      ${s(row.tin_number)},       ${s(row.reason)},
+            ${d(row.it_approved_date)}
+          )
+        `;
+        insertedCount++;
+      } catch (rowErr: any) {
+        console.error("[Import row error]", rowErr.message, row.company_name);
+        failed.push({ ...row, _error: rowErr.message });
+      }
+    }
 
-    const insertedCount = inserted?.length ?? 0;
-
-    await logImportAudit(req, insertedCount, data.length);
+    // Audit log
+    try {
+      const actor = getActorFromRequest(req);
+      await logSystemAudit({
+        action:        "import",
+        module:        "CustomerDatabase",
+        page:          "/taskflow/customer-database",
+        resourceType:  "customer",
+        resourceId:    null,
+        resourceName:  `${insertedCount} customers imported`,
+        actor,
+        affectedCount: insertedCount,
+        source:        "CustomerDatabaseImportAPI",
+        metadata:      { totalRecords: rows.length, successfulImports: insertedCount, failedCount: failed.length },
+      });
+    } catch { /* non-fatal */ }
 
     return NextResponse.json({
-      success:       insertedCount === data.length,
+      success:       insertedCount > 0,
       insertedCount,
-      message:       `${insertedCount} records imported successfully!`,
-      failed:        insertedCount < data.length ? data.slice(insertedCount) : [],
+      failedCount:   failed.length,
+      failed,
+      message:       `${insertedCount} of ${rows.length} records imported.`,
     });
   } catch (err: any) {
     console.error("[CustomerDatabase Import]", err.message);
-    return NextResponse.json({ success: false, error: err.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
-}
-
-export async function logImportAudit(req: Request, insertedCount: number, totalCount: number) {
-  const actor = getActorFromRequest(req);
-  await logSystemAudit({
-    action:       "import",
-    module:       "CustomerDatabase",
-    page:         "/taskflow/customer-database",
-    resourceType: "customer",
-    resourceId:   null,
-    resourceName: `${insertedCount} customers imported`,
-    actor,
-    affectedCount: insertedCount,
-    source:       "CustomerDatabaseImportAPI",
-    metadata:     { totalRecords: totalCount, successfulImports: insertedCount },
-  });
 }

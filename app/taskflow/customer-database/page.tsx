@@ -125,23 +125,96 @@ async function parseExcelForFile(
         await workbook.xlsx.load(data);
         const ws = workbook.worksheets[0];
         const parsed: any[] = [];
+
+        // ── Build header map from row 1 ──────────────────────────────────
+        // Supports both header-based (any order) and positional (legacy) formats
+        const headers: string[] = [];
+        const headerRow = ws.getRow(1);
+        headerRow.eachCell((cell, col) => {
+          headers[col] = String(cell.value ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+        });
+
+        const hasHeaders = headers.some(h => [
+          "company_name","contact_person","referenceid","tsm","manager",
+          "status","type_client","region","address",
+        ].includes(h));
+
         ws.eachRow((row, rowNumber) => {
-          if (rowNumber === 1) return;
-          parsed.push({
-            referenceid: tsaValue, manager: managerValue, tsm: tsmValue, tsa: tsaValue,
-            company_name: row.getCell(1).value || "", contact_person: row.getCell(2).value || "",
-            contact_number: row.getCell(3).value || "", email_address: row.getCell(4).value || "",
-            type_client: row.getCell(5).value || "", address: row.getCell(6).value || "",
-            region: row.getCell(7).value || "", status: row.getCell(8).value || "",
-            company_group: row.getCell(9).value || "", delivery_address: row.getCell(10).value || "",
-            industry: row.getCell(11).value || "",
-          });
+          if (rowNumber === 1) return; // skip header
+
+          const get = (colName: string): any => {
+            if (hasHeaders) {
+              const idx = headers.indexOf(colName);
+              return idx >= 0 ? row.getCell(idx).value : undefined;
+            }
+            return undefined;
+          };
+          // Positional fallback (legacy template — 11 columns)
+          const pos = (n: number): any => row.getCell(n).value;
+
+          // Helper: prefer header value, fallback to positional
+          const v = (headerName: string, posCol: number): any =>
+            hasHeaders ? get(headerName) : pos(posCol);
+
+          const cellDate = (headerName: string): any => {
+            const val = hasHeaders ? get(headerName) : undefined;
+            return val instanceof Date ? val.toISOString() : val ? String(val) : undefined;
+          };
+
+          const record: any = {
+            // Core fields — injected from dropdowns if not in file
+            referenceid:      s(get("referenceid"))      || tsaValue  || "",
+            manager:          s(get("manager"))           || managerValue || "",
+            tsm:              s(get("tsm"))               || tsmValue  || "",
+
+            // Required
+            company_name:     s(v("company_name",     1)) || "",
+            contact_person:   s(v("contact_person",   2)) || "",
+            contact_number:   s(v("contact_number",   3)) || "",
+            email_address:    s(v("email_address",    4)) || "",
+            type_client:      s(v("type_client",      5)) || "",
+            address:          s(v("address",          6)) || "",
+            region:           s(v("region",           7)) || "",
+            status:           s(v("status",           8)) || "Active",
+            company_group:    s(v("company_group",    9)) || "",
+            delivery_address: s(v("delivery_address", 10)) || "",
+            industry:         s(v("industry",         11)) || "",
+
+            // Extended columns (header-based only)
+            remarks:               s(get("remarks")),
+            gender:                s(get("gender")),
+            type:                  s(get("type")),
+            account_reference_number: s(get("account_reference_number")),
+            date_transferred:      cellDate("date_transferred"),
+            province:              s(get("province")),
+            city:                  s(get("city")),
+            date_approved:         cellDate("date_approved"),
+            date_removed:          cellDate("date_removed"),
+            transfer_to:           s(get("transfer_to")),
+            tin_number:            s(get("tin_number")),
+            reason:                s(get("reason")),
+            it_approved_date:      cellDate("it_approved_date"),
+            next_available_date:   cellDate("next_available_date"),
+            date_created:          cellDate("date_created"),
+            date_updated:          cellDate("date_updated"),
+          };
+
+          // Skip completely empty rows
+          if (!record.company_name && !record.email_address && !record.contact_person) return;
+
+          parsed.push(record);
         });
         resolve(parsed);
       } catch (err) { reject(err); }
     };
     reader.readAsArrayBuffer(file);
   });
+}
+
+/** Trim + null-coerce helper (used above) */
+function s(v: any): string {
+  if (v === undefined || v === null) return "";
+  return String(v).trim();
 }
 
 async function parseExcelForBulkUpdate(file: File): Promise<{ data: any[], columns: string[] }> {
@@ -336,10 +409,26 @@ export default function AccountPage() {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
 
   /* ── Dialogs ── */
-  const [showImportDialog,  setShowImportDialog] = useState(false);
-  const [showFilterDialog,  setShowFilterDialog] = useState(false);
-  const [showOthersDialog,  setShowOthersDialog] = useState(false);
-  const [isGenerating,      setIsGenerating]     = useState(false);
+  const [showImportDialog,    setShowImportDialog]    = useState(false);
+  const [showImportAllDialog, setShowImportAllDialog] = useState(false);
+  const [showFilterDialog,    setShowFilterDialog]    = useState(false);
+  const [showOthersDialog,    setShowOthersDialog]    = useState(false);
+  const [isGenerating,        setIsGenerating]        = useState(false);
+
+  /* ── Import All (CSV, no TSA picker) ── */
+  const [importAllFile,       setImportAllFile]       = useState<File|null>(null);
+  const [importAllPreview,    setImportAllPreview]    = useState<any[]>([]);
+  const [importAllLog,        setImportAllLog]        = useState<{type:"info"|"warn"|"ok"|"err";msg:string}[]>([]);
+  const [importAllFailed,     setImportAllFailed]     = useState<any[]>([]);
+  const [isImportAllLoading,  setIsImportAllLoading]  = useState(false);
+  const [isImportAllParsing,  setIsImportAllParsing]  = useState(false);
+  const importAllLogEndRef = React.useRef<HTMLDivElement>(null);
+  const addImportAllLog = React.useCallback(
+    (type:"info"|"warn"|"ok"|"err", msg:string) =>
+      setImportAllLog(prev => [...prev, {type, msg}]),
+    []
+  );
+  React.useEffect(() => { importAllLogEndRef.current?.scrollIntoView({behavior:"smooth"}); }, [importAllLog]);
 
   /* ── Bulk Update by Reference ── */
   const [bulkUpdateFile,      setBulkUpdateFile]      = useState<File|null>(null);
@@ -671,14 +760,151 @@ export default function AccountPage() {
   const handleDownloadFailed = () => {
     if (!importFailedRows.length) { toast.info("No failed rows."); return; }
     const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet("Failed Rows");
-    ws.addRow(["company_name","contact_person","contact_number","email_address","type_client","address","region","status","company_group","delivery_address","industry"]);
-    importFailedRows.forEach(row=>ws.addRow([row.company_name,row.contact_person,row.contact_number,row.email_address,row.type_client,row.address,row.region,row.status,row.company_group,row.delivery_address,row.industry]));
+    const allCols = [
+      "company_name","contact_person","contact_number","email_address","type_client",
+      "address","delivery_address","region","status","company_group","industry",
+      "remarks","gender","type","account_reference_number","referenceid","tsm","manager",
+      "date_transferred","province","city","date_approved","date_removed",
+      "transfer_to","tin_number","reason","it_approved_date","next_available_date",
+      "date_created","date_updated","_error",
+    ];
+    ws.addRow(allCols);
+    importFailedRows.forEach(row => ws.addRow(allCols.map(k => row[k] ?? "")));
     wb.xlsx.writeBuffer().then(buffer=>{
       const blob=new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
       const url=URL.createObjectURL(blob);
       const a=Object.assign(document.createElement("a"),{href:url,download:`${importOriginalFileName||"failed_rows"}.xlsx`});
       document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     });
+  };
+
+  /* ── Import All (CSV) ─────────────────────────────────────────────── */
+  /** Parse CSV file using headers in row 1 — returns array of row objects */
+  const parseCsvFile = (file: File): Promise<any[]> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+          if (lines.length < 2) { resolve([]); return; }
+
+          // Parse CSV header — handle quoted fields
+          const parseRow = (line: string): string[] => {
+            const result: string[] = [];
+            let cur = "", inQuote = false;
+            for (let i = 0; i < line.length; i++) {
+              const ch = line[i];
+              if (ch === '"') { inQuote = !inQuote; continue; }
+              if (ch === ',' && !inQuote) { result.push(cur.trim()); cur = ""; continue; }
+              cur += ch;
+            }
+            result.push(cur.trim());
+            return result;
+          };
+
+          const headers = parseRow(lines[0]).map(h =>
+            h.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")
+          );
+
+          const rows: any[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const cells = parseRow(line);
+            if (cells.every(c => !c)) continue; // skip blank rows
+            const obj: any = {};
+            headers.forEach((h, idx) => { obj[h] = cells[idx] ?? ""; });
+            // Skip row if no company_name
+            if (!obj.company_name?.trim()) continue;
+            rows.push(obj);
+          }
+          resolve(rows);
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsText(file, "utf-8");
+    });
+
+  const handleImportAllFileSelect = async (file: File) => {
+    setImportAllFile(file);
+    setImportAllLog([]);
+    setImportAllPreview([]);
+    setImportAllFailed([]);
+    setIsImportAllParsing(true);
+    addImportAllLog("info", `📂 Reading "${file.name}"…`);
+    try {
+      const rows = await parseCsvFile(file);
+      addImportAllLog("ok",  `✅ Parsed ${rows.length} row(s)`);
+      const missing = rows.filter(r => !r.company_name?.trim()).length;
+      if (missing) addImportAllLog("warn", `  ⚠️  ${missing} row(s) missing company_name (will be skipped)`);
+      const missingStatus = rows.filter(r => !r.status?.trim()).length;
+      if (missingStatus) addImportAllLog("info", `  ℹ️  ${missingStatus} row(s) missing status (will default to "Active")`);
+      addImportAllLog("ok", `🚀 Ready — ${rows.length} record(s) queued`);
+      setImportAllPreview(rows);
+    } catch {
+      addImportAllLog("err", `❌ Failed to parse file`);
+      toast.error("Failed to parse CSV file.");
+    } finally {
+      setIsImportAllParsing(false);
+    }
+  };
+
+  const handleImportAllUpload = async () => {
+    if (!importAllFile) return toast.error("Please select a CSV file.");
+    if (!importAllPreview.length) return toast.error("No rows to import.");
+    setIsImportAllLoading(true);
+    setImportAllFailed([]);
+    const total = importAllPreview.length;
+    const batchSize = 50; // larger batches — no dropdown enrichment needed
+    let inserted = 0;
+    const failed: any[] = [];
+    try {
+      for (let i = 0; i < total; i += batchSize) {
+        const batch = importAllPreview.slice(i, i + batchSize);
+        addImportAllLog("info", `  Uploading rows ${i + 1}–${Math.min(i + batchSize, total)}…`);
+        const res = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/Import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: batch }),
+        });
+        const result = await res.json();
+        inserted += result.insertedCount ?? 0;
+        if (result.failed?.length) failed.push(...result.failed);
+      }
+      if (failed.length) {
+        setImportAllFailed(failed);
+        addImportAllLog("warn", `⚠️  ${failed.length} row(s) failed`);
+        toast.error(`Imported ${inserted} / ${total} — ${failed.length} failed`);
+      } else {
+        addImportAllLog("ok", `✅ All ${inserted} record(s) imported successfully!`);
+        toast.success(`Successfully imported ${inserted} records.`);
+        setImportAllFile(null);
+        setImportAllPreview([]);
+        setImportAllLog([]);
+      }
+    } catch {
+      addImportAllLog("err", "❌ Upload failed — check console");
+      toast.error("Import All failed.");
+    } finally {
+      setIsImportAllLoading(false);
+    }
+  };
+
+  const handleDownloadImportAllFailed = () => {
+    if (!importAllFailed.length) return;
+    const headers = Object.keys(importAllFailed[0]).filter(k => k !== "_error");
+    const lines = [
+      [...headers, "_error"].join(","),
+      ...importAllFailed.map(row =>
+        [...headers, "_error"].map(k => `"${String(row[k] ?? "").replace(/"/g, '""')}"`).join(",")
+      ),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement("a"), { href: url, download: "import_all_failed.csv" });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   /* ── Bulk Update handlers ── */
@@ -882,6 +1108,10 @@ export default function AccountPage() {
                 <Button variant="outline" size="sm" onClick={()=>setShowImportDialog(true)}
                   className="bg-[#0d1117] border-slate-800 text-slate-400 hover:bg-orange-500/10 hover:border-orange-500/40 hover:text-orange-300 rounded-none h-9 text-[11px] uppercase tracking-wider font-mono">
                   <Upload className="size-4 mr-1" /> Import
+                </Button>
+                <Button variant="outline" size="sm" onClick={()=>setShowImportAllDialog(true)}
+                  className="bg-[#0d1117] border-emerald-800/60 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-300 rounded-none h-9 text-[11px] uppercase tracking-wider font-mono">
+                  <FileSpreadsheet className="size-4 mr-1" /> Import All
                 </Button>
                 <Download data={filtered} filename="CustomerDatabase" />
                 <Button variant="outline" size="sm" onClick={() => setShowOthersDialog(true)}
@@ -1346,10 +1576,111 @@ export default function AccountPage() {
           </div>
           <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-between gap-2">
             <Button variant="ghost" onClick={()=>setShowImportDialog(false)} className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700">Close</Button>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               {importFailedRows.length>0 && <Button variant="ghost" size="sm" onClick={handleDownloadFailed} className="h-8 text-xs rounded-none bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 gap-1"><DownloadIcon className="h-3.5 w-3.5" />Failed ({importFailedRows.length})</Button>}
-              <Button onClick={handleImportUpload} disabled={isImportLoading||!importFile||!importSelectedTSA} className="h-8 text-xs rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-5 gap-2 uppercase tracking-wider">
-                {isImportLoading?<><Loader2 className="h-3.5 w-3.5 animate-spin" />Uploading…</>:<><Upload className="h-3.5 w-3.5" />Upload</>}
+              {importPreviewData.length > 0 && !isImportLoading && (
+                <span className="text-[11px] font-mono text-slate-500 mr-1">
+                  {importPreviewData.length} rows ready
+                </span>
+              )}
+              <Button
+                onClick={handleImportUpload}
+                disabled={isImportLoading || !importFile || !importSelectedTSA}
+                className="h-9 text-[11px] font-bold rounded-none bg-orange-600 hover:bg-orange-500 text-white border-0 px-6 gap-2 uppercase tracking-widest disabled:opacity-40">
+                {isImportLoading
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Importing…</>
+                  : <><Upload className="h-3.5 w-3.5" />Import All ({importPreviewData.length || 0})</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Import All Dialog (CSV, no TSA picker) ── */}
+      <Dialog open={showImportAllDialog} onOpenChange={v => { setShowImportAllDialog(v); if (!v) { setImportAllFile(null); setImportAllPreview([]); setImportAllLog([]); setImportAllFailed([]); } }}>
+        <DialogContent className="max-w-lg bg-[#0d1117] border-none text-slate-100 rounded-none p-0 gap-0">
+          <DialogHeader className="px-6 py-4 border-b border-slate-700/60 bg-[#0d1117]">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-emerald-400">Import All — CSV</DialogTitle>
+                <p className="text-[11px] text-slate-500 mt-0.5">Upload a CSV with headers. All 30 columns read directly from the file.</p>
+              </div>
+              {(importAllFile || importAllLog.length > 0) && (
+                <Button variant="ghost" size="sm" disabled={isImportAllLoading}
+                  className="ml-auto h-7 text-[9px] uppercase font-bold text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-none"
+                  onClick={() => { setImportAllFile(null); setImportAllPreview([]); setImportAllLog([]); setImportAllFailed([]); }}>
+                  <RotateCcw className="mr-1 h-3 w-3" /> Reset
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="px-6 py-4 space-y-4 overflow-y-auto max-h-[60vh]">
+            {/* Column reference */}
+            <div className="text-[10px] font-mono text-slate-600 leading-relaxed border border-slate-800 bg-[#080d12] px-3 py-2 rounded-none">
+              <span className="text-slate-500 font-bold">Expected columns (header row 1):</span><br/>
+              referenceid · tsm · manager · company_name · contact_person · contact_number · email_address · address · delivery_address · region · industry · remarks · status · type_client · company_group · gender · type · account_reference_number · date_created · date_updated · next_available_date · date_transferred · province · city · date_approved · date_removed · transfer_to · tin_number · reason · it_approved_date
+            </div>
+
+            {/* Drop zone */}
+            <div>
+              <label
+                htmlFor="import-all-csv"
+                className={`flex flex-col items-center justify-center w-full h-28 border-2 border-dashed cursor-pointer transition-colors rounded-none ${
+                  importAllFile ? "border-emerald-500/40 bg-emerald-500/5" : "border-slate-700 bg-[#080d12] hover:border-emerald-500/30 hover:bg-emerald-500/5"
+                }`}>
+                {isImportAllParsing ? (
+                  <><Loader2 className="h-5 w-5 animate-spin text-emerald-400 mb-1" /><span className="text-[11px] text-slate-400">Parsing…</span></>
+                ) : importAllFile ? (
+                  <><FileSpreadsheet className="h-6 w-6 text-emerald-400 mb-1" /><span className="text-[11px] font-bold text-emerald-300">{importAllFile.name}</span><span className="text-[10px] text-slate-500">{importAllPreview.length} rows parsed</span></>
+                ) : (
+                  <><Upload className="h-5 w-5 text-slate-600 mb-1" /><span className="text-[11px] text-slate-500">Drop CSV here or click to browse</span><span className="text-[10px] text-slate-700 mt-0.5">.csv files only</span></>
+                )}
+                <input id="import-all-csv" type="file" accept=".csv" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleImportAllFileSelect(f); e.target.value = ""; }} />
+              </label>
+            </div>
+
+            {/* Parse log */}
+            {importAllLog.length > 0 && (
+              <div className="bg-black/40 border border-slate-800 rounded-none p-3 max-h-36 overflow-y-auto font-mono text-[10px] space-y-0.5">
+                {importAllLog.map((l, i) => (
+                  <div key={i} className={
+                    l.type === "ok"   ? "text-emerald-400" :
+                    l.type === "warn" ? "text-amber-400" :
+                    l.type === "err"  ? "text-red-400" :
+                    "text-slate-500"
+                  }>{l.msg}</div>
+                ))}
+                <div ref={importAllLogEndRef} />
+              </div>
+            )}
+
+            {/* Preview count */}
+            {importAllPreview.length > 0 && (
+              <div className="flex items-center justify-between text-[11px] font-mono border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                <span className="text-emerald-400 font-bold">{importAllPreview.length} records ready to import</span>
+                <span className="text-slate-600">{Object.keys(importAllPreview[0] ?? {}).length} columns detected</span>
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-between gap-2">
+            <Button variant="ghost" onClick={() => setShowImportAllDialog(false)} className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700">Close</Button>
+            <div className="flex gap-2 items-center">
+              {importAllFailed.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={handleDownloadImportAllFailed}
+                  className="h-8 text-xs rounded-none bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 gap-1">
+                  <DownloadIcon className="h-3.5 w-3.5" /> Failed ({importAllFailed.length})
+                </Button>
+              )}
+              <Button
+                onClick={handleImportAllUpload}
+                disabled={isImportAllLoading || !importAllFile || importAllPreview.length === 0}
+                className="h-9 text-[11px] font-bold rounded-none bg-emerald-600 hover:bg-emerald-500 text-white border-0 px-6 gap-2 uppercase tracking-widest disabled:opacity-40">
+                {isImportAllLoading
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Importing…</>
+                  : <><Upload className="h-3.5 w-3.5" />Import All ({importAllPreview.length})</>}
               </Button>
             </div>
           </div>
