@@ -10,11 +10,7 @@ const sql = neon(databaseUrl);
 
 // Valid columns from the accounts table
 const VALID_COLUMNS = [
-    'manager', 'tsm', 'company_name', 'contact_person', 'contact_number',
-    'email_address', 'address', 'delivery_address', 'region', 'industry',
-    'remarks', 'status', 'next_available_date', 'gender', 'type', 'type_client',
-    'company_group', 'date_transferred', 'province', 'city', 'date_approved',
-    'date_removed', 'transfer_to', 'tin_number', 'reason'
+    'industry', 'status', 'type_client'
 ];
 
 async function bulkUpdateByReference(updates: any[]) {
