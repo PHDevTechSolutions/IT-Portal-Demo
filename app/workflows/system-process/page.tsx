@@ -15,7 +15,7 @@ import {
   BackgroundVariant,
   type Node, type Edge, type Connection, type NodeTypes,
   MarkerType, ConnectionMode,
-  EdgeLabelRenderer, BaseEdge, type EdgeProps, getSmoothStepPath,
+  EdgeLabelRenderer, BaseEdge, type EdgeProps, getBezierPath,
   Handle, Position, type OnSelectionChangeParams,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -79,22 +79,43 @@ const SHAPE_PALETTE: ShapeDef[] = [
 ];
 
 /* ═══════════════════════════════════════════════════════════
-   HANDLE STYLE
+   HANDLE HELPERS
+   Every node gets 4 handles (top/right/bottom/left), each
+   acting as BOTH source and target so edges always land on
+   the exact dot you drag to/from.
 ═══════════════════════════════════════════════════════════ */
-const HS = { width: 10, height: 10, background: "#fb923c", border: "2px solid #0d1117" };
+const HS: React.CSSProperties = {
+  width: 10, height: 10,
+  background: "#fb923c",
+  border: "2px solid #0d1117",
+};
+
+/** Drop-in set of 4 bidirectional handles for rectangular nodes */
+function AllHandles({ opacity = 1 }: { opacity?: number }) {
+  const s = { ...HS, opacity };
+  return (
+    <>
+      <Handle id="t"  type="source" position={Position.Top}    style={s} />
+      <Handle id="t"  type="target" position={Position.Top}    style={{ ...s, pointerEvents: "none" }} />
+      <Handle id="r"  type="source" position={Position.Right}  style={s} />
+      <Handle id="r"  type="target" position={Position.Right}  style={{ ...s, pointerEvents: "none" }} />
+      <Handle id="b"  type="source" position={Position.Bottom} style={s} />
+      <Handle id="b"  type="target" position={Position.Bottom} style={{ ...s, pointerEvents: "none" }} />
+      <Handle id="l"  type="source" position={Position.Left}   style={s} />
+      <Handle id="l"  type="target" position={Position.Left}   style={{ ...s, pointerEvents: "none" }} />
+    </>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════
    CUSTOM NODES
 ═══════════════════════════════════════════════════════════ */
 function StartEndNode({ data, selected }: any) {
   return (
-    <div className={`relative flex items-center justify-center rounded-full px-5 py-2 min-w-[100px] text-center font-mono text-xs font-bold tracking-wider uppercase bg-[#0d1117] border-2 transition-all ${selected ? "border-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.5)]" : "border-orange-500/60"}`}
+    <div className={`relative flex items-center justify-center rounded-full px-5 py-2 min-w-[100px] text-center font-mono text-xs font-bold tracking-wider uppercase border-2 transition-all ${selected ? "border-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.5)]" : "border-orange-500/60"}`}
       style={{ background: data.bg ?? "#0d1117", color: data.textColor ?? "#fb923c" }}>
-      <Handle type="target" position={Position.Top}    style={HS} />
-      <Handle type="target" position={Position.Left}   style={HS} />
+      <AllHandles />
       <span>{data.label}</span>
-      <Handle type="source" position={Position.Bottom} style={HS} />
-      <Handle type="source" position={Position.Right}  style={HS} />
     </div>
   );
 }
@@ -103,32 +124,36 @@ function ProcessNode({ data, selected }: any) {
   return (
     <div className={`relative flex items-center justify-center px-4 py-3 min-w-[120px] min-h-[50px] text-center font-mono text-xs tracking-wide border-2 transition-all ${selected ? "border-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.5)]" : "border-slate-600"}`}
       style={{ background: data.bg ?? "#111827", color: data.textColor ?? "#e2e8f0" }}>
-      <Handle type="target" position={Position.Top}    style={HS} />
-      <Handle type="target" position={Position.Left}   style={HS} />
+      <AllHandles />
       <span className="break-words max-w-[140px]">{data.label}</span>
-      <Handle type="source" position={Position.Bottom} style={HS} />
-      <Handle type="source" position={Position.Right}  style={HS} />
     </div>
   );
 }
 
 function DecisionNode({ data, selected }: any) {
-  const s = 110;
+  const s = 120;
+  const half = s / 2;
+  const hs = { ...HS };
   return (
     <div className="relative" style={{ width: s, height: s }}>
-      <Handle type="target" position={Position.Top}    style={{ ...HS, top: 2 }} />
-      <Handle type="target" position={Position.Left}   style={{ ...HS, left: 2 }} />
+      {/* Handles pinned to the 4 tips of the diamond */}
+      <Handle id="t" type="source" position={Position.Top}    style={{ ...hs, left: half - 5, top: -5 }} />
+      <Handle id="t" type="target" position={Position.Top}    style={{ ...hs, left: half - 5, top: -5, pointerEvents: "none" }} />
+      <Handle id="l" type="source" position={Position.Left}   style={{ ...hs, top: half - 5, left: -5 }} />
+      <Handle id="l" type="target" position={Position.Left}   style={{ ...hs, top: half - 5, left: -5, pointerEvents: "none" }} />
+      <Handle id="b" type="source" position={Position.Bottom} style={{ ...hs, left: half - 5, bottom: -5 }} />
+      <Handle id="b" type="target" position={Position.Bottom} style={{ ...hs, left: half - 5, bottom: -5, pointerEvents: "none" }} />
+      <Handle id="r" type="source" position={Position.Right}  style={{ ...hs, top: half - 5, right: -5 }} />
+      <Handle id="r" type="target" position={Position.Right}  style={{ ...hs, top: half - 5, right: -5, pointerEvents: "none" }} />
       <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} className="absolute inset-0">
-        <polygon points={`${s/2},4 ${s-4},${s/2} ${s/2},${s-4} 4,${s/2}`}
+        <polygon points={`${half},2 ${s-2},${half} ${half},${s-2} 2,${half}`}
           fill={data.bg ?? "#1e1b4b"}
           stroke={selected ? "#fb923c" : "#6366f1"}
           strokeWidth={selected ? 2.5 : 1.5}
           filter={selected ? "drop-shadow(0 0 6px rgba(251,146,60,0.6))" : "none"} />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-center px-3 font-semibold"
+      <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-center px-5 font-semibold"
         style={{ color: data.textColor ?? "#a5b4fc" }}>{data.label}</div>
-      <Handle type="source" position={Position.Bottom} style={{ ...HS, bottom: 2 }} />
-      <Handle type="source" position={Position.Right}  style={{ ...HS, right: 2 }} />
     </div>
   );
 }
@@ -136,16 +161,13 @@ function DecisionNode({ data, selected }: any) {
 function DocumentNode({ data, selected }: any) {
   return (
     <div className="relative" style={{ minWidth: 120, minHeight: 60 }}>
-      <Handle type="target" position={Position.Top}  style={HS} />
-      <Handle type="target" position={Position.Left} style={HS} />
+      <AllHandles />
       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 120 64" preserveAspectRatio="none">
         <path d="M4,4 H116 V52 Q90,68 60,52 Q30,36 4,52 Z"
           fill={data.bg ?? "#052e16"} stroke={selected ? "#fb923c" : "#22c55e"} strokeWidth={selected ? 2 : 1.5} />
       </svg>
       <div className="relative z-10 flex items-center justify-center h-[52px] font-mono text-[11px] text-center px-3"
         style={{ color: data.textColor ?? "#86efac" }}>{data.label}</div>
-      <Handle type="source" position={Position.Bottom} style={{ ...HS, bottom: 4 }} />
-      <Handle type="source" position={Position.Right}  style={HS} />
     </div>
   );
 }
@@ -153,8 +175,7 @@ function DocumentNode({ data, selected }: any) {
 function DatabaseNode({ data, selected }: any) {
   return (
     <div className="relative" style={{ minWidth: 100, minHeight: 70 }}>
-      <Handle type="target" position={Position.Top}  style={HS} />
-      <Handle type="target" position={Position.Left} style={HS} />
+      <AllHandles />
       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 72" preserveAspectRatio="none">
         <ellipse cx="50" cy="12" rx="46" ry="10" fill={data.bg ?? "#0c1a2e"} stroke={selected ? "#fb923c" : "#38bdf8"} strokeWidth={selected ? 2 : 1.5} />
         <rect    x="4"  y="12" width="92" height="48" fill={data.bg ?? "#0c1a2e"} stroke={selected ? "#fb923c" : "#38bdf8"} strokeWidth={selected ? 2 : 1.5} />
@@ -162,8 +183,6 @@ function DatabaseNode({ data, selected }: any) {
       </svg>
       <div className="relative z-10 flex items-center justify-center h-[70px] font-mono text-[11px] text-center px-3"
         style={{ color: data.textColor ?? "#7dd3fc" }}>{data.label}</div>
-      <Handle type="source" position={Position.Bottom} style={{ ...HS, bottom: 2 }} />
-      <Handle type="source" position={Position.Right}  style={HS} />
     </div>
   );
 }
@@ -171,26 +190,22 @@ function DatabaseNode({ data, selected }: any) {
 function ParallelogramNode({ data, selected }: any) {
   return (
     <div className="relative" style={{ minWidth: 130, minHeight: 50 }}>
-      <Handle type="target" position={Position.Top}  style={HS} />
-      <Handle type="target" position={Position.Left} style={{ ...HS, left: 18 }} />
+      <AllHandles />
       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 130 50" preserveAspectRatio="none">
         <polygon points="20,4 126,4 110,46 4,46"
           fill={data.bg ?? "#1c1917"} stroke={selected ? "#fb923c" : "#f59e0b"} strokeWidth={selected ? 2 : 1.5} />
       </svg>
       <div className="relative z-10 flex items-center justify-center h-[50px] font-mono text-[11px] text-center px-6"
         style={{ color: data.textColor ?? "#fcd34d" }}>{data.label}</div>
-      <Handle type="source" position={Position.Bottom} style={{ ...HS, bottom: 2 }} />
-      <Handle type="source" position={Position.Right}  style={{ ...HS, right: 18 }} />
     </div>
   );
 }
 
 function ActorNode({ data, selected }: any) {
   return (
-    <div className={`relative flex flex-col items-center gap-1.5 p-3 font-mono text-[11px] tracking-wide bg-[#0d1117] border-2 rounded-lg transition-all ${selected ? "border-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.4)]" : "border-slate-600"}`}
+    <div className={`relative flex flex-col items-center gap-1.5 p-3 font-mono text-[11px] tracking-wide border-2 rounded-lg transition-all ${selected ? "border-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.4)]" : "border-slate-600"}`}
       style={{ background: data.bg ?? "#0f172a", color: data.textColor ?? "#94a3b8" }}>
-      <Handle type="target" position={Position.Top}  style={HS} />
-      <Handle type="target" position={Position.Left} style={HS} />
+      <AllHandles />
       <svg width="32" height="40" viewBox="0 0 32 40">
         <circle cx="16" cy="6"  r="5"  fill="none" stroke="#fb923c" strokeWidth="1.5" />
         <line x1="16" y1="11" x2="16" y2="26" stroke="#fb923c" strokeWidth="1.5" />
@@ -199,22 +214,17 @@ function ActorNode({ data, selected }: any) {
         <line x1="16" y1="26" x2="24" y2="38" stroke="#fb923c" strokeWidth="1.5" />
       </svg>
       <span>{data.label}</span>
-      <Handle type="source" position={Position.Bottom} style={HS} />
-      <Handle type="source" position={Position.Right}  style={HS} />
     </div>
   );
 }
 
 function ModuleNode({ data, selected }: any) {
   return (
-    <div className={`relative flex flex-col px-4 py-2 min-w-[130px] font-mono text-[11px] tracking-wide bg-[#0d1117] border-2 transition-all ${selected ? "border-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.4)]" : "border-violet-500/60"}`}
+    <div className={`relative flex flex-col px-4 py-2 min-w-[130px] font-mono text-[11px] tracking-wide border-2 transition-all ${selected ? "border-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.4)]" : "border-violet-500/60"}`}
       style={{ background: data.bg ?? "#1a0533", color: data.textColor ?? "#c4b5fd" }}>
-      <Handle type="target" position={Position.Top}  style={HS} />
-      <Handle type="target" position={Position.Left} style={HS} />
+      <AllHandles />
       <div className="text-[9px] text-violet-400/60 uppercase tracking-widest mb-0.5">ERP Module</div>
       <div className="font-semibold text-xs text-center">{data.label}</div>
-      <Handle type="source" position={Position.Bottom} style={HS} />
-      <Handle type="source" position={Position.Right}  style={HS} />
     </div>
   );
 }
@@ -223,11 +233,8 @@ function AnnotationNode({ data, selected }: any) {
   return (
     <div className={`relative px-3 py-2 max-w-[180px] rounded font-mono text-[11px] leading-relaxed italic border border-dashed transition-all ${selected ? "border-orange-400 bg-orange-500/10" : "border-slate-600 bg-slate-900/60"}`}
       style={{ color: data.textColor ?? "#94a3b8" }}>
-      <Handle type="target" position={Position.Top}  style={{ ...HS, opacity: 0.4 }} />
-      <Handle type="target" position={Position.Left} style={{ ...HS, opacity: 0.4 }} />
+      <AllHandles opacity={0.4} />
       <span>{data.label}</span>
-      <Handle type="source" position={Position.Bottom} style={{ ...HS, opacity: 0.4 }} />
-      <Handle type="source" position={Position.Right}  style={{ ...HS, opacity: 0.4 }} />
     </div>
   );
 }
@@ -261,7 +268,7 @@ const NODE_TYPES: NodeTypes = {
    CUSTOM EDGE
 ═══════════════════════════════════════════════════════════ */
 function LabeledEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected, markerEnd, style }: EdgeProps) {
-  const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
   return (
     <>
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd}
@@ -928,7 +935,7 @@ function FlowCanvas({
           onEdgeContextMenu={onEdgeContextMenu}
           onPaneClick={onPaneClick}
           nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES}
-          connectionMode={ConnectionMode.Loose}
+          connectionMode={ConnectionMode.Strict}
           deleteKeyCode={["Delete", "Backspace"]}
           defaultEdgeOptions={{ type: "labeled", markerEnd: { type: MarkerType.ArrowClosed, color: "#475569" }, data: { label: "" } }}
           fitView fitViewOptions={{ padding: 0.15 }}
