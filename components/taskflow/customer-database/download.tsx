@@ -32,16 +32,77 @@ export const Download: React.FC<DownloadProps> = ({
     setProgress(0);
     setIsDownloading(true);
 
+    // All columns matching the table display order
     const headers = [
-      "account_reference_number","company_name","contact_person","contact_number",
-      "email_address","type_client","address","region","status",
-      "company_group","delivery_address","industry",
+      "status",
+      "company_name",
+      "account_reference_number",
+      "company_group",
+      "contact_person",
+      "contact_number",
+      "email_address",
+      "type_client",
+      "industry",
+      "gender",
+      "address",
+      "delivery_address",
+      "region",
+      "province",
+      "city",
+      "remarks",
+      "referenceid",
+      "tsm",
+      "manager",
+      "transfer_to",
+      "tin_number",
+      "reason",
+      "date_created",
+      "date_updated",
+      "next_available_date",
+      "date_transferred",
+      "date_approved",
+      "date_removed",
+      "it_approved_date",
+      "type",
     ];
 
+    const fmtDate = (v: any) => {
+      if (!v) return "";
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("en-PH");
+    };
+
     const rows = data.map(c => [
-      c.account_reference_number, c.company_name, c.contact_person,
-      c.contact_number, c.email_address, c.type_client, c.address,
-      c.region, c.status, c.company_group, c.delivery_address, c.industry,
+      c.status,
+      c.company_name,
+      c.account_reference_number,
+      c.company_group,
+      c.contact_person,
+      c.contact_number,
+      c.email_address,
+      c.type_client,
+      c.industry,
+      c.gender,
+      c.address,
+      c.delivery_address,
+      c.region,
+      c.province,
+      c.city,
+      c.remarks,
+      c.referenceid,
+      c.tsm,
+      c.manager,
+      c.transfer_to,
+      c.tin_number,
+      c.reason,
+      fmtDate(c.date_created),
+      fmtDate(c.date_updated),
+      fmtDate(c.next_available_date),
+      fmtDate(c.date_transferred),
+      fmtDate(c.date_approved),
+      fmtDate(c.date_removed),
+      fmtDate(c.it_approved_date),
+      c.type,
     ]);
 
     const csvLines = [headers, ...rows].map(row =>

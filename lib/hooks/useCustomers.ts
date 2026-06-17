@@ -44,8 +44,8 @@ interface Customer {
 // Fetch all customers with caching
 async function fetchCustomers(): Promise<Customer[]> {
   const res = await fetch(
-    "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch",
-    { cache: "no-store" }
+    "/api/Data/Applications/Taskflow/CustomerDatabase/Fetch"
+    // No cache: "no-store" — let React Query manage freshness via staleTime
   );
   if (!res.ok) throw new Error("Failed to fetch customers");
   const data = await res.json();
@@ -56,9 +56,11 @@ async function fetchCustomers(): Promise<Customer[]> {
 export function useCustomers() {
   return useQuery({
     queryKey: customerKeys.lists(),
-    queryFn: fetchCustomers,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    queryFn:  fetchCustomers,
+    staleTime: 1000 * 60 * 2,  // 2 min — use cache, no re-fetch until stale
+    gcTime:    1000 * 60 * 30, // 30 min in memory
+    refetchOnWindowFocus: false, // don't re-fetch on every tab switch
+    refetchOnMount: false,       // don't re-fetch if data exists in cache
   });
 }
 

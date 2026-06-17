@@ -178,7 +178,17 @@ const DEFAULT_SIDEBAR_MODULES = [
       { title: "Database Backup",  url: "/admin/backup-database" },
     ],
   },
-  // 8. REPORTS & ANALYTICS
+  // 8. WORKFLOWS
+  {
+    key: "workflows",
+    title: "Workflows",
+    icon: "GitBranch",
+    description: "Visual process and flowchart builder",
+    items: [
+      { title: "System Process", url: "/workflows/system-process" },
+    ],
+  },
+  // 9. REPORTS & ANALYTICS
   {
     key: "reports",
     title: "Reports",

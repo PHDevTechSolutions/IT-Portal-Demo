@@ -113,6 +113,36 @@ async function safeJson(res: Response): Promise<any> {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+// ── Module-level user name cache — fetched once per session, 10 min TTL ──
+const _userCache: { map: Map<string, UserRecord> | null; ts: number } = { map: null, ts: 0 };
+const USER_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+async function fetchUserNameMap(): Promise<Map<string, UserRecord>> {
+  const now = Date.now();
+  if (_userCache.map && (now - _userCache.ts) < USER_CACHE_TTL_MS) {
+    return _userCache.map;
+  }
+  const map = new Map<string, UserRecord>();
+  try {
+    const res  = await fetch("/api/UserManagement/Fetch", { cache: "default" });
+    if (!res.ok) return map;
+    const data = await safeJson(res);
+    const users: any[] = Array.isArray(data) ? data : (data?.data ?? []);
+    for (const u of users) {
+      const refId = (u.ReferenceID ?? "").trim();
+      if (!refId) continue;
+      map.set(refId.toLowerCase(), {
+        referenceId: refId,
+        name:   `${u.Firstname ?? ""} ${u.Lastname ?? ""}`.trim() || refId,
+        status: u.Status ?? "",
+      });
+    }
+    _userCache.map = map;
+    _userCache.ts  = now;
+  } catch { /* return whatever we have */ }
+  return map;
+}
+
 async function parseExcelForFile(
   file: File, tsaValue: string, managerValue: string, tsmValue: string,
 ): Promise<any[]> {
@@ -380,6 +410,7 @@ export default function AccountPage() {
   const [filterTSM,      setFilterTSM]      = useState("all");
   const [filterManager,  setFilterManager]  = useState("all");
   const [filterType,     setFilterType]     = useState("all");
+  const [filterStatus,   setFilterStatus]   = useState("all");
   const [page,           setPage]           = useState(1);
   const [rowsPerPage,    setRowsPerPage]     = useState(20);
   const [sortOrder,      setSortOrder]      = useState<"asc"|"desc">("desc");
@@ -565,30 +596,8 @@ export default function AccountPage() {
   /* ── Resolve display names ── */
   useEffect(() => {
     if (!customers.length) return;
-    const uniqueIds = new Set<string>();
-    for (const c of customers) {
-      if (c.referenceid?.trim()) uniqueIds.add(c.referenceid.trim().toLowerCase());
-      if (c.tsm?.trim()) uniqueIds.add(c.tsm.trim().toLowerCase());
-      if (c.manager?.trim()) uniqueIds.add(c.manager.trim().toLowerCase());
-    }
-    if (!uniqueIds.size) return;
-    const fetchNames = async () => {
-      try {
-        const res = await fetch("/api/UserManagement/Fetch");
-        if (!res.ok) return;
-        const data = await safeJson(res);
-        const users: any[] = Array.isArray(data) ? data : (data?.data ?? []);
-        const map = new Map<string, UserRecord>();
-        for (const u of users) {
-          const refId = (u.ReferenceID ?? "").trim();
-          if (!refId) continue;
-          const key = refId.toLowerCase();
-          if (uniqueIds.has(key)) map.set(key, { referenceId: refId, name: `${u.Firstname??""} ${u.Lastname??""}`.trim() || refId, status: u.Status ?? "" });
-        }
-        setRefIdUserMap(map);
-      } catch {}
-    };
-    fetchNames();
+    // Use module-level cached fetch — avoids repeated MongoDB hits
+    fetchUserNameMap().then(map => setRefIdUserMap(map)).catch(() => {});
   }, [customers]);
 
   /* ── Sync from React Query ── */
@@ -648,10 +657,11 @@ export default function AccountPage() {
     return ()=>clearTimeout(t);
   }, [search, filterType]);
 
-  useEffect(()=>setPage(1),[search,filterType,filterTSA,filterTSM,filterManager]);
+  useEffect(()=>setPage(1),[search,filterType,filterStatus,filterTSA,filterTSM,filterManager]);
 
   /* ── Derived options ── */
-  const typeOptions = useMemo(()=>["all",...new Set(customers.map(c=>c.type_client).filter(Boolean))].sort(),[customers]);
+  const typeOptions   = useMemo(()=>["all",...new Set(customers.map(c=>c.type_client).filter(Boolean))].sort(),[customers]);
+  const statusOptions = useMemo(()=>["all",...new Set(customers.map(c=>c.status).filter(Boolean))].sort(),[customers]);
 
   const filterTsaOptions = useMemo<ComboOption[]>(()=>{
     const seen = new Map<string,ComboOption>();
@@ -690,12 +700,13 @@ export default function AccountPage() {
   const filtered = useMemo(()=>customers
     .filter(c=>[c.company_name,c.account_reference_number,c.contact_person,c.contact_number,c.email_address,c.region,c.manager,c.tsm].some(f=>f?.toLowerCase().includes(search.toLowerCase())))
     .filter(c=>filterType==="all"||c.type_client===filterType)
+    .filter(c=>filterStatus==="all"||(c.status??"").trim().toLowerCase()===filterStatus.toLowerCase())
     .filter(c=>filterTSA==="all"||c.referenceid?.trim().toLowerCase()===filterTSA.trim().toLowerCase())
     .filter(c=>filterTSM==="all"||(c.tsm??"").trim().toLowerCase()===filterTSM.trim().toLowerCase())
     .filter(c=>filterManager==="all"||(c.manager??"").trim().toLowerCase()===filterManager.trim().toLowerCase())
     .filter(c=>{ if (!startDate&&!endDate) return true; const d=new Date(c.date_created).getTime(); const s=startDate?new Date(startDate).getTime():null; const e=endDate?new Date(endDate).getTime():null; if (s&&d<s) return false; if (e&&d>e) return false; return true; })
     .sort((a,b)=>{ const da=new Date(a.date_created).getTime(); const db=new Date(b.date_created).getTime(); return sortOrder==="asc"?da-db:db-da; })
-  ,[customers,search,filterType,filterTSA,filterTSM,filterManager,startDate,endDate,sortOrder]);
+  ,[customers,search,filterType,filterStatus,filterTSA,filterTSM,filterManager,startDate,endDate,sortOrder]);
 
   const displayData = useMemo(()=>{
     if (!isAuditView) return filtered;
@@ -1034,9 +1045,9 @@ export default function AccountPage() {
     preTransferSnapshotRef.current=[];
   };
 
-  const handleResetFilters=()=>{ setFilterTSA("all"); setFilterTSM("all"); setFilterManager("all"); setFilterType("all"); setStartDate(""); setEndDate(""); setSortOrder("desc"); setRowsPerPage(20); setPage(1); };
+  const handleResetFilters=()=>{ setFilterTSA("all"); setFilterTSM("all"); setFilterManager("all"); setFilterType("all"); setFilterStatus("all"); setStartDate(""); setEndDate(""); setSortOrder("desc"); setRowsPerPage(20); setPage(1); };
 
-  const hasActiveFilters = filterTSA!=="all"||filterTSM!=="all"||filterManager!=="all"||filterType!=="all"||!!startDate||!!endDate||sortOrder!=="desc"||rowsPerPage!==20;
+  const hasActiveFilters = filterTSA!=="all"||filterTSM!=="all"||filterManager!=="all"||filterType!=="all"||filterStatus!=="all"||!!startDate||!!endDate||sortOrder!=="desc"||rowsPerPage!==20;
 
   const parseLogColor=(type:string)=>{ if(type==="ok") return "text-emerald-400"; if(type==="warn") return "text-amber-400"; if(type==="err") return "text-red-400"; return "text-zinc-400"; };
 
@@ -1708,6 +1719,19 @@ export default function AccountPage() {
               <Select value={filterType} onValueChange={v=>{setFilterType(v);setPage(1);}}>
                 <SelectTrigger className="h-9 text-xs rounded-none bg-slate-800 border-slate-700 text-slate-200"><SelectValue placeholder="All Types" /></SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">{typeOptions.map(t=><SelectItem key={t} value={t} className="text-xs capitalize focus:bg-orange-500/10 focus:text-orange-400">{t==="all"?"All Types":t}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Status</label>
+              <Select value={filterStatus} onValueChange={v=>{setFilterStatus(v);setPage(1);}}>
+                <SelectTrigger className="h-9 text-xs rounded-none bg-slate-800 border-slate-700 text-slate-200"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                  {statusOptions.map(s=>(
+                    <SelectItem key={s} value={s} className="text-xs capitalize focus:bg-orange-500/10 focus:text-orange-400">
+                      {s==="all"?"All Statuses":s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">

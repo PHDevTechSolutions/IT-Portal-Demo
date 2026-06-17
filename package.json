@@ -51,6 +51,7 @@
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
     "@woocommerce/woocommerce-rest-api": "^1.0.1",
+    "@xyflow/react": "^12.11.0",
     "axios": "^1.7.9",
     "bcrypt": "^6.0.0",
     "chart.js": "^4.4.8",

@@ -14,7 +14,7 @@ import {
   Activity, Boxes, TicketCheck, CalendarCheck, FileText, Database,
   LucideIcon, LayoutDashboard, Users, FolderKanban, Package,
   DollarSign, Wallet, UserCircle, UserPlus, BarChart3, PieChart,
-  FileStack, ListTodo, ClipboardList, Key,
+  FileStack, ListTodo, ClipboardList, Key, GitBranch,
 } from "lucide-react";
 import { getUserPermissions, hasPermission } from "@/lib/utils/permissions";
 
@@ -26,7 +26,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   LayoutDashboard, SquareTerminal, Activity, Boxes, TicketCheck,
   FolderKanban, Users, Package, DollarSign, Wallet, UserCircle,
   UserPlus, Bot, BookOpen, Settings2, BarChart3, PieChart, FileStack,
-  CalendarCheck, FileText, Database, LifeBuoy, Send,
+  CalendarCheck, FileText, Database, LifeBuoy, Send, GitBranch,
 };
 
 // ─── navSecondary config with required permission keys ────────────────────────
