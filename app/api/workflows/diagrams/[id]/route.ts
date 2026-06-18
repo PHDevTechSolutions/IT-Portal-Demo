@@ -14,17 +14,18 @@ export const dynamic = "force-dynamic";
 
 const COLLECTION = "workflow_diagrams";
 
+// Next.js 15: params is a Promise
+type RouteContext = { params: Promise<{ id: string }> };
+
 function toObjectId(id: string) {
   try { return new ObjectId(id); }
   catch { return null; }
 }
 
 // ── GET ────────────────────────────────────────────────────────────────────────
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  const oid = toObjectId(params.id);
+export async function GET(_req: NextRequest, { params }: RouteContext) {
+  const { id } = await params;
+  const oid = toObjectId(id);
   if (!oid) return NextResponse.json({ success: false, error: "Invalid id" }, { status: 400 });
 
   try {
@@ -49,11 +50,9 @@ export async function GET(
 }
 
 // ── PUT ────────────────────────────────────────────────────────────────────────
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  const oid = toObjectId(params.id);
+export async function PUT(req: NextRequest, { params }: RouteContext) {
+  const { id } = await params;
+  const oid = toObjectId(id);
   if (!oid) return NextResponse.json({ success: false, error: "Invalid id" }, { status: 400 });
 
   try {
@@ -64,7 +63,7 @@ export async function PUT(
     if (body.nodes !== undefined) { patch.nodes = body.nodes; patch.nodeCount = body.nodes.length; }
     if (body.edges !== undefined) { patch.edges = body.edges; patch.edgeCount = body.edges.length; }
 
-    const db = await connectToDatabase();
+    const db     = await connectToDatabase();
     const result = await db.collection(COLLECTION).updateOne({ _id: oid }, { $set: patch });
 
     if (result.matchedCount === 0)
@@ -77,11 +76,9 @@ export async function PUT(
 }
 
 // ── DELETE ─────────────────────────────────────────────────────────────────────
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  const oid = toObjectId(params.id);
+export async function DELETE(_req: NextRequest, { params }: RouteContext) {
+  const { id } = await params;
+  const oid = toObjectId(id);
   if (!oid) return NextResponse.json({ success: false, error: "Invalid id" }, { status: 400 });
 
   try {
