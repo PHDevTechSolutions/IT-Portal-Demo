@@ -93,6 +93,7 @@ interface Customer {
   date_approved?: string;
   date_removed?: string;
   transfer_to?: string;
+  it_approved_date?: string;
 }
 
 interface UserRecord {
@@ -1245,6 +1246,7 @@ export default function AccountPage() {
                         {label:"Date Transferred", w:"min-w-[100px]"},
                         {label:"Date Approved",    w:"min-w-[100px]"},
                         {label:"Date Removed",     w:"min-w-[100px]"},
+                        {label:"IT Approved Date", w:"min-w-[130px]"},
                       ].map(({label,w})=>(
                         <TableHead key={label} className={cn(w,"py-2 px-3 text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/60 border-r border-orange-500/5 last:border-r-0")}>
                           {label}
@@ -1335,6 +1337,11 @@ export default function AccountPage() {
                           <TableCell className={cn(cb,"min-w-[100px] text-slate-500 font-mono text-[10px]")}>{fmtDate(c.date_transferred)}</TableCell>
                           <TableCell className={cn(cb,"min-w-[100px] text-slate-500 font-mono text-[10px]")}>{fmtDate(c.date_approved)}</TableCell>
                           <TableCell className={cn(cb,"min-w-[100px] text-slate-500 font-mono text-[10px]")}>{fmtDate(c.date_removed)}</TableCell>
+                          <TableCell className={cn(cb,"min-w-[130px] font-mono text-[10px]")}>
+                            {c.it_approved_date
+                              ? <span className="text-emerald-400/80">{fmtDate(c.it_approved_date)}</span>
+                              : <span className="text-slate-700">—</span>}
+                          </TableCell>
                         </TableRow>
                       );
                     })}

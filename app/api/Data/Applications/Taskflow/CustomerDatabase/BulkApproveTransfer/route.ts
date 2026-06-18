@@ -26,23 +26,25 @@ async function bulkupdate({
 
         let query;
         if (updateReferenceIdFromTransferTo) {
-            // Update status and also set referenceid = transfer_to
+            // Update status, set referenceid = transfer_to, stamp IT approval date
             query = await Xchire_sql`
                 UPDATE accounts
                 SET
                     status = ${status},
                     referenceid = transfer_to,
-                    date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
+                    date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila',
+                    it_approved_date = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
                 WHERE id = ANY(${userIds})
                 RETURNING *;
             `;
         } else {
-            // Only update status
+            // Only update status, stamp IT approval date
             query = await Xchire_sql`
                 UPDATE accounts
                 SET
                     status = ${status},
-                    date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
+                    date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila',
+                    it_approved_date = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
                 WHERE id = ANY(${userIds})
                 RETURNING *;
             `;
