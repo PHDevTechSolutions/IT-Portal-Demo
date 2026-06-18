@@ -42,6 +42,7 @@ interface Customer {
   source?: string;
   website?: string;
   confidence?: "high" | "medium" | "low";
+  it_approved_date?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -622,11 +623,12 @@ export default function AccountPage() {
         )
         const result = await res.json()
         if (result.success) {
+          const now = new Date().toISOString()
           const approved = customers
             .filter(c => ids.includes(c.id))
             .map(c => ({ name: c.company_name, id: c.id }))
           setCustomers(prev => prev.map(c =>
-            ids.includes(c.id) ? { ...c, status: "Active", date_updated: new Date().toISOString() } : c,
+            ids.includes(c.id) ? { ...c, status: "Active", date_updated: now, it_approved_date: now } : c,
           ))
           setAutoApproveLog(prev => [...approved, ...prev].slice(0, 20))
           setPendingAutoApprove(new Set())
@@ -756,7 +758,7 @@ export default function AccountPage() {
 
   const cellBase = "py-2 px-3 border-r border-orange-500/5 last:border-r-0"
 
-  const TABLE_HEADERS = ["Company","Contact","Email","Type","Industry","Website","Status","Area","Transfer From","Transfer To","TSM","Manager","Date Created","Date Updated","Next Available"]
+  const TABLE_HEADERS = ["Company","Contact","Email","Type","Industry","Website","Status","Area","Transfer From","Transfer To","TSM","Manager","Date Created","Date Updated","Next Available","IT Approved Date"]
   const APPROVAL_HEADERS = ["Company","Contact","Email","Type","Status","Area","TSM","Manager","Date Created","Date Updated"]
 
   // ── Selection helpers ──────────────────────────────────────────────────────
@@ -804,7 +806,8 @@ export default function AccountPage() {
       const res = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/BulkApproveTransfer", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userIds: Array.from(selectedTransferIds), status: "Active", updateReferenceIdFromTransferTo: true }) })
       const result = await res.json()
       if (result.success) {
-        setCustomers((prev) => prev.map((c) => selectedTransferIds.has(c.id) ? { ...c, status: "Active", date_updated: new Date().toISOString(), referenceid: c.transfer_to || c.referenceid } : c))
+        const now = new Date().toISOString()
+        setCustomers((prev) => prev.map((c) => selectedTransferIds.has(c.id) ? { ...c, status: "Active", date_updated: now, it_approved_date: now, referenceid: c.transfer_to || c.referenceid } : c))
         toast.success(`Approved ${selectedTransferIds.size} customers.`)
         setSelectedTransferIds(new Set()); setSelectAllTransfer(false); setShowApproveDialog(false); setHasExported(false)
       } else { toast.error(result.error || "Approval failed.") }
@@ -835,7 +838,8 @@ export default function AccountPage() {
       const res = await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/BulkApproveTransfer", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userIds: Array.from(selectedApprovalIds), status: newStatus, updateReferenceIdFromTransferTo: false }) })
       const result = await res.json()
       if (result.success) {
-        setCustomers((prev) => prev.map((c) => selectedApprovalIds.has(c.id) ? { ...c, status: newStatus, date_updated: new Date().toISOString() } : c))
+        const now = new Date().toISOString()
+        setCustomers((prev) => prev.map((c) => selectedApprovalIds.has(c.id) ? { ...c, status: newStatus, date_updated: now, it_approved_date: now } : c))
         toast.success(`${selectedApprovalIds.size} customers set to "${newStatus}".`)
         setSelectedApprovalIds(new Set()); setSelectAllApproval(false)
       } else { toast.error(result.error || "Status update failed.") }
@@ -1120,6 +1124,12 @@ export default function AccountPage() {
                               <span className="text-[9px] font-mono uppercase text-violet-500/40">Created</span>
                               <span className="text-[10px] font-mono text-slate-500">{new Date(c.date_created).toLocaleDateString()}</span>
                             </div>
+                            {c.it_approved_date && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-mono uppercase text-emerald-500/50">IT Approved</span>
+                                <span className="text-[10px] font-mono text-emerald-400/80">{new Date(c.it_approved_date).toLocaleDateString()}</span>
+                              </div>
+                            )}
                             {/* View changes link */}
                             <button
                               onClick={() => setChangesTarget(c)}
@@ -1225,6 +1235,11 @@ export default function AccountPage() {
                                   <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>{new Date(c.date_created).toLocaleDateString()}</TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>{new Date(c.date_updated).toLocaleDateString()}</TableCell>
                                   <TableCell className={cn(cellBase, "min-w-[100px] text-slate-500 font-mono text-[10px]")}>{c.next_available_date ? new Date(c.next_available_date).toLocaleDateString() : <span className="text-slate-600">—</span>}</TableCell>
+                          <TableCell className={cn(cellBase, "min-w-[130px] font-mono text-[10px]")}>
+                            {c.it_approved_date
+                              ? <span className="text-emerald-400/80">{new Date(c.it_approved_date).toLocaleDateString()}</span>
+                              : <span className="text-slate-700">—</span>}
+                          </TableCell>
                                 </DraggableRow>
                               )
                             })}
