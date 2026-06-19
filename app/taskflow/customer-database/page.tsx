@@ -1213,42 +1213,42 @@ export default function AccountPage() {
                 </div>
               ) : current.length>0 ? (
                 <Table className="whitespace-nowrap text-[11px] min-w-full">
-                  <TableHeader className="sticky top-0 z-10">
+                  <TableHeader className="sticky top-0 z-40 bg-[#0d1117]">
                     <TableRow className="border-b border-orange-500/20 bg-[#0d1117] hover:bg-[#0d1117]">
-                      <TableHead className="w-8 text-center px-2 py-2">
+                      <TableHead className="w-[32px] text-center px-2 py-2 sticky left-0 z-50 bg-[#0d1117]">
                         <input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="accent-orange-500" />
                       </TableHead>
                       {[
-                        {label:"Actions",          w:"w-20"},
-                        {label:"Status",           w:"min-w-[100px]"},
-                        {label:"Company",          w:"min-w-[180px]"},
-                        {label:"Account Reference Number", w:"min-w-[160px]"},
-                        {label:"Company Group",    w:"min-w-[120px]"},
-                        {label:"Contact Person",   w:"min-w-[130px]"},
-                        {label:"Contact No.",      w:"min-w-[120px]"},
-                        {label:"Email",            w:"min-w-[180px]"},
-                        {label:"Type Client",      w:"min-w-[100px]"},
-                        {label:"Industry",         w:"min-w-[80px]"},
-                        {label:"Gender",           w:"min-w-[60px]"},
-                        {label:"Address",          w:"min-w-[200px]"},
-                        {label:"Delivery Address", w:"min-w-[200px]"},
-                        {label:"Region",           w:"min-w-[100px]"},
-                        {label:"Province",         w:"min-w-[100px]"},
-                        {label:"City",             w:"min-w-[100px]"},
-                        {label:"Remarks",          w:"min-w-[120px]"},
-                        {label:"TSA",              w:"min-w-[120px]"},
-                        {label:"TSM",              w:"min-w-[120px]"},
-                        {label:"Manager",          w:"min-w-[120px]"},
-                        {label:"Transfer To",      w:"min-w-[100px]"},
-                        {label:"Date Created",     w:"min-w-[100px]"},
-                        {label:"Date Updated",     w:"min-w-[100px]"},
-                        {label:"Next Available",   w:"min-w-[100px]"},
-                        {label:"Date Transferred", w:"min-w-[100px]"},
-                        {label:"Date Approved",    w:"min-w-[100px]"},
-                        {label:"Date Removed",     w:"min-w-[100px]"},
-                        {label:"IT Approved Date", w:"min-w-[130px]"},
-                      ].map(({label,w})=>(
-                        <TableHead key={label} className={cn(w,"py-2 px-3 text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/60 border-r border-orange-500/5 last:border-r-0")}>
+                        {label:"Actions",          w:"w-[80px]", stickyLeft: 32},
+                        {label:"Status",           w:"w-[100px]", stickyLeft: 112},
+                        {label:"Company",          w:"w-[180px]", stickyLeft: 212},
+                        {label:"Account Reference Number", w:"min-w-[160px]", stickyLeft: null},
+                        {label:"Company Group",    w:"min-w-[120px]", stickyLeft: null},
+                        {label:"Contact Person",   w:"min-w-[130px]", stickyLeft: null},
+                        {label:"Contact No.",      w:"min-w-[120px]", stickyLeft: null},
+                        {label:"Email",            w:"min-w-[180px]", stickyLeft: null},
+                        {label:"Type Client",      w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Industry",         w:"min-w-[80px]", stickyLeft: null},
+                        {label:"Gender",           w:"min-w-[60px]", stickyLeft: null},
+                        {label:"Address",          w:"min-w-[200px]", stickyLeft: null},
+                        {label:"Delivery Address", w:"min-w-[200px]", stickyLeft: null},
+                        {label:"Region",           w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Province",         w:"min-w-[100px]", stickyLeft: null},
+                        {label:"City",             w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Remarks",          w:"min-w-[120px]", stickyLeft: null},
+                        {label:"TSA",              w:"min-w-[120px]", stickyLeft: null},
+                        {label:"TSM",              w:"min-w-[120px]", stickyLeft: null},
+                        {label:"Manager",          w:"min-w-[120px]", stickyLeft: null},
+                        {label:"Transfer To",      w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Date Created",     w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Date Updated",     w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Next Available",   w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Date Transferred", w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Date Approved",    w:"min-w-[100px]", stickyLeft: null},
+                        {label:"Date Removed",     w:"min-w-[100px]", stickyLeft: null},
+                        {label:"IT Approved Date", w:"min-w-[130px]", stickyLeft: null},
+                      ].map(({label,w,stickyLeft})=>(
+                        <TableHead key={label} className={cn(w,"py-2 px-3 text-[9px] font-mono font-bold uppercase tracking-widest text-orange-500/60 border-r border-orange-500/5 last:border-r-0", stickyLeft !== null ? "sticky z-50 bg-[#0d1117]" : "")} style={stickyLeft !== null ? {left: `${stickyLeft}px`} : {}}>
                           {label}
                         </TableHead>
                       ))}
@@ -1288,12 +1288,12 @@ export default function AccountPage() {
                           isParked&&"opacity-40",
                           isSelected?"bg-orange-500/[0.06] border-l-2 border-l-orange-500/50":"border-l-2 border-l-transparent")}>
 
-                          <TableCell className={cn(cb,"text-center w-8")}>
+                          <TableCell className={cn(cb,"text-center w-[32px] sticky left-0 z-30 bg-[#0a0d14]")} style={{backgroundColor: isSelected ? "rgba(251,146,60,0.06)" : "#0a0d14"}}>
                             <input type="checkbox" checked={isSelected} onChange={()=>toggleSelect(c.id)} className="accent-orange-500" />
                           </TableCell>
 
                           {/* ── Edit → navigate to /[id] ── */}
-                          <TableCell className={cn(cb,"w-20")}>
+                          <TableCell className={cn(cb,"w-[80px] sticky z-30 bg-[#0a0d14]")} style={{left: "32px", backgroundColor: isSelected ? "rgba(251,146,60,0.06)" : "#0a0d14"}}>
                             <button
                               onClick={()=>router.push(`/taskflow/customer-database/${c.id}`)}
                               className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono uppercase tracking-widest border border-orange-500/20 text-orange-500/60 hover:border-orange-500/50 hover:text-orange-400 hover:bg-orange-500/10 transition-colors whitespace-nowrap">
@@ -1301,9 +1301,9 @@ export default function AccountPage() {
                             </button>
                           </TableCell>
 
-                          <TableCell className={cn(cb,"min-w-[100px]")}><StatusBadge status={c.status} /></TableCell>
+                          <TableCell className={cn(cb,"w-[100px] sticky z-30 bg-[#0a0d14]")} style={{left: "112px", backgroundColor: isSelected ? "rgba(251,146,60,0.06)" : "#0a0d14"}}><StatusBadge status={c.status} /></TableCell>
 
-                          <TableCell className={cn(cb,"min-w-[180px]")}>
+                          <TableCell className={cn(cb,"w-[180px] sticky z-30 bg-[#0a0d14]")} style={{left: "212px", backgroundColor: isSelected ? "rgba(251,146,60,0.06)" : "#0a0d14"}}>
                             <div className={cn("font-mono text-[11px] uppercase leading-tight text-slate-200",
                               (isDuplicate||isMissingType||isMissingStatus)&&"line-through decoration-red-500/70 decoration-2")}>
                               {c.company_name||"—"}
