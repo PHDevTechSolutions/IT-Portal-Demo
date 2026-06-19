@@ -51,6 +51,12 @@ const normalizeCompanyName = (s: string) => (s || "").toLowerCase()
   .replace(/\b(corp|corporation|inc|incorporated|co|company|ltd|limited|ent|enterprise|enterprises)\b/g, "")
   .replace(/\s+/g, " ").trim()
 
+const isPlaceholderEmail = (email: string) => {
+  const normalized = email.trim().toLowerCase()
+  const placeholders = ['none@', 'test@', 'example@', 'dummy@', 'fake@', 'temp@', 'noreply@']
+  return placeholders.some(p => normalized.includes(p))
+}
+
 /**
  * Returns true if `a` and `b` are "similar enough" company names to be
  * considered potential duplicates.
@@ -589,6 +595,13 @@ export default function AccountPage() {
       const appNorm = normalizeCompanyName(app.company_name)
       if (!appNorm) continue
 
+      // Check if required fields are present and not placeholders
+      const hasValidContact = !!app.contact_person?.trim()
+      const hasValidPhone = !!app.contact_number?.trim()
+      const hasValidEmail = !!(app.email_address?.trim() && !isPlaceholderEmail(app.email_address))
+      
+      if (!hasValidContact || !hasValidPhone || !hasValidEmail) continue
+
       const hasDuplicate = normalizedOthers.some(o =>
         o.id !== app.id && (o.norm === appNorm || o.norm.startsWith(appNorm) || appNorm.startsWith(o.norm))
       ) || approvalList.some(a => 
@@ -1041,18 +1054,37 @@ export default function AccountPage() {
                       const isSel = selectedApprovalIds.has(c.id)
                       const willAutoApprove = pendingAutoApprove.has(c.id)
                       const hasDuplicate = duplicateIds.has(c.id)
+                      
+                      // Check for missing/invalid fields
+                      const hasValidContact = !!c.contact_person?.trim()
+                      const hasValidPhone = !!c.contact_number?.trim()
+                      const hasValidEmail = !!(c.email_address?.trim() && !isPlaceholderEmail(c.email_address))
+                      
+                      const missingFields = []
+                      if (!hasValidContact) missingFields.push('Contact Person')
+                      if (!hasValidPhone) missingFields.push('Phone')
+                      if (!c.email_address?.trim()) missingFields.push('Email')
+                      else if (isPlaceholderEmail(c.email_address)) missingFields.push('Invalid Email')
+                      
                       return (
                         <div key={c.id} className={cn("border transition-colors",
                           hasDuplicate ? "border-amber-500/20 bg-amber-500/[0.03]" :
+                          missingFields.length > 0 ? "border-red-500/20 bg-red-500/[0.03]" :
                           willAutoApprove ? "border-emerald-500/20 bg-emerald-500/[0.03]" :
                           isSel ? "border-violet-500/40 bg-violet-500/[0.06]" :
                           "border-violet-500/10 bg-[#0d1117] hover:border-violet-500/30")}>
                           <div className="flex items-center gap-2 px-3 py-2 border-b border-violet-500/10 bg-[#0a0d14]">
                             <input type="checkbox" checked={isSel} onChange={() => toggleApproval(c.id)} className="accent-violet-500" />
                             <span className="text-[9px] font-mono flex-1 truncate"
-                              style={{ color: hasDuplicate ? "#fbbf24" : willAutoApprove ? "#34d399" : "rgba(167,139,250,0.3)" }}>
+                              style={{ color: hasDuplicate ? "#fbbf24" : missingFields.length > 0 ? "#f87171" : willAutoApprove ? "#34d399" : "rgba(167,139,250,0.3)" }}>
                               {c.company_name}
                             </span>
+                            {/* Missing fields warning */}
+                            {missingFields.length > 0 && (
+                              <span className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-red-500/30 bg-red-500/10 text-red-400 uppercase" title={missingFields.join(', ')}>
+                                ⚠ Missing Fields
+                              </span>
+                            )}
                             {/* Duplicate warning */}
                             {hasDuplicate && (
                               <button
@@ -1077,18 +1109,18 @@ export default function AccountPage() {
                           </div>
                           <div className="p-3 space-y-1.5">
                             {[
-                              ["Contact", c.contact_person],
-                              ["Phone", c.contact_number],
-                              ["Email", c.email_address],
-                              ["Type", c.type_client],
-                              ["Region", c.region],
-                              ["Industry", c.industry],
-                              ["TSM", c.tsm],
-                              ["Manager", c.manager]
-                            ].map(([label, value]) => (
+                              { label: "Contact", value: c.contact_person, invalid: !hasValidContact },
+                              { label: "Phone", value: c.contact_number, invalid: !hasValidPhone },
+                              { label: "Email", value: c.email_address, invalid: !hasValidEmail },
+                              { label: "Type", value: c.type_client },
+                              { label: "Region", value: c.region },
+                              { label: "Industry", value: c.industry },
+                              { label: "TSM", value: c.tsm },
+                              { label: "Manager", value: c.manager }
+                            ].map(({ label, value, invalid }) => (
                               <div key={label} className="flex items-start justify-between gap-2">
-                                <span className="text-[9px] font-mono uppercase text-violet-500/40 shrink-0">{label}</span>
-                                <span className="text-[10px] font-mono text-slate-300 text-right truncate max-w-[160px]">{value || "—"}</span>
+                                <span className={cn("text-[9px] font-mono uppercase shrink-0", invalid ? "text-red-400/60" : "text-violet-500/40")}>{label}</span>
+                                <span className={cn("text-[10px] font-mono text-right truncate max-w-[160px]", invalid ? "text-red-400" : "text-slate-300")}>{value || "—"}</span>
                               </div>
                             ))}
                             {c.source && (
