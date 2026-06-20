@@ -739,9 +739,9 @@ function FileManager({
 const AUTO_SAVE_MS = 1500; // debounce
 
 function FlowCanvas({
-  initialNodes, initialEdges, onFlowChange,
+  initialNodes, initialEdges, diagramId, onFlowChange,
 }: {
-  initialNodes: Node[]; initialEdges: Edge[];
+  initialNodes: Node[]; initialEdges: Edge[]; diagramId: string | null;
   onFlowChange: (nodes: Node[], edges: Edge[]) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -767,14 +767,20 @@ function FlowCanvas({
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [nodes, edges]); // eslint-disable-line
 
-  // Reset when diagram switches
+  // Track last diagram ID to only reset when diagram actually changes
+  const lastDiagramIdRef = useRef<string | null>(null);
+  
+  // Reset only when diagram switches (not on every node/edge update)
   useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-    setSelNode(null);
-    setSelEdge(null);
-    setTimeout(() => fitView({ padding: 0.15 }), 80);
-  }, [initialNodes, initialEdges]); // eslint-disable-line
+    if (lastDiagramIdRef.current !== diagramId) {
+      lastDiagramIdRef.current = diagramId;
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+      setSelNode(null);
+      setSelEdge(null);
+      setTimeout(() => fitView({ padding: 0.15 }), 80);
+    }
+  }, [diagramId, initialNodes, initialEdges, setNodes, setEdges, fitView]);
 
   // ── Sync React Flow's own selection into our state ──
   const onSelectionChange = useCallback(({ nodes: sn, edges: se }: OnSelectionChangeParams) => {
@@ -1143,6 +1149,7 @@ function SystemProcessInner() {
             <FlowCanvas
               initialNodes={activeNodes}
               initialEdges={activeEdges}
+              diagramId={activeDiagramId}
               onFlowChange={handleFlowChange}
             />
           </ReactFlowProvider>
