@@ -1038,7 +1038,7 @@ export default function AccountPage() {
                   </div>
                 </div>
 
-                {/* Cards */}
+                {/* Two columns: left (cards) and right (queued list) */}
                 {isFetching ? (
                   <div className="py-8 flex flex-col items-center gap-2">
                     <Loader2 className="size-4 animate-spin text-violet-500/40" />
@@ -1049,129 +1049,192 @@ export default function AccountPage() {
                     <p className="text-[9px] font-mono uppercase tracking-widest text-violet-500/30">No records for approval.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {approvalCurrent.map((c) => {
-                      const isSel = selectedApprovalIds.has(c.id)
-                      const willAutoApprove = pendingAutoApprove.has(c.id)
-                      const hasDuplicate = duplicateIds.has(c.id)
-                      
-                      // Check for missing/invalid fields
-                      const hasValidContact = !!c.contact_person?.trim()
-                      const hasValidPhone = !!c.contact_number?.trim()
-                      const hasValidEmail = !!(c.email_address?.trim() && !isPlaceholderEmail(c.email_address))
-                      
-                      const missingFields = []
-                      if (!hasValidContact) missingFields.push('Contact Person')
-                      if (!hasValidPhone) missingFields.push('Phone')
-                      if (!c.email_address?.trim()) missingFields.push('Email')
-                      else if (isPlaceholderEmail(c.email_address)) missingFields.push('Invalid Email')
-                      
-                      return (
-                        <div key={c.id} className={cn("border transition-colors",
-                          hasDuplicate ? "border-amber-500/20 bg-amber-500/[0.03]" :
-                          missingFields.length > 0 ? "border-red-500/20 bg-red-500/[0.03]" :
-                          willAutoApprove ? "border-emerald-500/20 bg-emerald-500/[0.03]" :
-                          isSel ? "border-violet-500/40 bg-violet-500/[0.06]" :
-                          "border-violet-500/10 bg-[#0d1117] hover:border-violet-500/30")}>
-                          <div className="flex items-center gap-2 px-3 py-2 border-b border-violet-500/10 bg-[#0a0d14]">
-                            <input type="checkbox" checked={isSel} onChange={() => toggleApproval(c.id)} className="accent-violet-500" />
-                            <span className="text-[9px] font-mono flex-1 truncate"
-                              style={{ color: hasDuplicate ? "#fbbf24" : missingFields.length > 0 ? "#f87171" : willAutoApprove ? "#34d399" : "rgba(167,139,250,0.3)" }}>
-                              {c.company_name}
-                            </span>
-                            {/* Missing fields warning */}
-                            {missingFields.length > 0 && (
-                              <span className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-red-500/30 bg-red-500/10 text-red-400 uppercase" title={missingFields.join(', ')}>
-                                ⚠ Missing Fields
-                              </span>
-                            )}
-                            {/* Duplicate warning */}
-                            {hasDuplicate && (
-                              <button
-                                onClick={() => setDuplicateTarget(c)}
-                                className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-amber-500/30 bg-amber-500/10 text-amber-400 uppercase hover:bg-amber-500/20 transition-colors">
-                                ⚠ View Duplicate
-                              </button>
-                            )}
-                            {/* Auto-approve indicator */}
-                            {willAutoApprove && (
-                              <span className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 uppercase">
-                                ✓ Auto
-                              </span>
-                            )}
-                            {/* Clickable badge → opens changes dialog */}
-                            <button
-                              onClick={() => setChangesTarget(c)}
-                              title="View pending changes"
-                              className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 border border-violet-500/30 bg-violet-500/10 text-violet-400 uppercase tracking-widest hover:bg-violet-500/20 hover:border-violet-400/60 transition-colors">
-                              <Clock className="size-3" /> For Approval
-                            </button>
-                          </div>
-                          <div className="p-3 space-y-1.5">
-                            {[
-                              { label: "Contact", value: c.contact_person, invalid: !hasValidContact },
-                              { label: "Phone", value: c.contact_number, invalid: !hasValidPhone },
-                              { label: "Email", value: c.email_address, invalid: !hasValidEmail },
-                              { label: "Type", value: c.type_client },
-                              { label: "Region", value: c.region },
-                              { label: "Industry", value: c.industry },
-                              { label: "TSM", value: c.tsm },
-                              { label: "Manager", value: c.manager }
-                            ].map(({ label, value, invalid }) => (
-                              <div key={label} className="flex items-start justify-between gap-2">
-                                <span className={cn("text-[9px] font-mono uppercase shrink-0", invalid ? "text-red-400/60" : "text-violet-500/40")}>{label}</span>
-                                <span className={cn("text-[10px] font-mono text-right truncate max-w-[160px]", invalid ? "text-red-400" : "text-slate-300")}>{value || "—"}</span>
-                              </div>
-                            ))}
-                            {c.source && (
-                              <div className="flex items-start justify-between gap-2">
-                                <span className="text-[9px] font-mono uppercase text-violet-500/40 shrink-0">Source</span>
-                                <a href={c.source.startsWith("http") ? c.source : "#"} target="_blank" rel="noopener noreferrer" 
-                                   className="text-[10px] font-mono text-violet-400 hover:underline truncate max-w-[160px]">
-                                  {c.source.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
-                                </a>
-                              </div>
-                            )}
-                            {c.website && (
-                              <div className="flex items-start justify-between gap-2">
-                                <span className="text-[9px] font-mono uppercase text-violet-500/40 shrink-0">Website</span>
-                                <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" 
-                                   className="text-[10px] font-mono text-violet-400 hover:underline truncate max-w-[160px]">
-                                  {c.website.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
-                                </a>
-                              </div>
-                            )}
-                            {c.confidence && (
-                              <div className="flex items-center justify-between pt-1">
-                                <span className="text-[9px] font-mono uppercase text-violet-500/40">Confidence</span>
-                                <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 border uppercase tracking-widest",
-                                  c.confidence === "high" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" :
-                                  c.confidence === "medium" ? "border-amber-500/30 bg-amber-500/10 text-amber-400" :
-                                  "border-red-500/30 bg-red-500/10 text-red-400")}>
-                                  {c.confidence}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* LEFT COLUMN: Cards for queued/waiting (has issues) */}
+                    <div className="space-y-2">
+                      <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-violet-500/80 mb-2">Waiting for Approval</h3>
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                        {approvalCurrent.filter((c) => {
+                          const hasValidContact = !!c.contact_person?.trim();
+                          const hasValidPhone = !!c.contact_number?.trim();
+                          const hasValidEmail = !!(c.email_address?.trim() && !isPlaceholderEmail(c.email_address));
+                          const hasDuplicate = duplicateIds.has(c.id);
+                          return hasDuplicate || !hasValidContact || !hasValidPhone || !hasValidEmail;
+                        }).map((c) => {
+                          const isSel = selectedApprovalIds.has(c.id)
+                          const willAutoApprove = pendingAutoApprove.has(c.id)
+                          const hasDuplicate = duplicateIds.has(c.id)
+                          
+                          // Check for missing/invalid fields
+                          const hasValidContact = !!c.contact_person?.trim()
+                          const hasValidPhone = !!c.contact_number?.trim()
+                          const hasValidEmail = !!(c.email_address?.trim() && !isPlaceholderEmail(c.email_address))
+                          
+                          const missingFields = []
+                          if (!hasValidContact) missingFields.push('Contact Person')
+                          if (!hasValidPhone) missingFields.push('Phone')
+                          if (!c.email_address?.trim()) missingFields.push('Email')
+                          else if (isPlaceholderEmail(c.email_address)) missingFields.push('Invalid Email')
+                          
+                          return (
+                            <div key={c.id} className={cn("border transition-colors",
+                              hasDuplicate ? "border-amber-500/20 bg-amber-500/[0.03]" :
+                              missingFields.length > 0 ? "border-red-500/20 bg-red-500/[0.03]" :
+                              willAutoApprove ? "border-emerald-500/20 bg-emerald-500/[0.03]" :
+                              isSel ? "border-violet-500/40 bg-violet-500/[0.06]" :
+                              "border-violet-500/10 bg-[#0d1117] hover:border-violet-500/30")}>
+                              <div className="flex items-center gap-2 px-3 py-2 border-b border-violet-500/10 bg-[#0a0d14]">
+                                <input type="checkbox" checked={isSel} onChange={() => toggleApproval(c.id)} className="accent-violet-500" />
+                                <span className="text-[9px] font-mono flex-1 truncate"
+                                  style={{ color: hasDuplicate ? "#fbbf24" : missingFields.length > 0 ? "#f87171" : willAutoApprove ? "#34d399" : "rgba(167,139,250,0.3)" }}>
+                                  {c.company_name}
                                 </span>
+                                {/* Missing fields warning */}
+                                {missingFields.length > 0 && (
+                                  <span className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-red-500/30 bg-red-500/10 text-red-400 uppercase" title={missingFields.join(', ')}>
+                                    ⚠ Missing Fields
+                                  </span>
+                                )}
+                                {/* Duplicate warning */}
+                                {hasDuplicate && (
+                                  <button
+                                    onClick={() => setDuplicateTarget(c)}
+                                    className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-amber-500/30 bg-amber-500/10 text-amber-400 uppercase hover:bg-amber-500/20 transition-colors">
+                                    ⚠ View Duplicate
+                                  </button>
+                                )}
+                                {/* Auto-approve indicator */}
+                                {willAutoApprove && (
+                                  <span className="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 uppercase">
+                                    ✓ Auto
+                                  </span>
+                                )}
+                                {/* Clickable badge → opens changes dialog */}
+                                <button
+                                  onClick={() => setChangesTarget(c)}
+                                  title="View pending changes"
+                                  className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 border border-violet-500/30 bg-violet-500/10 text-violet-400 uppercase tracking-widest hover:bg-violet-500/20 hover:border-violet-400/60 transition-colors">
+                                  <Clock className="size-3" /> For Approval
+                                </button>
                               </div>
-                            )}
-                            <div className="flex items-center justify-between pt-1.5 border-t border-violet-500/10">
-                              <span className="text-[9px] font-mono uppercase text-violet-500/40">Created</span>
-                              <span className="text-[10px] font-mono text-slate-500">{new Date(c.date_created).toLocaleDateString()}</span>
+                              <div className="p-3 space-y-1.5">
+                                {[
+                                  { label: "Contact", value: c.contact_person, invalid: !hasValidContact },
+                                  { label: "Phone", value: c.contact_number, invalid: !hasValidPhone },
+                                  { label: "Email", value: c.email_address, invalid: !hasValidEmail },
+                                  { label: "Type", value: c.type_client },
+                                  { label: "Region", value: c.region },
+                                  { label: "Industry", value: c.industry },
+                                  { label: "TSM", value: c.tsm },
+                                  { label: "Manager", value: c.manager }
+                                ].map(({ label, value, invalid }) => (
+                                  <div key={label} className="flex items-start justify-between gap-2">
+                                    <span className={cn("text-[9px] font-mono uppercase shrink-0", invalid ? "text-red-400/60" : "text-violet-500/40")}>{label}</span>
+                                    <span className={cn("text-[10px] font-mono text-right truncate max-w-[160px]", invalid ? "text-red-400" : "text-slate-300")}>{value || "—"}</span>
+                                  </div>
+                                ))}
+                                {c.source && (
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-[9px] font-mono uppercase text-violet-500/40 shrink-0">Source</span>
+                                    <a href={c.source.startsWith("http") ? c.source : "#"} target="_blank" rel="noopener noreferrer" 
+                                       className="text-[10px] font-mono text-violet-400 hover:underline truncate max-w-[160px]">
+                                      {c.source.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
+                                    </a>
+                                  </div>
+                                )}
+                                {c.website && (
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-[9px] font-mono uppercase text-violet-500/40 shrink-0">Website</span>
+                                    <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" 
+                                       className="text-[10px] font-mono text-violet-400 hover:underline truncate max-w-[160px]">
+                                      {c.website.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
+                                    </a>
+                                  </div>
+                                )}
+                                {c.confidence && (
+                                  <div className="flex items-center justify-between pt-1">
+                                    <span className="text-[9px] font-mono uppercase text-violet-500/40">Confidence</span>
+                                    <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 border uppercase tracking-widest",
+                                      c.confidence === "high" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" :
+                                      c.confidence === "medium" ? "border-amber-500/30 bg-amber-500/10 text-amber-400" :
+                                      "border-red-500/30 bg-red-500/10 text-red-400")}>
+                                      {c.confidence}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between pt-1.5 border-t border-violet-500/10">
+                                  <span className="text-[9px] font-mono uppercase text-violet-500/40">Created</span>
+                                  <span className="text-[10px] font-mono text-slate-500">{new Date(c.date_created).toLocaleDateString()}</span>
+                                </div>
+                                {c.it_approved_date && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9px] font-mono uppercase text-emerald-500/50">IT Approved</span>
+                                    <span className="text-[10px] font-mono text-emerald-400/80">{new Date(c.it_approved_date).toLocaleDateString()}</span>
+                                  </div>
+                                )}
+                                {/* View changes link */}
+                                <button
+                                  onClick={() => setChangesTarget(c)}
+                                  className="w-full flex items-center justify-center gap-1.5 mt-1 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-violet-500/20 text-violet-400/60 hover:border-violet-500/50 hover:text-violet-400 transition-colors">
+                                  <History className="size-3" /> View Changes
+                                </button>
+                              </div>
                             </div>
-                            {c.it_approved_date && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-[9px] font-mono uppercase text-emerald-500/50">IT Approved</span>
-                                <span className="text-[10px] font-mono text-emerald-400/80">{new Date(c.it_approved_date).toLocaleDateString()}</span>
-                              </div>
-                            )}
-                            {/* View changes link */}
-                            <button
-                              onClick={() => setChangesTarget(c)}
-                              className="w-full flex items-center justify-center gap-1.5 mt-1 py-1.5 text-[9px] font-mono uppercase tracking-widest border border-violet-500/20 text-violet-400/60 hover:border-violet-500/50 hover:text-violet-400 transition-colors">
-                              <History className="size-3" /> View Changes
-                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    {/* RIGHT COLUMN: List view (no issues) */}
+                    <div className="space-y-2">
+                      <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-violet-500/80 mb-2">Queued</h3>
+                      <div className="border border-violet-500/10 bg-[#0d1117] overflow-hidden">
+                        {approvalCurrent.filter((c) => {
+                          const hasValidContact = !!c.contact_person?.trim();
+                          const hasValidPhone = !!c.contact_number?.trim();
+                          const hasValidEmail = !!(c.email_address?.trim() && !isPlaceholderEmail(c.email_address));
+                          const hasDuplicate = duplicateIds.has(c.id);
+                          return !hasDuplicate && hasValidContact && hasValidPhone && hasValidEmail;
+                        }).length === 0 ? (
+                          <div className="py-6 text-center text-slate-500 text-[9px] font-mono uppercase tracking-widest">
+                            No queued customers
                           </div>
-                        </div>
-                      )
-                    })}
+                        ) : (
+                          <div className="divide-y divide-violet-500/10">
+                            {approvalCurrent.filter((c) => {
+                              const hasValidContact = !!c.contact_person?.trim();
+                              const hasValidPhone = !!c.contact_number?.trim();
+                              const hasValidEmail = !!(c.email_address?.trim() && !isPlaceholderEmail(c.email_address));
+                              const hasDuplicate = duplicateIds.has(c.id);
+                              return !hasDuplicate && hasValidContact && hasValidPhone && hasValidEmail;
+                            }).map((c) => {
+                              const isSel = selectedApprovalIds.has(c.id);
+                              const willAutoApprove = pendingAutoApprove.has(c.id);
+                              return (
+                                <div key={c.id} className={cn("flex items-center gap-3 px-4 py-3 hover:bg-violet-500/[0.03] transition-colors", isSel && "bg-violet-500/[0.06]")}>
+                                  <input type="checkbox" checked={isSel} onChange={() => toggleApproval(c.id)} className="accent-violet-500" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className={cn("text-[11px] font-mono font-semibold", willAutoApprove ? "text-emerald-400" : "text-slate-200")}>{c.company_name}</span>
+                                      {willAutoApprove && <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 uppercase">✓ Auto</span>}
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-3 mt-1">
+                                      <span className="text-[10px] font-mono text-slate-400">{c.contact_person}</span>
+                                      <span className="text-[10px] font-mono text-slate-500">{c.email_address}</span>
+                                      <span className="text-[10px] font-mono text-slate-500">{c.region}</span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => setChangesTarget(c)}
+                                    className="shrink-0 text-[9px] font-mono text-violet-400/70 hover:text-violet-400 transition-colors">
+                                    View
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
