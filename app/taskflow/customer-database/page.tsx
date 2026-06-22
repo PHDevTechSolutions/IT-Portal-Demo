@@ -470,6 +470,7 @@ export default function AccountPage() {
   const [isBulkUpdateLoading, setIsBulkUpdateLoading] = useState(false);
   const [bulkUpdateLog,       setBulkUpdateLog]       = useState<{type:"info"|"warn"|"ok"|"err";msg:string}[]>([]);
   const [isBulkUpdateParsing, setIsBulkUpdateParsing] = useState(false);
+  const [bulkUpdateMode,      setBulkUpdateMode]      = useState<"byId"|"byTsaTsmManager">("byId");
   const bulkUpdateLogEndRef = useRef<HTMLDivElement>(null);
   const addBulkUpdateLog = useCallback((type:"info"|"warn"|"ok"|"err", msg:string) => setBulkUpdateLog(prev=>[...prev,{type,msg}]), []);
   useEffect(() => { bulkUpdateLogEndRef.current?.scrollIntoView({behavior:"smooth"}); }, [bulkUpdateLog]);
@@ -928,16 +929,28 @@ export default function AccountPage() {
       addBulkUpdateLog("ok",`✅ Parsed ${data.length} row(s)`);
       addBulkUpdateLog("info",`  → Columns found: ${columns.join(", ")}`);
       
-      // Check if account_reference_number column exists
-      if (!columns.includes("account_reference_number")) {
-        addBulkUpdateLog("err",`❌ Missing required column: account_reference_number`);
-        toast.error("Excel file must contain 'account_reference_number' column");
-        setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]);
+      // Check required columns based on mode
+      if (bulkUpdateMode === "byTsaTsmManager") {
+        // Only require either account_reference_number or referenceid as identifier
+        if (!columns.includes("account_reference_number") && !columns.includes("referenceid")) {
+          addBulkUpdateLog("err",`❌ Missing required column: account_reference_number or referenceid`);
+          toast.error("Excel file must contain either 'account_reference_number' or 'referenceid' column");
+          setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]);
+          return;
+        }
       } else {
-        addBulkUpdateLog("ok",`🚀 Ready — ${data.length} record(s) queued for update`);
-        setBulkUpdatePreview(data);
-        setBulkUpdateColumns(columns);
+        // Check if account_reference_number column exists for byId mode
+        if (!columns.includes("account_reference_number")) {
+          addBulkUpdateLog("err",`❌ Missing required column: account_reference_number`);
+          toast.error("Excel file must contain 'account_reference_number' column");
+          setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]);
+          return;
+        }
       }
+      
+      addBulkUpdateLog("ok",`🚀 Ready — ${data.length} record(s) queued for update`);
+      setBulkUpdatePreview(data);
+      setBulkUpdateColumns(columns);
     } catch { addBulkUpdateLog("err",`❌ Failed to parse "${file.name}"`); toast.error("Failed to parse Excel file."); }
     finally { setIsBulkUpdateParsing(false); }
   };
@@ -946,13 +959,30 @@ export default function AccountPage() {
     if (!bulkUpdateFile) return toast.error("Please select a file.");
     if (!bulkUpdatePreview.length) return toast.error("No data to update.");
     setIsBulkUpdateLoading(true); setBulkUpdateLog([]);
-    addBulkUpdateLog("info",`🚀 Starting bulk update...`);
+    
+    const modeLabel = bulkUpdateMode === "byTsaTsmManager" ? "TSA, TSM, Manager, Status, Industry, and Type Client" : "all fields";
+    addBulkUpdateLog("info",`🚀 Starting bulk update (${modeLabel})...`);
+    
     try {
       const total = bulkUpdatePreview.length; const batchSize = 10;
       let successCount = 0; let failCount = 0;
       
       for (let i=0;i<total;i+=batchSize) {
-        const batch=bulkUpdatePreview.slice(i,i+batchSize);
+        let batch = bulkUpdatePreview.slice(i,i+batchSize);
+        
+        // If mode is byTsaTsmManager, filter to only include TSA, TSM, Manager, Status, Industry, and Type Client fields
+        if (bulkUpdateMode === "byTsaTsmManager") {
+          batch = batch.map(row => ({
+            account_reference_number: row.account_reference_number,
+            referenceid: row.referenceid || row.tsa,
+            tsm: row.tsm,
+            manager: row.manager,
+            status: row.status,
+            industry: row.industry,
+            type_client: row.type_client
+          }));
+        }
+        
         addBulkUpdateLog("info",`  → Processing ${i+1}–${Math.min(i+batchSize,total)}/${total}...`);
         
         const res=await fetch("/api/Data/Applications/Taskflow/CustomerDatabase/BulkUpdateByReference",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({updates:batch})});
@@ -1771,8 +1801,8 @@ export default function AccountPage() {
                 <Settings className="w-4 h-4 text-orange-400" />
               </div>
               <div>
-                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">Bulk Update by ID</DialogTitle>
-                <p className="text-[11px] text-slate-500 mt-0.5">Update accounts using id as identifier</p>
+                <DialogTitle className="text-sm font-bold uppercase tracking-widest text-orange-400">Bulk Update Options</DialogTitle>
+                <p className="text-[11px] text-slate-500 mt-0.5">Select a bulk update method</p>
               </div>
               {(bulkUpdateFile||bulkUpdatePreview.length>0) && (
                 <Button variant="ghost" size="sm" disabled={isBulkUpdateLoading} className="ml-auto h-7 text-[9px] uppercase font-bold text-slate-400 hover:text-orange-400 hover:bg-orange-500/10 rounded-none"
@@ -1782,7 +1812,27 @@ export default function AccountPage() {
               )}
             </div>
           </DialogHeader>
-          <div className="px-6 py-4 space-y-4 overflow-y-auto max-h-[70vh]">
+          <div className="px-6 py-4 space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-slate-500">Update Method</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => { setBulkUpdateMode("byId"); setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]); setBulkUpdateLog([]); }}
+                  className={cn("p-3 border rounded-none text-left transition-all", bulkUpdateMode === "byId" ? "border-orange-500 bg-orange-500/10" : "border-slate-700 hover:border-slate-600 bg-slate-800/30")}
+                >
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-200 mb-1">BULK UPDATE BY ID</div>
+                  <div className="text-[10px] text-slate-500">Update all fields using account reference number as identifier</div>
+                </button>
+                <button
+                  onClick={() => { setBulkUpdateMode("byTsaTsmManager"); setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]); setBulkUpdateLog([]); }}
+                  className={cn("p-3 border rounded-none text-left transition-all", bulkUpdateMode === "byTsaTsmManager" ? "border-orange-500 bg-orange-500/10" : "border-slate-700 hover:border-slate-600 bg-slate-800/30")}
+                >
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-200 mb-1">BULK UPDATE BY TSA, TSM, MANAGER, STATUS, INDUSTRY AND TYPE CLIENT BY ID</div>
+                  <div className="text-[10px] text-slate-500">Update TSA, TSM, Manager, Status, Industry, and Type Client fields using account reference number</div>
+                </button>
+              </div>
+            </div>
+            <div className="space-y-4 overflow-y-auto max-h-[70vh]">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase text-slate-500">Excel/CSV File <span className="text-red-400">*</span></label>
               <DropZone file={bulkUpdateFile} fileName={bulkUpdateFileName} onFileSelect={handleBulkUpdateFileSelect} onClear={()=>{ setBulkUpdateFile(null); setBulkUpdateFileName(null); setBulkUpdatePreview([]); setBulkUpdateColumns([]); setBulkUpdateLog([]); }} disabled={isBulkUpdateLoading} />
@@ -1825,6 +1875,7 @@ export default function AccountPage() {
                 </div>
               </div>
             )}
+          </div>
           </div>
           <div className="px-6 py-3 border-t border-slate-700/60 bg-slate-800/60 flex items-center justify-between gap-2">
             <Button variant="ghost" onClick={()=>setShowOthersDialog(false)} className="h-8 text-xs rounded-none text-slate-400 hover:text-slate-200 hover:bg-slate-700">Close</Button>
