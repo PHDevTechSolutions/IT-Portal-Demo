@@ -10,7 +10,7 @@ const sql = neon(databaseUrl);
 
 // Valid columns from the accounts table
 const VALID_COLUMNS = [
-    'industry', 'status', 'type_client'
+    'referenceid', 'tsm', 'manager', 'industry', 'status', 'type_client'
 ];
 
 async function bulkUpdateByReference(updates: any[]) {
@@ -23,10 +23,10 @@ async function bulkUpdateByReference(updates: any[]) {
         const errors = [];
 
         for (const update of updates) {
-            const { id, ...fieldsToUpdate } = update;
+            const { account_reference_number, ...fieldsToUpdate } = update;
 
-            if (!id) {
-                errors.push({ error: "Missing id", data: update });
+            if (!account_reference_number) {
+                errors.push({ error: "Missing account_reference_number", data: update });
                 continue;
             }
 
@@ -39,7 +39,7 @@ async function bulkUpdateByReference(updates: any[]) {
             }
 
             if (Object.keys(validUpdates).length === 0) {
-                errors.push({ error: "No valid columns to update", id });
+                errors.push({ error: "No valid columns to update", account_reference_number });
                 continue;
             }
 
@@ -50,19 +50,19 @@ async function bulkUpdateByReference(updates: any[]) {
             const query = `
                 UPDATE accounts
                 SET ${setClauses}, date_updated = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila'
-                WHERE id = $1
+                WHERE account_reference_number = $1
                 RETURNING *
             `;
 
             try {
-                const result = await sql(query, [id, ...values]);
+                const result = await sql(query, [account_reference_number, ...values]);
                 if (result && result.length > 0) {
                     results.push(result[0]);
                 } else {
-                    errors.push({ error: "Record not found", id });
+                    errors.push({ error: "Record not found", account_reference_number });
                 }
             } catch (err: any) {
-                errors.push({ error: err.message, id });
+                errors.push({ error: err.message, account_reference_number });
             }
         }
 
